@@ -1,0 +1,4 @@
+{"input":"帮我查一下美家房产的客户情况","expectedTools":["queryCustomerProfile"]}
+{"input":"今天我应该优先跟进哪些客户？","expectedTools":["rankLeads"]}
+{"input":"帮我创建明天上午十点跟进美家房产的任务","expectedTools":["createFollowupTask"],"mustRequireConfirmation":true}
+

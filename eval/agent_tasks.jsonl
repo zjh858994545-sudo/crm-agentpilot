@@ -1,0 +1,2 @@
+{"task":"分析客户美家房产并给出明天跟进策略","expectedTools":["queryCustomerProfile","queryContactHistory","searchKnowledge"],"expectedOutputFields":["客户现状","风险","推荐动作","话术"]}
+
