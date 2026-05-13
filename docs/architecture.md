@@ -16,6 +16,7 @@ Frontend Workbench
       -> Confirmation Service
       -> Call Center Service
       -> Evaluation Runner
+      -> Event Publisher
   -> PostgreSQL / pgvector
   -> Redis
   -> Kafka
@@ -40,3 +41,4 @@ Frontend Workbench
 - Keep the first version deterministic with a mock model and mock embedding so tests and demos are repeatable.
 - Use the pgvector Docker image in local infrastructure while storing mock embeddings in a database-portable format for H2 tests.
 - Add `X-Trace-Id` on every HTTP response so API calls can be correlated with logs and tool-call records.
+- Publish Agent run, tool-call, and confirmed CRM task events through one event layer. The default is log-only for stable local demos; setting `AGENT_EVENTS_KAFKA_ENABLED=true` sends the same events to Kafka topics.

@@ -53,6 +53,18 @@ React Workbench
 
 ## 本地启动
 
+一键演示启动：
+
+```powershell
+.\scripts\start-full-demo.ps1
+```
+
+该脚本会启动 Docker 依赖、后端和前端，并把日志写入 `.demo-logs/`。停止演示进程：
+
+```powershell
+.\scripts\stop-full-demo.ps1
+```
+
 启动依赖：
 
 ```powershell
@@ -81,6 +93,7 @@ npm run dev
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Actuator health: http://localhost:8080/actuator/health
 - Model status: http://localhost:8080/api/model/status
+- Events status: http://localhost:8080/api/events/status
 
 ## Real Model Configuration
 
@@ -103,6 +116,12 @@ curl -X POST http://localhost:8080/api/model/chat `
 ```
 
 ## 演示脚本
+
+后端启动后，先跑 smoke 验收：
+
+```powershell
+.\scripts\smoke-demo.ps1
+```
 
 后端启动后，可以直接运行完整 API 演示：
 
@@ -172,6 +191,7 @@ npm run build
 - Docker Desktop 已恢复到 F 盘，Docker Compose 已验证：PostgreSQL/pgvector、Redis、Kafka 均可 healthy 启动
 - 后端已在 Docker Postgres/Redis 环境下跑通完整 API 演示链路
 - 已加入 OpenAI-compatible 模型适配、Swagger UI、Actuator 基础端点、`X-Trace-Id` 请求追踪
+- 已加入可选 Kafka 事件发布层：`agent-run-events`、`agent-tool-call-events`、`crm-task-events`，默认 log-only，设置 `AGENT_EVENTS_KAFKA_ENABLED=true` 后可发布到 Kafka
 
 ## 面试讲法
 

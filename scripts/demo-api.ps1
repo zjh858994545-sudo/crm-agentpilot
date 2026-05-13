@@ -1,4 +1,6 @@
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $baseUrl = $env:AGENTPILOT_BASE_URL
 if ([string]::IsNullOrWhiteSpace($baseUrl)) {
@@ -22,9 +24,25 @@ function Show-Step($name) {
 function Invoke-AgentPilot($method, $path, $body = $null) {
     $uri = "$baseUrl$path"
     if ($null -eq $body) {
-        return Invoke-RestMethod -Method $method -Uri $uri
+        $response = Invoke-WebRequest -Method $method -Uri $uri -UseBasicParsing
+        return Convert-ResponseJson $response
     }
-    return Invoke-RestMethod -Method $method -Uri $uri -ContentType "application/json; charset=utf-8" -Body ($body | ConvertTo-Json -Depth 10)
+    $json = $body | ConvertTo-Json -Depth 10
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $response = Invoke-WebRequest -Method $method -Uri $uri -UseBasicParsing -ContentType "application/json; charset=utf-8" -Body $bytes
+    return Convert-ResponseJson $response
+}
+
+function Convert-ResponseJson($response) {
+    if ($response.RawContentStream) {
+        $response.RawContentStream.Position = 0
+        $reader = New-Object System.IO.StreamReader($response.RawContentStream, [System.Text.Encoding]::UTF8)
+        return ($reader.ReadToEnd() | ConvertFrom-Json)
+    }
+    if ($response.Content -is [byte[]]) {
+        return ([System.Text.Encoding]::UTF8.GetString($response.Content) | ConvertFrom-Json)
+    }
+    return ([string]$response.Content | ConvertFrom-Json)
 }
 
 Show-Step "1. Health"

@@ -18,6 +18,21 @@ export interface HealthView {
   modules: Record<string, string>;
 }
 
+export interface ModelStatus {
+  provider: string;
+  model: string;
+  configured: boolean;
+  mode: string;
+}
+
+export interface EventStatus {
+  mode: string;
+  kafkaEnabled: boolean;
+  agentRunTopic: string;
+  agentToolCallTopic: string;
+  crmTaskTopic: string;
+}
+
 export interface Customer {
   id: number;
   name: string;
@@ -200,6 +215,16 @@ export const apiClient = axios.create({
 
 export async function fetchHealth() {
   const response = await apiClient.get<ApiResponse<HealthView>>('/health');
+  return response.data.data;
+}
+
+export async function fetchModelStatus() {
+  const response = await apiClient.get<ApiResponse<ModelStatus>>('/model/status');
+  return response.data.data;
+}
+
+export async function fetchEventStatus() {
+  const response = await apiClient.get<ApiResponse<EventStatus>>('/events/status');
   return response.data.data;
 }
 

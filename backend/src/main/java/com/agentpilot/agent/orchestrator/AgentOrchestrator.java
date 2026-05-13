@@ -24,6 +24,7 @@ import com.agentpilot.crm.service.CrmTaskService;
 import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.crm.service.LeadService;
 import com.agentpilot.crm.service.ProductPackageService;
+import com.agentpilot.events.AgentPilotEventPublisher;
 import com.agentpilot.model.ChatModelClient;
 import com.agentpilot.rag.service.RagService;
 import com.agentpilot.rag.vo.KnowledgeAnswer;
@@ -61,6 +62,7 @@ public class AgentOrchestrator {
     private final LeadScoringService leadScoringService;
     private final RagService ragService;
     private final ChatModelClient chatModelClient;
+    private final AgentPilotEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
     public AgentOrchestrator(
@@ -78,6 +80,7 @@ public class AgentOrchestrator {
             LeadScoringService leadScoringService,
             RagService ragService,
             ChatModelClient chatModelClient,
+            AgentPilotEventPublisher eventPublisher,
             ObjectMapper objectMapper
     ) {
         this.sessionService = sessionService;
@@ -94,6 +97,7 @@ public class AgentOrchestrator {
         this.leadScoringService = leadScoringService;
         this.ragService = ragService;
         this.chatModelClient = chatModelClient;
+        this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
     }
 
@@ -117,6 +121,7 @@ public class AgentOrchestrator {
         run.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
         run.setCompletedAt(LocalDateTime.now());
         runService.updateById(run);
+        eventPublisher.publishAgentRunCompleted(run);
         memoryService.append(session.getId(), "assistant", response.answer());
         return response;
     }
@@ -132,6 +137,9 @@ public class AgentOrchestrator {
         }
 
         Object result = executeConfirmedAction(confirmation);
+        if (result instanceof CrmTask task) {
+            eventPublisher.publishCrmTaskCreated(task);
+        }
         confirmation.setStatus("CONFIRMED");
         confirmation.setConfirmedBy(userId == null ? 1L : userId);
         confirmation.setConfirmedAt(LocalDateTime.now());
@@ -362,6 +370,7 @@ public class AgentOrchestrator {
         call.setRequiresConfirmation(definition.requiresConfirmation());
         call.setCompletedAt(LocalDateTime.now());
         toolCallService.save(call);
+        eventPublisher.publishToolCallRecorded(call);
         return call;
     }
 

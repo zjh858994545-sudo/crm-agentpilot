@@ -7,6 +7,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+.demo-logs/
 
 # Environment
 .env

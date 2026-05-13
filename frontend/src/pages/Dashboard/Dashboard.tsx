@@ -1,6 +1,6 @@
 import { Alert, Card, Progress, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import { fetchHealth, HealthView } from '../../api/client';
+import { EventStatus, fetchEventStatus, fetchHealth, fetchModelStatus, HealthView, ModelStatus } from '../../api/client';
 
 const { Text } = Typography;
 
@@ -15,13 +15,46 @@ const moduleRows = [
 
 export default function Dashboard() {
   const [health, setHealth] = useState<HealthView | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
+  const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
     fetchHealth()
       .then(setHealth)
       .catch(() => setError('后端未连接，当前显示前端静态工作台。'));
+    fetchModelStatus().then(setModelStatus).catch(() => undefined);
+    fetchEventStatus().then(setEventStatus).catch(() => undefined);
   }, []);
+
+  const probeRows = [
+    {
+      key: 'health',
+      item: 'Health',
+      status: health?.status ?? 'LOCAL',
+      detail: '后端 /api/health'
+    },
+    {
+      key: 'model',
+      item: 'Model',
+      status: modelStatus?.mode ?? 'deterministic-mock',
+      detail: modelStatus?.configured ? modelStatus.model : 'Mock mode, 可切 OpenAI-compatible'
+    },
+    {
+      key: 'events',
+      item: 'Events',
+      status: eventStatus?.mode ?? 'log-only',
+      detail: eventStatus
+        ? `${eventStatus.agentRunTopic} / ${eventStatus.agentToolCallTopic} / ${eventStatus.crmTaskTopic}`
+        : 'Kafka 可选开启'
+    },
+    {
+      key: 'observability',
+      item: 'Observability',
+      status: 'READY',
+      detail: 'Swagger UI / Actuator / X-Trace-Id'
+    }
+  ];
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -36,12 +69,33 @@ export default function Dashboard() {
           <Text className="metric-label">面试演示闭环</Text>
         </Card>
         <Card className="span-3">
-          <Statistic title="模型提供方" value={health?.modelProvider ?? 'mock'} />
-          <Text className="metric-label">可切 OpenAI-compatible</Text>
+          <Statistic title="模型模式" value={modelStatus?.mode ?? health?.modelProvider ?? 'mock'} />
+          <Text className="metric-label">{modelStatus?.model ?? 'OpenAI-compatible adapter'}</Text>
         </Card>
         <Card className="span-3">
-          <Statistic title="演示场景" value={5} suffix="个" />
-          <Text className="metric-label">推荐、分析、确认、质检、评测</Text>
+          <Statistic title="事件总线" value={eventStatus?.mode ?? 'log-only'} />
+          <Text className="metric-label">Kafka topic 预留与可观测事件</Text>
+        </Card>
+        <Card className="span-3">
+          <Statistic title="演示场景" value={6} suffix="个" />
+          <Text className="metric-label">推荐、分析、确认、知识库、质检、评测</Text>
+        </Card>
+        <Card className="span-12" title="运行探针">
+          <Table
+            size="small"
+            pagination={false}
+            dataSource={probeRows}
+            columns={[
+              { title: '探针', dataIndex: 'item', width: 160 },
+              {
+                title: '状态',
+                dataIndex: 'status',
+                width: 180,
+                render: (value: string) => <Tag color={value === 'LOCAL' ? 'orange' : 'blue'}>{value}</Tag>
+              },
+              { title: '说明', dataIndex: 'detail' }
+            ]}
+          />
         </Card>
 
         <Card className="span-8" title="交付路线">

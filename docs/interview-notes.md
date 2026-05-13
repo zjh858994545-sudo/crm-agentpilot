@@ -16,12 +16,14 @@ The central design question is: how can an AI Agent help sales reps work faster 
 - Evaluation uses JSONL cases and real scripts to avoid invented metrics.
 - OpenAI-compatible model access is isolated behind `ChatModelClient`, so local demos stay deterministic while production can switch by environment variables.
 - Swagger UI, Actuator, and `X-Trace-Id` show that the project is operated as an engineering service, not just a local script.
+- Agent run, tool call, and confirmed CRM task events go through one event publisher. Local demos use log-only mode; setting `AGENT_EVENTS_KAFKA_ENABLED=true` publishes the same events to Kafka topics.
 
 ## Trade-offs
 
 - The first version uses mock model and mock embedding for repeatable tests.
 - Rule scoring ships before ML scoring because interviewers can inspect and reason about it.
 - Kafka is used for event recording and future async processing, but core writes remain transactional.
+- Event publishing is isolated from the write path. A Kafka outage should not let the Agent skip confirmation or corrupt CRM data; it only affects downstream observability and analytics.
 - The local RAG implementation stores deterministic mock embeddings in text form for H2-compatible tests; the Docker stack uses PostgreSQL with the pgvector image so the vector column can be swapped in later without changing service boundaries.
 
 ## Interview Demo Order
@@ -34,6 +36,7 @@ The central design question is: how can an AI Agent help sales reps work faster 
 6. Open Call Center to show summary, quality check, and contact-log confirmation.
 7. Open Evaluation to run metrics from JSONL test cases.
 8. Open Swagger UI to show the API surface and explain how frontend, evaluation scripts, and interview demos call the same endpoints.
+9. Open Dashboard runtime probes or `/api/events/status` to explain event topics and traceability.
 
 ## What Needs External Input
 

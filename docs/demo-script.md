@@ -2,6 +2,21 @@
 
 ## 准备
 
+推荐方式：
+
+```powershell
+.\scripts\start-full-demo.ps1
+.\scripts\smoke-demo.ps1 -RunDemo
+```
+
+停止演示进程：
+
+```powershell
+.\scripts\stop-full-demo.ps1
+```
+
+手动方式：
+
 ```powershell
 docker compose up -d
 cd backend
@@ -21,6 +36,7 @@ npm run dev
 如果只想演示 API 链路：
 
 ```powershell
+.\scripts\smoke-demo.ps1
 .\scripts\demo-api.ps1
 ```
 
@@ -166,3 +182,19 @@ Prompt：
 讲法：
 
 > 评测指标来自 JSONL 用例真实执行，面试时可以打开 `eval` 目录和生成的报告，说明这个 Agent 是可测试、可回归的。
+
+## 工程化追问：事件与可观测性
+
+页面：Dashboard 或 Swagger UI
+
+接口：
+
+```text
+GET /api/events/status
+GET /actuator/health
+GET /v3/api-docs
+```
+
+讲法：
+
+> Agent 每次运行、每次工具调用、以及确认后的 CRM 任务创建都会经过事件发布层。为了本地演示稳定，默认是 log-only；如果设置 `AGENT_EVENTS_KAFKA_ENABLED=true`，同一套事件会发布到 Kafka topic，供后续审计、告警、离线评测或运营看板消费。
