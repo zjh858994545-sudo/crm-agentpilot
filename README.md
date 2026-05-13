@@ -65,6 +65,8 @@ React Workbench
 .\scripts\stop-full-demo.ps1
 ```
 
+如果 `8080` 或 `5173` 已被本机其他程序占用，脚本会自动选择空闲端口，并在控制台打印实际 Frontend、Backend、Swagger 地址；`smoke-demo.ps1` 会自动读取 `.demo-logs/backend.url`。
+
 启动依赖：
 
 ```powershell

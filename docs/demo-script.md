@@ -9,6 +9,8 @@
 .\scripts\smoke-demo.ps1 -RunDemo
 ```
 
+如果本机 `8080` 或 `5173` 被占用，启动脚本会自动切换到空闲端口。以控制台打印的 Frontend 地址为准，`smoke-demo.ps1` 会自动读取实际 Backend 地址。
+
 停止演示进程：
 
 ```powershell

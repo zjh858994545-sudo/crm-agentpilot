@@ -1,5 +1,5 @@
 param(
-    [string]$BaseUrl = "http://localhost:8080",
+    [string]$BaseUrl = "",
     [switch]$RunDemo
 )
 
@@ -28,6 +28,16 @@ function Get-ResponseText($response) {
         return [System.Text.Encoding]::UTF8.GetString($response.Content)
     }
     return [string]$response.Content
+}
+
+if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+    $backendUrlFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".demo-logs\backend.url"
+    if (Test-Path $backendUrlFile) {
+        $BaseUrl = (Get-Content -Path $backendUrlFile -Raw).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+        $BaseUrl = "http://localhost:8080"
+    }
 }
 
 Write-Host "CRM-AgentPilot smoke check"

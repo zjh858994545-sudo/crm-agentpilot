@@ -10,7 +10,11 @@ function Stop-ProcessTree($processId) {
     }
     $process = Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue
     if ($process) {
-        Stop-Process -Id ([int]$processId) -Force
+        try {
+            Stop-Process -Id ([int]$processId) -Force -ErrorAction Stop
+        } catch {
+            & taskkill.exe /PID ([int]$processId) /T /F 1>$null 2>$null
+        }
     }
 }
 
