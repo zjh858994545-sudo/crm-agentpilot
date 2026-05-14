@@ -36,6 +36,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -139,7 +141,7 @@ public class AgentOrchestrator {
 
         Object result = executeConfirmedAction(confirmation);
         if (result instanceof CrmTask task) {
-            eventPublisher.publishCrmTaskCreated(task);
+            publishCrmTaskCreatedAfterCommit(task);
         }
         confirmation.setStatus("CONFIRMED");
         confirmation.setConfirmedBy(userId);
@@ -205,7 +207,7 @@ public class AgentOrchestrator {
         String deterministicAnswer = "客户现状：" + customer.getName() + " 属于 " + customer.getValueLevel()
                 + " 类客户，风险等级 " + customer.getRiskLevel()
                 + "。主要动作：复盘历史跟进和曝光效果，围绕客户关注点给出续费/优化建议。建议话术：先确认经营目标，再用数据和同行案例说明方案价值。";
-        String answer = generateCustomerAnalysisAnswer(request.message(), customer, logs, knowledge, deterministicAnswer);
+        String answer = generateCustomerAnalysisAnswer(session.getId(), request.message(), customer, logs, knowledge, deterministicAnswer);
         run.setStatus("COMPLETED");
         run.setAgentOutput(answer);
         return finalAnswer(session.getId(), run.getId(), answer, List.of(view(profileCall), view(historyCall), view(knowledgeCall)));
@@ -228,10 +230,14 @@ public class AgentOrchestrator {
         payload.put("customerId", customer.getId());
         payload.put("leadId", lead == null ? null : lead.getId());
         payload.put("salesRepId", defaultSalesRepId(request.salesRepId()));
-        payload.put("title", "跟进" + customer.getName() + "续费意向");
+        String title = "跟进" + customer.getName() + "续费意向";
+        String idempotencyKey = "agent-task-" + customer.getId() + "-"
+                + dueTime.toLocalDate() + "-"
+                + Integer.toHexString(Objects.hash(customer.getId(), title, dueTime));
+        payload.put("title", title);
         payload.put("content", "围绕套餐到期、曝光效果、价格异议和下一步复盘沟通。");
         payload.put("dueTime", dueTime.toString());
-        payload.put("idempotencyKey", "agent-task-" + run.getId() + "-" + customer.getId());
+        payload.put("idempotencyKey", idempotencyKey);
 
         AgentToolCall call = recordTool(run.getId(), "createFollowupTask", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
         AgentConfirmation confirmation = new AgentConfirmation();
@@ -382,6 +388,7 @@ public class AgentOrchestrator {
     }
 
     private String generateCustomerAnalysisAnswer(
+            Long sessionId,
             String userMessage,
             Customer customer,
             List<ContactLog> logs,
@@ -410,6 +417,9 @@ public class AgentOrchestrator {
                 最近跟进摘要：
                 %s
 
+                会话短期记忆：
+                %s
+
                 知识库回答：
                 %s
 
@@ -423,6 +433,7 @@ public class AgentOrchestrator {
                 customer.getRiskLevel(),
                 customer.getTags(),
                 summarizeLogs(logs),
+                memoryService.summarize(sessionId),
                 knowledge.answer()
         );
         Optional<String> modelAnswer = chatModelClient.complete(systemPrompt, userPrompt);
@@ -447,6 +458,19 @@ public class AgentOrchestrator {
         }
     }
 
+    private void publishCrmTaskCreatedAfterCommit(CrmTask task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            eventPublisher.publishCrmTaskCreated(task);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                eventPublisher.publishCrmTaskCreated(task);
+            }
+        });
+    }
+
     private String routeIntent(String message) {
         if (message.contains("创建") && message.contains("任务")) {
             return "CREATE_TASK";
@@ -468,11 +492,7 @@ public class AgentOrchestrator {
             return customerService.getById(request.customerId());
         }
         String message = request.message();
-        return customerService.list()
-                .stream()
-                .filter(customer -> message.contains(customer.getName()))
-                .findFirst()
-                .orElse(null);
+        return customerService.findMentionedIn(message).orElse(null);
     }
 
     private AgentChatResponse finalAnswer(Long sessionId, Long runId, String answer, List<ToolCallView> toolCalls) {

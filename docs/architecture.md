@@ -1,6 +1,6 @@
 # Architecture
 
-CRM-AgentPilot is built around one rule: the Agent can assist sales work, but business writes must be controlled, auditable, and replayable.
+CRM-AgentPilot is built around one rule: the Agent can assist sales work, but business writes must be controlled, auditable, and debuggable.
 
 ## Runtime View
 
@@ -35,10 +35,11 @@ Frontend Workbench
 
 - Keep local development runnable with a mock model provider.
 - Keep LLM provider logic behind an OpenAI-compatible adapter.
+- Store short-term session memory in Redis with an in-process fallback, and include it in configured customer-analysis model prompts.
 - Store every tool call with input, output, status, latency, and error.
 - Split read tools and write tools at the registry level.
 - Treat retrieved knowledge as business context, never as system instructions.
 - Keep the first version deterministic with a mock model and mock embedding so tests and demos are repeatable.
 - Use the pgvector Docker image in local infrastructure while storing mock embeddings in a database-portable format for H2 tests.
 - Add `X-Trace-Id` on every HTTP response so API calls can be correlated with logs and tool-call records.
-- Publish Agent run, tool-call, and confirmed CRM task events through one event layer. The default is log-only for stable local demos; setting `AGENT_EVENTS_KAFKA_ENABLED=true` sends the same events to Kafka topics.
+- Publish Agent run, tool-call, and confirmed CRM task events through one event layer. Confirmed CRM task events are emitted after the database transaction commits. The default is log-only for stable local demos; setting `AGENT_EVENTS_KAFKA_ENABLED=true` sends the same events to Kafka topics.
