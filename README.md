@@ -51,23 +51,48 @@ React Workbench
   -> Kafka
 ```
 
-## 本地启动
+## 一键启动
 
-一键演示启动：
+面试演示首选全容器版，只需要这一条：
+
+```powershell
+.\scripts\start-docker-demo.ps1 -OpenBrowser
+```
+
+这个脚本会用 Docker Compose 启动 PostgreSQL/pgvector、Redis、Kafka、后端和前端，自动读取系统环境变量里的模型配置，等待后端健康检查通过，并执行 smoke check。
+
+默认地址：
+
+- Frontend: http://localhost:15173
+- Backend health: http://localhost:18080/api/health
+- Swagger UI: http://localhost:18080/swagger-ui.html
+- Model status: http://localhost:18080/api/model/status
+
+停止：
+
+```powershell
+.\scripts\stop-docker-demo.ps1
+```
+
+重置数据库和容器卷：
+
+```powershell
+.\scripts\stop-docker-demo.ps1 -ResetData
+```
+
+如果端口冲突，可以指定端口：
+
+```powershell
+.\scripts\start-docker-demo.ps1 -BackendPort 18081 -FrontendPort 15174 -OpenBrowser
+```
+
+开发调试时也可以使用本机 Maven/NPM 版本：
 
 ```powershell
 .\scripts\start-full-demo.ps1
 ```
 
-该脚本会启动 Docker 依赖、后端和前端，并把日志写入 `.demo-logs/`。停止演示进程：
-
-```powershell
-.\scripts\stop-full-demo.ps1
-```
-
-如果 `8080` 或 `5173` 已被本机其他程序占用，脚本会自动选择空闲端口，并在控制台打印实际 Frontend、Backend、Swagger 地址；`smoke-demo.ps1` 会自动读取 `.demo-logs/backend.url`。
-
-启动依赖：
+启动基础设施：
 
 ```powershell
 docker compose up -d
@@ -99,20 +124,21 @@ npm run dev
 
 ## Real Model Configuration
 
-默认使用 deterministic mock mode，方便测试和面试演示稳定复现。如果要切到真实 OpenAI-compatible 模型，设置环境变量：
+默认使用 deterministic mock mode，方便测试和面试演示稳定复现。如果要长期切到真实 OpenAI-compatible 模型，建议写入 Windows 用户环境变量：
 
 ```powershell
-$env:AGENT_MODEL_PROVIDER="openai-compatible"
-$env:OPENAI_COMPATIBLE_BASE_URL="https://api.openai.com/v1"
-$env:OPENAI_COMPATIBLE_API_KEY="你的 API Key"
-$env:OPENAI_COMPATIBLE_CHAT_MODEL="gpt-4o-mini"
+[Environment]::SetEnvironmentVariable("AGENT_MODEL_PROVIDER", "openai-compatible", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_COMPATIBLE_BASE_URL", "https://api.openai.com/v1", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_COMPATIBLE_API_KEY", "你的 API Key", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_COMPATIBLE_CHAT_MODEL", "gpt-4o-mini", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_COMPATIBLE_TEMPERATURE", "0.2", "User")
 ```
 
-验证模型连接：
+设置后重新打开 PowerShell，再运行 `.\scripts\start-docker-demo.ps1`。验证模型连接：
 
 ```powershell
-curl http://localhost:8080/api/model/status
-curl -X POST http://localhost:8080/api/model/chat `
+curl http://localhost:18080/api/model/status
+curl -X POST http://localhost:18080/api/model/chat `
   -H "Content-Type: application/json" `
   -d "{\"prompt\":\"用一句话解释 CRM AI Agent 的价值\"}"
 ```
