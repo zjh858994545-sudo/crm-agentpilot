@@ -39,13 +39,14 @@ function Get-AvailablePort($preferred, $fallbackStart) {
 }
 
 function Import-UserEnvironment($name) {
-    $currentValue = [Environment]::GetEnvironmentVariable($name, "Process")
-    if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
-        return
-    }
     $userValue = [Environment]::GetEnvironmentVariable($name, "User")
     if (-not [string]::IsNullOrWhiteSpace($userValue)) {
         Set-Item -Path "Env:$name" -Value $userValue
+        return
+    }
+    $currentValue = [Environment]::GetEnvironmentVariable($name, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+        Set-Item -Path "Env:$name" -Value $currentValue
     }
 }
 
