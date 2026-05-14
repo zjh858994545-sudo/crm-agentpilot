@@ -49,6 +49,29 @@ function Import-UserEnvironment($name) {
     }
 }
 
+function Set-JavaProxyOptions {
+    Import-UserEnvironment "JAVA_TOOL_OPTIONS"
+    if (-not [string]::IsNullOrWhiteSpace($env:JAVA_TOOL_OPTIONS)) {
+        Write-Host "[CONFIG] JAVA_TOOL_OPTIONS already configured"
+        return
+    }
+
+    $proxyUri = $env:HTTPS_PROXY
+    if ([string]::IsNullOrWhiteSpace($proxyUri)) {
+        $proxyUri = $env:HTTP_PROXY
+    }
+    if ([string]::IsNullOrWhiteSpace($proxyUri) -and (Test-PortInUse 7890)) {
+        $proxyUri = "http://127.0.0.1:7890"
+    }
+    if ([string]::IsNullOrWhiteSpace($proxyUri)) {
+        return
+    }
+
+    $uri = [Uri]$proxyUri
+    $env:JAVA_TOOL_OPTIONS = "-Dhttp.proxyHost=$($uri.Host) -Dhttp.proxyPort=$($uri.Port) -Dhttps.proxyHost=$($uri.Host) -Dhttps.proxyPort=$($uri.Port) -Dhttp.nonProxyHosts=localhost|127.*|[::1]"
+    Write-Host "[CONFIG] Java proxy $($uri.Host):$($uri.Port)"
+}
+
 function Start-DemoProcess($name, $workDir, $command) {
     $logPath = Join-Path $logsDir "$name-$runStamp.log"
     $pidPath = Join-Path $logsDir "$name.pid"
@@ -70,8 +93,13 @@ function Start-DemoProcess($name, $workDir, $command) {
     "OPENAI_COMPATIBLE_API_KEY",
     "OPENAI_COMPATIBLE_CHAT_MODEL",
     "OPENAI_COMPATIBLE_TEMPERATURE",
-    "AGENT_EVENTS_KAFKA_ENABLED"
+    "AGENT_EVENTS_KAFKA_ENABLED",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY"
 ) | ForEach-Object { Import-UserEnvironment $_ }
+
+Set-JavaProxyOptions
 
 $docker = Get-DockerCommand
 Write-Host "[RUN] docker compose up -d"

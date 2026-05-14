@@ -79,6 +79,29 @@ function Show-DockerPullHelp {
     Write-Host ""
 }
 
+function Set-DockerBackendJavaProxyOptions {
+    if (-not [string]::IsNullOrWhiteSpace($env:BACKEND_JAVA_TOOL_OPTIONS)) {
+        return
+    }
+    $proxyUri = $env:HTTPS_PROXY
+    if ([string]::IsNullOrWhiteSpace($proxyUri)) {
+        $proxyUri = $env:HTTP_PROXY
+    }
+    if ([string]::IsNullOrWhiteSpace($proxyUri) -and (Test-PortInUse 7890)) {
+        $proxyUri = "http://host.docker.internal:7890"
+    }
+    if ([string]::IsNullOrWhiteSpace($proxyUri)) {
+        return
+    }
+    $uri = [Uri]$proxyUri
+    $proxyHost = $uri.Host
+    if ($proxyHost -eq "127.0.0.1" -or $proxyHost -eq "localhost") {
+        $proxyHost = "host.docker.internal"
+    }
+    $env:BACKEND_JAVA_TOOL_OPTIONS = "-Dhttp.proxyHost=$proxyHost -Dhttp.proxyPort=$($uri.Port) -Dhttps.proxyHost=$proxyHost -Dhttps.proxyPort=$($uri.Port) -Dhttp.nonProxyHosts=localhost|127.*|[::1]|postgres|redis|kafka"
+    Write-Host "[CONFIG] Docker backend Java proxy ${proxyHost}:$($uri.Port)"
+}
+
 @(
     "AGENT_MODEL_PROVIDER",
     "OPENAI_COMPATIBLE_BASE_URL",
@@ -90,6 +113,8 @@ function Show-DockerPullHelp {
     "HTTPS_PROXY",
     "NO_PROXY"
 ) | ForEach-Object { Import-UserEnvironment $_ }
+
+Set-DockerBackendJavaProxyOptions
 
 if ($BackendPort -le 0) {
     $BackendPort = Get-AvailablePort 18080 18081
