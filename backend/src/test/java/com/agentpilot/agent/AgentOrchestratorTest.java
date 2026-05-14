@@ -85,5 +85,13 @@ class AgentOrchestratorTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
     }
-}
 
+    @Test
+    void confirmationDecisionRequiresUserId() throws Exception {
+        mockMvc.perform(post("/api/agent/confirmations/1/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":null}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")));
+    }
+}

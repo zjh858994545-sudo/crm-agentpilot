@@ -45,6 +45,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class AgentOrchestrator {
@@ -101,7 +102,6 @@ public class AgentOrchestrator {
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
     public AgentChatResponse chat(AgentChatRequest request) {
         Instant startedAt = Instant.now();
         AgentSession session = getOrCreateSession(request);
@@ -128,6 +128,7 @@ public class AgentOrchestrator {
 
     @Transactional
     public Map<String, Object> confirm(Long confirmationId, Long userId) {
+        requireUserId(userId);
         AgentConfirmation confirmation = confirmationService.getById(confirmationId);
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
@@ -141,7 +142,7 @@ public class AgentOrchestrator {
             eventPublisher.publishCrmTaskCreated(task);
         }
         confirmation.setStatus("CONFIRMED");
-        confirmation.setConfirmedBy(userId == null ? 1L : userId);
+        confirmation.setConfirmedBy(userId);
         confirmation.setConfirmedAt(LocalDateTime.now());
         confirmationService.updateById(confirmation);
 
@@ -157,12 +158,13 @@ public class AgentOrchestrator {
 
     @Transactional
     public Map<String, Object> reject(Long confirmationId, Long userId) {
+        requireUserId(userId);
         AgentConfirmation confirmation = confirmationService.getById(confirmationId);
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
         }
         confirmation.setStatus("REJECTED");
-        confirmation.setConfirmedBy(userId == null ? 1L : userId);
+        confirmation.setConfirmedBy(userId);
         confirmation.setConfirmedAt(LocalDateTime.now());
         confirmationService.updateById(confirmation);
         return Map.of("status", "REJECTED", "confirmationId", confirmationId);
@@ -170,8 +172,9 @@ public class AgentOrchestrator {
 
     private AgentChatResponse recommendLeads(AgentChatRequest request, AgentSession session, AgentRun run) {
         Map<String, Object> input = Map.of("salesRepId", defaultSalesRepId(request.salesRepId()), "topK", 5);
+        Instant toolStartedAt = Instant.now();
         List<LeadRecommendation> recommendations = leadScoringService.recommend(defaultSalesRepId(request.salesRepId()), 5);
-        AgentToolCall call = recordTool(run.getId(), "rankLeads", input, recommendations, "SUCCESS", null);
+        AgentToolCall call = recordTool(run.getId(), "rankLeads", input, recommendations, "SUCCESS", null, elapsedMs(toolStartedAt));
         String answer = "建议今天优先跟进：" + recommendations.stream()
                 .limit(3)
                 .map(item -> item.customerName() + "(" + item.priority() + "，" + item.score() + ")")
@@ -183,6 +186,7 @@ public class AgentOrchestrator {
     }
 
     private AgentChatResponse analyzeCustomer(AgentChatRequest request, AgentSession session, AgentRun run) {
+        Instant profileStartedAt = Instant.now();
         Customer customer = resolveCustomer(request);
         if (customer == null) {
             String answer = "没有找到对应客户，请提供客户名称或 customerId。";
@@ -190,15 +194,18 @@ public class AgentOrchestrator {
             run.setAgentOutput(answer);
             return finalAnswer(session.getId(), run.getId(), answer, List.of());
         }
-        AgentToolCall profileCall = recordTool(run.getId(), "queryCustomerProfile", Map.of("customerId", customer.getId()), customer, "SUCCESS", null);
+        AgentToolCall profileCall = recordTool(run.getId(), "queryCustomerProfile", Map.of("customerId", customer.getId()), customer, "SUCCESS", null, elapsedMs(profileStartedAt));
+        Instant historyStartedAt = Instant.now();
         List<ContactLog> logs = contactLogService.listByCustomerId(customer.getId());
-        AgentToolCall historyCall = recordTool(run.getId(), "queryContactHistory", Map.of("customerId", customer.getId()), logs, "SUCCESS", null);
+        AgentToolCall historyCall = recordTool(run.getId(), "queryContactHistory", Map.of("customerId", customer.getId()), logs, "SUCCESS", null, elapsedMs(historyStartedAt));
+        Instant knowledgeStartedAt = Instant.now();
         KnowledgeAnswer knowledge = ragService.ask(customer.getIndustry() + " 续费 价格异议 跟进策略", 3);
-        AgentToolCall knowledgeCall = recordTool(run.getId(), "searchKnowledge", Map.of("query", customer.getIndustry() + " 续费 价格异议 跟进策略"), knowledge, "SUCCESS", null);
+        AgentToolCall knowledgeCall = recordTool(run.getId(), "searchKnowledge", Map.of("query", customer.getIndustry() + " 续费 价格异议 跟进策略"), knowledge, "SUCCESS", null, elapsedMs(knowledgeStartedAt));
 
-        String answer = "客户现状：" + customer.getName() + " 属于 " + customer.getValueLevel()
+        String deterministicAnswer = "客户现状：" + customer.getName() + " 属于 " + customer.getValueLevel()
                 + " 类客户，风险等级 " + customer.getRiskLevel()
                 + "。主要动作：复盘历史跟进和曝光效果，围绕客户关注点给出续费/优化建议。建议话术：先确认经营目标，再用数据和同行案例说明方案价值。";
+        String answer = generateCustomerAnalysisAnswer(request.message(), customer, logs, knowledge, deterministicAnswer);
         run.setStatus("COMPLETED");
         run.setAgentOutput(answer);
         return finalAnswer(session.getId(), run.getId(), answer, List.of(view(profileCall), view(historyCall), view(knowledgeCall)));
@@ -226,7 +233,7 @@ public class AgentOrchestrator {
         payload.put("dueTime", dueTime.toString());
         payload.put("idempotencyKey", "agent-task-" + run.getId() + "-" + customer.getId());
 
-        AgentToolCall call = recordTool(run.getId(), "createFollowupTask", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null);
+        AgentToolCall call = recordTool(run.getId(), "createFollowupTask", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
         AgentConfirmation confirmation = new AgentConfirmation();
         confirmation.setRunId(run.getId());
         confirmation.setToolCallId(call.getId());
@@ -256,8 +263,9 @@ public class AgentOrchestrator {
     }
 
     private AgentChatResponse answerKnowledge(AgentChatRequest request, AgentSession session, AgentRun run) {
+        Instant toolStartedAt = Instant.now();
         KnowledgeAnswer answer = ragService.ask(request.message(), 5);
-        AgentToolCall call = recordTool(run.getId(), "searchKnowledge", Map.of("query", request.message()), answer, "SUCCESS", null);
+        AgentToolCall call = recordTool(run.getId(), "searchKnowledge", Map.of("query", request.message()), answer, "SUCCESS", null, elapsedMs(toolStartedAt));
         run.setStatus("COMPLETED");
         run.setAgentOutput(answer.answer());
         return finalAnswer(session.getId(), run.getId(), answer.answer(), List.of(view(call)));
@@ -354,8 +362,7 @@ public class AgentOrchestrator {
         return run;
     }
 
-    private AgentToolCall recordTool(Long runId, String toolName, Object input, Object output, String status, String errorMessage) {
-        Instant startedAt = Instant.now();
+    private AgentToolCall recordTool(Long runId, String toolName, Object input, Object output, String status, String errorMessage, long latencyMs) {
         AgentToolDefinition definition = toolRegistry.find(toolName)
                 .orElse(new AgentToolDefinition(toolName, "unknown", ToolType.READ, false, List.of()));
         AgentToolCall call = new AgentToolCall();
@@ -365,13 +372,79 @@ public class AgentOrchestrator {
         call.setInputJson(toJson(input));
         call.setOutputJson(toJson(output));
         call.setStatus(status);
-        call.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
+        call.setLatencyMs(Math.max(0L, latencyMs));
         call.setErrorMessage(errorMessage);
         call.setRequiresConfirmation(definition.requiresConfirmation());
         call.setCompletedAt(LocalDateTime.now());
         toolCallService.save(call);
         eventPublisher.publishToolCallRecorded(call);
         return call;
+    }
+
+    private String generateCustomerAnalysisAnswer(
+            String userMessage,
+            Customer customer,
+            List<ContactLog> logs,
+            KnowledgeAnswer knowledge,
+            String deterministicAnswer
+    ) {
+        if (!chatModelClient.configured()) {
+            return deterministicAnswer;
+        }
+        String systemPrompt = """
+                你是 CRM-AgentPilot 的销售作业助手。只能基于给定 CRM 事实、历史跟进和知识库引用生成回答。
+                不要编造客户信息。输出必须包含客户现状、主要风险、推荐动作、可执行话术。
+                涉及写 CRM 的动作只能建议，不能宣称已经写入。
+                """;
+        String userPrompt = """
+                用户问题：%s
+
+                客户资料：
+                名称：%s
+                行业：%s
+                城市：%s
+                价值等级：%s
+                风险等级：%s
+                标签：%s
+
+                最近跟进摘要：
+                %s
+
+                知识库回答：
+                %s
+
+                请生成简洁、专业、可执行的客户跟进策略。
+                """.formatted(
+                userMessage,
+                customer.getName(),
+                customer.getIndustry(),
+                customer.getCity(),
+                customer.getValueLevel(),
+                customer.getRiskLevel(),
+                customer.getTags(),
+                summarizeLogs(logs),
+                knowledge.answer()
+        );
+        Optional<String> modelAnswer = chatModelClient.complete(systemPrompt, userPrompt);
+        return modelAnswer.orElse(deterministicAnswer);
+    }
+
+    private String summarizeLogs(List<ContactLog> logs) {
+        return logs.stream()
+                .limit(3)
+                .map(log -> "- " + log.getContactAt() + " " + log.getSummary())
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("暂无历史跟进记录");
+    }
+
+    private long elapsedMs(Instant startedAt) {
+        return Duration.between(startedAt, Instant.now()).toMillis();
+    }
+
+    private void requireUserId(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required for confirmation decisions");
+        }
     }
 
     private String routeIntent(String message) {

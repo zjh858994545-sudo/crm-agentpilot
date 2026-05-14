@@ -2,6 +2,8 @@ package com.agentpilot.model;
 
 import com.agentpilot.model.config.ModelProperties;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -12,6 +14,8 @@ import java.util.Optional;
 
 @Component
 public class OpenAiCompatibleChatModelClient implements ChatModelClient {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleChatModelClient.class);
+
     private final ModelProperties properties;
     private final RestClient restClient;
 
@@ -47,6 +51,8 @@ public class OpenAiCompatibleChatModelClient implements ChatModelClient {
             String content = response.at("/choices/0/message/content").asText("");
             return StringUtils.hasText(content) ? Optional.of(content.strip()) : Optional.empty();
         } catch (RuntimeException ex) {
+            log.warn("OpenAI-compatible chat completion failed. provider={} model={} message={}",
+                    properties.getProvider(), config.getChatModel(), ex.getMessage());
             return Optional.empty();
         }
     }

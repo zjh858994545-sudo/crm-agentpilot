@@ -51,19 +51,17 @@ public class AgentController {
     @PostMapping("/confirmations/{id}/confirm")
     public ApiResponse<Map<String, Object>> confirm(
             @PathVariable Long id,
-            @RequestBody(required = false) ConfirmationDecisionRequest request
+            @Valid @RequestBody ConfirmationDecisionRequest request
     ) {
-        Long userId = request == null ? 1L : request.userId();
-        return ApiResponse.ok(orchestrator.confirm(id, userId));
+        return ApiResponse.ok(orchestrator.confirm(id, request.userId()));
     }
 
     @PostMapping("/confirmations/{id}/reject")
     public ApiResponse<Map<String, Object>> reject(
             @PathVariable Long id,
-            @RequestBody(required = false) ConfirmationDecisionRequest request
+            @Valid @RequestBody ConfirmationDecisionRequest request
     ) {
-        Long userId = request == null ? 1L : request.userId();
-        return ApiResponse.ok(orchestrator.reject(id, userId));
+        return ApiResponse.ok(orchestrator.reject(id, request.userId()));
     }
 
     @GetMapping("/tools")
@@ -81,4 +79,3 @@ public class AgentController {
         return ApiResponse.ok(toolCallService.listByRunId(runId));
     }
 }
-

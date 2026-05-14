@@ -10,6 +10,8 @@ import com.agentpilot.rag.vo.KnowledgeAnswer;
 import com.agentpilot.rag.vo.KnowledgeSearchResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -25,6 +27,8 @@ import java.util.stream.Stream;
 
 @Service
 public class EvaluationService {
+    private static final Logger log = LoggerFactory.getLogger(EvaluationService.class);
+
     private final RagService ragService;
     private final AgentOrchestrator orchestrator;
     private final ObjectMapper objectMapper;
@@ -37,8 +41,8 @@ public class EvaluationService {
 
     public EvaluationReport runEvaluation() {
         Instant startedAt = Instant.now();
-        List<JsonNode> ragCases = readJsonl("../eval/rag_questions.jsonl");
-        List<JsonNode> toolCases = readJsonl("../eval/tool_call_cases.jsonl");
+        List<JsonNode> ragCases = readJsonl("eval/rag_questions.jsonl");
+        List<JsonNode> toolCases = readJsonl("eval/tool_call_cases.jsonl");
         List<Long> latencies = new ArrayList<>();
 
         int ragHit = 0;
@@ -121,9 +125,9 @@ public class EvaluationService {
     }
 
     private List<JsonNode> readJsonl(String path) {
-        Path file = Path.of(path);
+        Path file = resolveProjectPath(path);
         if (!Files.exists(file)) {
-            return List.of();
+            throw new IllegalStateException("Evaluation file not found: " + path);
         }
         try (Stream<String> lines = Files.lines(file, StandardCharsets.UTF_8)) {
             return lines
@@ -131,7 +135,8 @@ public class EvaluationService {
                     .map(this::readJson)
                     .toList();
         } catch (IOException ex) {
-            return List.of();
+            log.error("Failed to read evaluation file {}", file, ex);
+            throw new IllegalStateException("Failed to read evaluation file: " + path, ex);
         }
     }
 
@@ -172,7 +177,7 @@ public class EvaluationService {
 
     private String writeReport(List<EvaluationMetric> metrics, Instant startedAt) {
         String fileName = "report-" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".md";
-        String report = tryWriteReport(Path.of("../eval/reports"), fileName, metrics, startedAt);
+        String report = tryWriteReport(resolveProjectPath("eval/reports"), fileName, metrics, startedAt);
         if (!report.isBlank()) {
             return report;
         }
@@ -202,7 +207,21 @@ public class EvaluationService {
             Files.write(report, lines, StandardCharsets.UTF_8);
             return report.normalize().toString();
         } catch (IOException ex) {
+            log.warn("Failed to write evaluation report to {}", reportsDir, ex);
             return "";
         }
+    }
+
+    private Path resolveProjectPath(String path) {
+        Path cwd = Path.of("").toAbsolutePath().normalize();
+        Path direct = cwd.resolve(path).normalize();
+        if (Files.exists(direct) || Files.exists(direct.getParent())) {
+            return direct;
+        }
+        Path parent = cwd.getParent() == null ? direct : cwd.getParent().resolve(path).normalize();
+        if (Files.exists(parent) || Files.exists(parent.getParent())) {
+            return parent;
+        }
+        return direct;
     }
 }

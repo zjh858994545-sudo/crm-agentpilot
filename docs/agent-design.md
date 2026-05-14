@@ -25,16 +25,18 @@ Read tools:
 - `rankLeads`
 - `searchKnowledge`
 - `queryProductPackage`
-- `analyzeCustomerRisk`
 
 Write tools:
 
 - `createFollowupTask`
 - `updateLeadStage`
 - `writeContactLog`
-- `saveCustomerMemory`
 
 All write tools must set `requiresConfirmation=true`.
+
+The current demo routes `rankLeads`, `queryCustomerProfile`, `queryContactHistory`,
+`searchKnowledge`, and `createFollowupTask`. Other registered write tools are kept
+as extension points and are not advertised as completed demo paths.
 
 ## Output Types
 
@@ -48,4 +50,3 @@ All write tools must set `requiresConfirmation=true`.
 - Policy and SOP facts come from knowledge retrieval.
 - Write tools only create confirmation records on the first pass.
 - Confirmation endpoints validate permissions, payload, and idempotency before writing.
-

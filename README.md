@@ -195,6 +195,14 @@ npm run build
 - 已加入 OpenAI-compatible 模型适配、Swagger UI、Actuator 基础端点、`X-Trace-Id` 请求追踪
 - 已加入可选 Kafka 事件发布层：`agent-run-events`、`agent-tool-call-events`、`crm-task-events`，默认 log-only，设置 `AGENT_EVENTS_KAFKA_ENABLED=true` 后可发布到 Kafka
 
+## 已知限制
+
+- 主 Agent 默认使用 deterministic mock 路由，保证面试演示和评测可复现；配置真实模型后，客户分析链路会使用 `ChatModelClient` 生成最终策略表达，其他意图仍以规则路由为主。
+- RAG 当前使用关键词检索和 deterministic mock embedding，PostgreSQL 使用 pgvector 镜像作为后续扩展目标，当前 schema 仍为 H2 兼容设计。
+- Kafka 事件层默认 log-only；开启 Kafka 后是演示级事件发布，生产环境应升级为 outbox/CDC 保证事务与事件一致性。
+- 当前没有完整鉴权系统，confirmation 接口要求显式 `userId` 以保留审计字段，生产化应接 Spring Security/JWT 和客户字段级权限。
+- JSONL 评测集是小规模面试样例，用于验证评测框架，生产化需要扩展真实业务样本。
+
 ## 面试讲法
 
 一句话：这个项目解决的是“AI Agent 如何安全进入 CRM 业务系统”的问题。

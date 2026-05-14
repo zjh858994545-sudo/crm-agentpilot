@@ -10,11 +10,11 @@ The central design question is: how can an AI Agent help sales reps work faster 
 
 - Tool Calling is modeled as a registry with read and write tool types.
 - Write tools produce confirmation records instead of writing directly.
-- `agent_run` and `agent_tool_call` provide audit, replay, and debugging.
-- RAG combines query rewrite, keyword retrieval, vector retrieval, rerank, citation, and refusal.
+- `agent_run` and `agent_tool_call` provide audit traces and debugging context.
+- RAG combines query rewrite, keyword retrieval, deterministic vector-like scoring, rerank, citation, and refusal.
 - Lead scoring is explainable, so sales reps can trust why a customer is prioritized.
 - Evaluation uses JSONL cases and real scripts to avoid invented metrics.
-- OpenAI-compatible model access is isolated behind `ChatModelClient`, so local demos stay deterministic while production can switch by environment variables.
+- OpenAI-compatible model access is isolated behind `ChatModelClient`. Local demos stay deterministic by default, while configured environments can use the real model for `/api/model/chat` and the customer-analysis answer synthesis path.
 - Swagger UI, Actuator, and `X-Trace-Id` show that the project is operated as an engineering service, not just a local script.
 - Agent run, tool call, and confirmed CRM task events go through one event publisher. Local demos use log-only mode; setting `AGENT_EVENTS_KAFKA_ENABLED=true` publishes the same events to Kafka topics.
 
@@ -24,7 +24,7 @@ The central design question is: how can an AI Agent help sales reps work faster 
 - Rule scoring ships before ML scoring because interviewers can inspect and reason about it.
 - Kafka is used for event recording and future async processing, but core writes remain transactional.
 - Event publishing is isolated from the write path. A Kafka outage should not let the Agent skip confirmation or corrupt CRM data; it only affects downstream observability and analytics.
-- The local RAG implementation stores deterministic mock embeddings in text form for H2-compatible tests; the Docker stack uses PostgreSQL with the pgvector image so the vector column can be swapped in later without changing service boundaries.
+- The local RAG implementation stores deterministic mock embeddings in text form for H2-compatible tests; the Docker stack uses PostgreSQL with the pgvector image as a migration target, but the current schema intentionally remains portable.
 
 ## Interview Demo Order
 
