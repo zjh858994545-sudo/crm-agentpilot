@@ -2,7 +2,8 @@ param(
     [int]$BackendPort = 0,
     [int]$FrontendPort = 0,
     [switch]$NoSmoke,
-    [switch]$OpenBrowser
+    [switch]$OpenBrowser,
+    [switch]$NoFallback
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,13 +68,27 @@ function Get-AvailablePort($preferred, $fallbackStart) {
     throw "No available port found near $fallbackStart."
 }
 
+function Show-DockerPullHelp {
+    Write-Host ""
+    Write-Host "Docker could not pull build images from Docker Hub."
+    Write-Host "If you are using a local proxy, configure Docker Desktop:"
+    Write-Host "Settings -> Resources -> Proxies -> Manual proxy"
+    Write-Host "HTTP proxy:  http://127.0.0.1:7890"
+    Write-Host "HTTPS proxy: http://127.0.0.1:7890"
+    Write-Host "Then Apply & Restart Docker Desktop and run this script again."
+    Write-Host ""
+}
+
 @(
     "AGENT_MODEL_PROVIDER",
     "OPENAI_COMPATIBLE_BASE_URL",
     "OPENAI_COMPATIBLE_API_KEY",
     "OPENAI_COMPATIBLE_CHAT_MODEL",
     "OPENAI_COMPATIBLE_TEMPERATURE",
-    "AGENT_EVENTS_KAFKA_ENABLED"
+    "AGENT_EVENTS_KAFKA_ENABLED",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY"
 ) | ForEach-Object { Import-UserEnvironment $_ }
 
 if ($BackendPort -le 0) {
@@ -108,6 +123,16 @@ $composeArgs = @(
 
 Write-Host "[RUN] docker compose full stack"
 & $docker @composeArgs
+if ($LASTEXITCODE -ne 0) {
+    Show-DockerPullHelp
+    if ($NoFallback) {
+        throw "Docker Compose full stack failed. Fix Docker Hub connectivity or rerun without -NoFallback."
+    }
+    Write-Host "[FALLBACK] Starting demo with Docker infrastructure + local backend/frontend."
+    Write-Host "[FALLBACK] This keeps one-command startup working while Docker Hub is unavailable."
+    & (Join-Path $PSScriptRoot "start-full-demo.ps1")
+    exit $LASTEXITCODE
+}
 
 Write-Host "[WAIT] backend health"
 Wait-Backend $backendUrl

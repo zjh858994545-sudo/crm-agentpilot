@@ -38,6 +38,17 @@ function Get-AvailablePort($preferred, $fallbackStart) {
     throw "No available port found near $fallbackStart."
 }
 
+function Import-UserEnvironment($name) {
+    $currentValue = [Environment]::GetEnvironmentVariable($name, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+        return
+    }
+    $userValue = [Environment]::GetEnvironmentVariable($name, "User")
+    if (-not [string]::IsNullOrWhiteSpace($userValue)) {
+        Set-Item -Path "Env:$name" -Value $userValue
+    }
+}
+
 function Start-DemoProcess($name, $workDir, $command) {
     $logPath = Join-Path $logsDir "$name-$runStamp.log"
     $pidPath = Join-Path $logsDir "$name.pid"
@@ -52,6 +63,15 @@ function Start-DemoProcess($name, $workDir, $command) {
     Set-Content -Path $pidPath -Value $process.Id -Encoding ASCII
     Write-Host "[STARTED] $name pid=$($process.Id), log=$logPath"
 }
+
+@(
+    "AGENT_MODEL_PROVIDER",
+    "OPENAI_COMPATIBLE_BASE_URL",
+    "OPENAI_COMPATIBLE_API_KEY",
+    "OPENAI_COMPATIBLE_CHAT_MODEL",
+    "OPENAI_COMPATIBLE_TEMPERATURE",
+    "AGENT_EVENTS_KAFKA_ENABLED"
+) | ForEach-Object { Import-UserEnvironment $_ }
 
 $docker = Get-DockerCommand
 Write-Host "[RUN] docker compose up -d"
