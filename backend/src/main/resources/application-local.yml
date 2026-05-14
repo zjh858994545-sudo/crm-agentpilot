@@ -11,7 +11,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration,classpath:db/vendor/{vendor}
   data:
     redis:
       host: ${REDIS_HOST:localhost}

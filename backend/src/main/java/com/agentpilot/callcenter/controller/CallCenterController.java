@@ -9,6 +9,7 @@ import com.agentpilot.callcenter.service.CustomerMemoryService;
 import com.agentpilot.callcenter.entity.CustomerMemory;
 import com.agentpilot.common.response.ApiResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +21,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/callcenter")
+@PreAuthorize("hasAuthority('crm:read')")
 public class CallCenterController {
     private final CallCenterService callCenterService;
     private final CustomerMemoryService customerMemoryService;
@@ -40,6 +42,7 @@ public class CallCenterController {
     }
 
     @PostMapping("/contact-log-confirmations")
+    @PreAuthorize("hasAuthority('crm:write')")
     public ApiResponse<ContactLogConfirmationResponse> proposeContactLog(@Valid @RequestBody CallTextRequest request) {
         return ApiResponse.ok(callCenterService.proposeContactLog(request));
     }
@@ -49,4 +52,3 @@ public class CallCenterController {
         return ApiResponse.ok(customerMemoryService.listByCustomerId(customerId));
     }
 }
-

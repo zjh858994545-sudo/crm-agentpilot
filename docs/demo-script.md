@@ -200,3 +200,22 @@ GET /v3/api-docs
 讲法：
 
 > Agent 每次运行、每次工具调用、以及确认后的 CRM 任务创建都会经过事件发布层。为了本地演示稳定，默认是 log-only；如果设置 `AGENT_EVENTS_KAFKA_ENABLED=true`，同一套事件会发布到 Kafka topic，供后续审计、告警、离线评测或运营看板消费。
+
+> 现在事件不是直接 fire-and-forget，而是先写入 `agent_outbox_event`。请求事务提交后再分发，`/api/events/status` 里的 `outboxPending` 可以看到待分发积压。
+
+## 工程化追问：权限、pgvector 与 Tool Schema
+
+接口：
+
+```text
+GET /api/agent/tools/openai
+POST /api/knowledge/search
+```
+
+讲法：
+
+> 业务 API 支持 Spring Security strict 模式，通过 `X-AgentPilot-Token` 做演示级权限保护；本地默认 permissive，避免面试现场因为 token 配置影响演示。
+
+> 知识库在 PostgreSQL 下会走 pgvector，检索结果里的 `retriever=pgvector-hybrid` 可以作为证据。当前配置下 embedding 是阿里百炼 `text-embedding-v4`，`/api/model/embedding` 会返回 `vectorLength=1024`；测试 profile 仍保留 deterministic mock，保证 CI 稳定。
+
+> Tool Registry 已经把每个工具的参数 schema 写成 JSON Schema，并能通过 `/api/agent/tools/openai` 转成 OpenAI-compatible tools 数组。主 Agent 还没有全意图交给 LLM function calling，但协议层已经准备好了。

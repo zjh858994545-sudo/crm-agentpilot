@@ -12,6 +12,7 @@ import com.agentpilot.rag.vo.KnowledgeImportRequest;
 import com.agentpilot.rag.vo.KnowledgeSearchRequest;
 import com.agentpilot.rag.vo.KnowledgeSearchResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/knowledge")
+@PreAuthorize("hasAuthority('knowledge:read')")
 public class KnowledgeController {
     private final KnowledgeDocService docService;
     private final KnowledgeChunkService chunkService;
@@ -39,6 +41,7 @@ public class KnowledgeController {
     }
 
     @PostMapping("/docs")
+    @PreAuthorize("hasAuthority('knowledge:write')")
     public ApiResponse<KnowledgeDoc> importDocument(@Valid @RequestBody KnowledgeImportRequest request) {
         return ApiResponse.ok(ragService.importDocument(request));
     }
@@ -63,4 +66,3 @@ public class KnowledgeController {
         return ApiResponse.ok(ragService.ask(request.question(), request.topK() == null ? 5 : request.topK()));
     }
 }
-

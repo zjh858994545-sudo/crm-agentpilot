@@ -1,6 +1,9 @@
 package com.agentpilot.agent;
 
 import com.agentpilot.agent.tool.ToolRegistry;
+import com.agentpilot.events.entity.OutboxEvent;
+import com.agentpilot.events.service.OutboxEventService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -34,12 +37,18 @@ class AgentOrchestratorTest {
     @Autowired
     private ToolRegistry toolRegistry;
 
+    @Autowired
+    private OutboxEventService outboxEventService;
+
     @Test
     void toolRegistrySeparatesReadAndWriteTools() {
         assertThat(toolRegistry.find("rankLeads")).isPresent();
         assertThat(toolRegistry.find("rankLeads").orElseThrow().requiresConfirmation()).isFalse();
         assertThat(toolRegistry.find("createFollowupTask")).isPresent();
         assertThat(toolRegistry.find("createFollowupTask").orElseThrow().requiresConfirmation()).isTrue();
+        assertThat(toolRegistry.find("createFollowupTask").orElseThrow().parametersSchema())
+                .containsKeys("type", "properties", "required");
+        assertThat(toolRegistry.openAiTools()).isNotEmpty();
     }
 
     @Test
@@ -84,6 +93,9 @@ class AgentOrchestratorTest {
                         .content("{\"userId\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
+
+        assertThat(outboxEventService.count(new LambdaQueryWrapper<OutboxEvent>()
+                .eq(OutboxEvent::getEventType, "crm_task.created"))).isGreaterThanOrEqualTo(1);
     }
 
     @Test

@@ -3,6 +3,8 @@ package com.agentpilot.events;
 import com.agentpilot.agent.entity.AgentRun;
 import com.agentpilot.agent.entity.AgentToolCall;
 import com.agentpilot.crm.entity.CrmTask;
+import com.agentpilot.events.entity.OutboxEvent;
+import com.agentpilot.events.service.OutboxEventService;
 import com.agentpilot.events.config.EventProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,12 +13,17 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class AgentPilotEventPublisher {
@@ -25,15 +32,18 @@ public class AgentPilotEventPublisher {
     private final EventProperties properties;
     private final ObjectProvider<KafkaTemplate<Object, Object>> kafkaTemplateProvider;
     private final ObjectMapper objectMapper;
+    private final OutboxEventService outboxEventService;
 
     public AgentPilotEventPublisher(
             EventProperties properties,
             ObjectProvider<KafkaTemplate<Object, Object>> kafkaTemplateProvider,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            OutboxEventService outboxEventService
     ) {
         this.properties = properties;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
         this.objectMapper = objectMapper;
+        this.outboxEventService = outboxEventService;
     }
 
     public void publishAgentRunCompleted(AgentRun run) {
@@ -77,6 +87,7 @@ public class AgentPilotEventPublisher {
         result.put("agentRunTopic", properties.getAgentRunTopic());
         result.put("agentToolCallTopic", properties.getAgentToolCallTopic());
         result.put("crmTaskTopic", properties.getCrmTaskTopic());
+        result.put("outboxPending", outboxEventService.pendingCount());
         return result;
     }
 
@@ -90,24 +101,64 @@ public class AgentPilotEventPublisher {
                 Instant.now(),
                 payload
         );
+        OutboxEvent outbox = new OutboxEvent();
+        outbox.setEventId(event.eventId());
+        outbox.setTopic(topic);
+        outbox.setEventType(eventType);
+        outbox.setAggregateType(aggregateType);
+        outbox.setAggregateId(event.aggregateId());
+        outbox.setTraceId(event.traceId());
+        outbox.setStatus("PENDING");
+        outbox.setRetryCount(0);
+        outbox.setCreatedAt(LocalDateTime.now());
+        try {
+            outbox.setPayloadJson(objectMapper.writeValueAsString(event));
+        } catch (JsonProcessingException ex) {
+            log.warn("Outbox event serialization failed. topic={} type={} message={}", topic, eventType, ex.getMessage());
+            return;
+        }
+        outboxEventService.save(outbox);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatchOne(outbox.getId());
+                }
+            });
+        } else {
+            dispatchOne(outbox.getId());
+        }
+    }
+
+    @Scheduled(fixedDelayString = "${agentpilot.events.outbox-dispatch-delay-ms:5000}")
+    public void dispatchPending() {
+        outboxEventService.listDispatchable(20).forEach(event -> dispatchOne(event.getId()));
+    }
+
+    private void dispatchOne(Long outboxId) {
+        OutboxEvent outbox = outboxEventService.getById(outboxId);
+        if (outbox == null || "PUBLISHED".equals(outbox.getStatus())) {
+            return;
+        }
         if (!properties.isKafkaEnabled()) {
-            log.info("event topic={} type={} aggregateId={}", topic, eventType, aggregateId);
+            log.info("outbox event topic={} type={} aggregateId={} mode=log-only",
+                    outbox.getTopic(), outbox.getEventType(), outbox.getAggregateId());
+            outboxEventService.markPublished(outbox);
             return;
         }
         KafkaTemplate<Object, Object> kafkaTemplate = kafkaTemplateProvider.getIfAvailable();
         if (kafkaTemplate == null) {
-            log.warn("Kafka event publishing is enabled but KafkaTemplate is unavailable. topic={} type={}", topic, eventType);
+            outboxEventService.markFailed(outbox, "KafkaTemplate is unavailable");
             return;
         }
         try {
-            kafkaTemplate.send(topic, event.aggregateId(), objectMapper.writeValueAsString(event))
-                    .whenComplete((result, ex) -> {
-                        if (ex != null) {
-                            log.warn("Kafka event publish failed. topic={} type={} message={}", topic, eventType, ex.getMessage());
-                        }
-                    });
-        } catch (JsonProcessingException ex) {
-            log.warn("Kafka event serialization failed. topic={} type={} message={}", topic, eventType, ex.getMessage());
+            kafkaTemplate.send(outbox.getTopic(), outbox.getAggregateId(), outbox.getPayloadJson())
+                    .get(5, TimeUnit.SECONDS);
+            outboxEventService.markPublished(outbox);
+        } catch (Exception ex) {
+            log.warn("Kafka outbox dispatch failed. topic={} type={} message={}",
+                    outbox.getTopic(), outbox.getEventType(), ex.getMessage());
+            outboxEventService.markFailed(outbox, ex.getMessage());
         }
     }
 }

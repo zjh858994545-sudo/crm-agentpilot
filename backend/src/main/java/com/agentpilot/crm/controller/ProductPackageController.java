@@ -4,6 +4,7 @@ import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.crm.entity.ProductPackage;
 import com.agentpilot.crm.service.ProductPackageService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,6 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/products")
+@PreAuthorize("hasAuthority('product:read')")
 public class ProductPackageController {
     private final ProductPackageService productPackageService;
 
@@ -31,4 +33,3 @@ public class ProductPackageController {
         return ApiResponse.ok(productPackageService.list(wrapper));
     }
 }
-

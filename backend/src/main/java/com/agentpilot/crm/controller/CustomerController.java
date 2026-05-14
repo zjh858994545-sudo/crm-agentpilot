@@ -6,6 +6,7 @@ import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.crm.service.CustomerService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customers")
+@PreAuthorize("hasAuthority('crm:read')")
 public class CustomerController {
     private final CustomerService customerService;
     private final ContactLogService contactLogService;
@@ -45,4 +47,3 @@ public class CustomerController {
         return ApiResponse.ok(contactLogService.listByCustomerId(id));
     }
 }
-

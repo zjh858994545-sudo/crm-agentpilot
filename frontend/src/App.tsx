@@ -9,8 +9,10 @@ import {
   TeamOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
-import { Badge, Layout, Menu, Space, Typography } from 'antd';
+import { Badge, Layout, Menu, Space, Tag, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { fetchEventStatus, fetchModelStatus, ModelStatus } from './api/client';
 import AgentChat from './pages/AgentChat/AgentChat';
 import AgentRuns from './pages/AgentRuns/AgentRuns';
 import CallCenter from './pages/CallCenter/CallCenter';
@@ -36,11 +38,25 @@ const navItems = [
 
 function Shell() {
   const location = useLocation();
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
+  const [eventMode, setEventMode] = useState('log-only');
   const selectedKey =
     navItems
       .map((item) => item.key)
       .filter((key) => key !== '/')
       .find((key) => location.pathname.startsWith(key)) ?? '/';
+
+  useEffect(() => {
+    fetchModelStatus().then(setModelStatus).catch(() => undefined);
+    fetchEventStatus().then((status) => setEventMode(status.mode)).catch(() => undefined);
+  }, []);
+
+  const modelText = modelStatus?.configured
+    ? `${modelStatus.vendor ?? modelStatus.provider} / ${modelStatus.model}`
+    : 'deterministic mock';
+  const embeddingText = modelStatus?.embedding?.configured
+    ? `${modelStatus.embedding.vendor ?? modelStatus.embedding.provider} / ${modelStatus.embedding.model} / ${modelStatus.embedding.dimension}d`
+    : 'embedding: mock';
 
   return (
     <Layout className="app-shell">
@@ -60,8 +76,10 @@ function Shell() {
             <Text className="eyebrow">Interview Demo</Text>
             <Title level={4}>CRM AI Agent 全栈平台</Title>
           </Space>
-          <Space size={16}>
-            <Badge status="processing" text="Mock LLM + Tool Calling" />
+          <Space size={10} wrap className="header-status">
+            <Tag color={modelStatus?.configured ? 'blue' : 'default'}>{modelText}</Tag>
+            <Tag color={modelStatus?.embedding?.configured ? 'green' : 'default'}>{embeddingText}</Tag>
+            <Tag color={eventMode === 'log-only' ? 'default' : 'green'}>events: {eventMode}</Tag>
             <Badge status="success" text="Demo Ready" />
           </Space>
         </Header>

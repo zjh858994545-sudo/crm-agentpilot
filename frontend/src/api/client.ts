@@ -20,9 +20,20 @@ export interface HealthView {
 
 export interface ModelStatus {
   provider: string;
+  vendor?: string;
+  protocol?: string;
   model: string;
   configured: boolean;
   mode: string;
+  embedding?: {
+    provider: string;
+    vendor?: string;
+    protocol?: string;
+    model: string;
+    configured: boolean;
+    dimension: number;
+    mode: string;
+  };
 }
 
 export interface EventStatus {
@@ -31,6 +42,16 @@ export interface EventStatus {
   agentRunTopic: string;
   agentToolCallTopic: string;
   crmTaskTopic: string;
+  outboxPending?: number;
+}
+
+export interface OpenAiToolDefinition {
+  type: string;
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export interface Customer {
@@ -213,6 +234,14 @@ export const apiClient = axios.create({
   timeout: 30000
 });
 
+apiClient.interceptors.request.use((config) => {
+  const token = import.meta.env.VITE_AGENTPILOT_API_TOKEN || window.localStorage.getItem('agentpilot.apiToken');
+  if (token) {
+    config.headers.set('X-AgentPilot-Token', token);
+  }
+  return config;
+});
+
 export async function fetchHealth() {
   const response = await apiClient.get<ApiResponse<HealthView>>('/health');
   return response.data.data;
@@ -225,6 +254,11 @@ export async function fetchModelStatus() {
 
 export async function fetchEventStatus() {
   const response = await apiClient.get<ApiResponse<EventStatus>>('/events/status');
+  return response.data.data;
+}
+
+export async function fetchOpenAiTools() {
+  const response = await apiClient.get<ApiResponse<OpenAiToolDefinition[]>>('/agent/tools/openai');
   return response.data.data;
 }
 

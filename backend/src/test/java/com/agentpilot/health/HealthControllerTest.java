@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,5 +30,19 @@ class HealthControllerTest {
                 .andExpect(jsonPath("$.data.app", is("CRM-AgentPilot")))
                 .andExpect(jsonPath("$.data.modelProvider", is("mock")));
     }
-}
 
+    @Test
+    void modelStatusIncludesEmbeddingProvider() throws Exception {
+        mockMvc.perform(get("/api/model/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.embedding.provider", is("mock")))
+                .andExpect(jsonPath("$.data.embedding.model", is("deterministic-mock")))
+                .andExpect(jsonPath("$.data.embedding.dimension", is(16)));
+
+        mockMvc.perform(post("/api/model/embedding")
+                        .contentType("application/json")
+                        .content("{\"text\":\"客户嫌套餐贵\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.vectorLength", is(16)));
+    }
+}

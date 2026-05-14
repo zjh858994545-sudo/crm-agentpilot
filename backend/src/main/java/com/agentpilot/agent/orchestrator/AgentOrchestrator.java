@@ -19,6 +19,7 @@ import com.agentpilot.crm.entity.ContactLog;
 import com.agentpilot.crm.entity.CrmTask;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.entity.Lead;
+import com.agentpilot.crm.entity.ProductPackage;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.crm.service.CrmTaskService;
 import com.agentpilot.crm.service.CustomerService;
@@ -26,6 +27,7 @@ import com.agentpilot.crm.service.LeadService;
 import com.agentpilot.crm.service.ProductPackageService;
 import com.agentpilot.events.AgentPilotEventPublisher;
 import com.agentpilot.model.ChatModelClient;
+import com.agentpilot.model.ModelToolCall;
 import com.agentpilot.rag.service.RagService;
 import com.agentpilot.rag.vo.KnowledgeAnswer;
 import com.agentpilot.scoring.service.LeadScoringService;
@@ -36,8 +38,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -109,23 +109,41 @@ public class AgentOrchestrator {
         AgentSession session = getOrCreateSession(request);
         memoryService.append(session.getId(), "user", request.message());
         AgentRun run = createRun(request, session);
-        String intent = routeIntent(request.message());
-        run.setIntent(intent);
-        runService.updateById(run);
 
-        AgentChatResponse response = switch (intent) {
-            case "LEAD_RECOMMENDATION" -> recommendLeads(request, session, run);
-            case "CUSTOMER_ANALYSIS" -> analyzeCustomer(request, session, run);
-            case "CREATE_TASK" -> proposeTask(request, session, run);
-            case "KNOWLEDGE_QA" -> answerKnowledge(request, session, run);
-            default -> fallback(session, run);
-        };
+        AgentChatResponse response = tryLlmToolCalling(request, session, run)
+                .orElseGet(() -> routeByRules(request, session, run));
         run.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
         run.setCompletedAt(LocalDateTime.now());
         runService.updateById(run);
         eventPublisher.publishAgentRunCompleted(run);
         memoryService.append(session.getId(), "assistant", response.answer());
         return response;
+    }
+
+    private Optional<AgentChatResponse> tryLlmToolCalling(AgentChatRequest request, AgentSession session, AgentRun run) {
+        if (!chatModelClient.configured()) {
+            return Optional.empty();
+        }
+        Optional<ModelToolCall> decision = chatModelClient.chooseTool(toolRoutingSystemPrompt(), request.message(), toolRegistry.openAiTools());
+        if (decision.isEmpty() || toolRegistry.find(decision.get().name()).isEmpty()) {
+            return Optional.empty();
+        }
+        run.setIntent("LLM_TOOL:" + decision.get().name());
+        runService.updateById(run);
+        return executeModelToolCall(decision.get(), request, session, run);
+    }
+
+    private AgentChatResponse routeByRules(AgentChatRequest request, AgentSession session, AgentRun run) {
+        String intent = routeIntent(request.message());
+        run.setIntent(intent);
+        runService.updateById(run);
+        return switch (intent) {
+            case "LEAD_RECOMMENDATION" -> recommendLeads(request, session, run, 5);
+            case "CUSTOMER_ANALYSIS" -> analyzeCustomer(request, session, run);
+            case "CREATE_TASK" -> proposeTask(request, session, run, Map.of());
+            case "KNOWLEDGE_QA" -> answerKnowledge(request, session, run, request.message(), 5);
+            default -> fallback(session, run);
+        };
     }
 
     @Transactional
@@ -141,7 +159,7 @@ public class AgentOrchestrator {
 
         Object result = executeConfirmedAction(confirmation);
         if (result instanceof CrmTask task) {
-            publishCrmTaskCreatedAfterCommit(task);
+            eventPublisher.publishCrmTaskCreated(task);
         }
         confirmation.setStatus("CONFIRMED");
         confirmation.setConfirmedBy(userId);
@@ -172,10 +190,38 @@ public class AgentOrchestrator {
         return Map.of("status", "REJECTED", "confirmationId", confirmationId);
     }
 
-    private AgentChatResponse recommendLeads(AgentChatRequest request, AgentSession session, AgentRun run) {
-        Map<String, Object> input = Map.of("salesRepId", defaultSalesRepId(request.salesRepId()), "topK", 5);
+    private Optional<AgentChatResponse> executeModelToolCall(
+            ModelToolCall decision,
+            AgentChatRequest request,
+            AgentSession session,
+            AgentRun run
+    ) {
+        Map<String, Object> args = decision.arguments() == null ? Map.of() : decision.arguments();
+        return switch (decision.name()) {
+            case "rankLeads" -> Optional.of(recommendLeads(request, session, run, intArg(args, "topK", 5)));
+            case "analyzeCustomer" -> Optional.of(analyzeCustomer(request, session, run, resolveCustomer(request, args)));
+            case "queryCustomerProfile" -> Optional.of(queryCustomerProfile(request, session, run, args));
+            case "queryContactHistory" -> Optional.of(queryContactHistory(request, session, run, args));
+            case "searchKnowledge" -> Optional.of(answerKnowledge(
+                    request,
+                    session,
+                    run,
+                    stringArg(args, "query", request.message()),
+                    intArg(args, "topK", 5)
+            ));
+            case "queryProductPackage" -> Optional.of(queryProductPackage(request, session, run, args));
+            case "createFollowupTask" -> Optional.of(proposeTask(request, session, run, args));
+            case "writeContactLog" -> Optional.of(proposeContactLog(request, session, run, args));
+            case "updateLeadStage" -> Optional.of(proposeLeadStageUpdate(session, run, args));
+            default -> Optional.empty();
+        };
+    }
+
+    private AgentChatResponse recommendLeads(AgentChatRequest request, AgentSession session, AgentRun run, int topK) {
+        int limit = Math.max(1, Math.min(topK, 20));
+        Map<String, Object> input = Map.of("salesRepId", defaultSalesRepId(request.salesRepId()), "topK", limit);
         Instant toolStartedAt = Instant.now();
-        List<LeadRecommendation> recommendations = leadScoringService.recommend(defaultSalesRepId(request.salesRepId()), 5);
+        List<LeadRecommendation> recommendations = leadScoringService.recommend(defaultSalesRepId(request.salesRepId()), limit);
         AgentToolCall call = recordTool(run.getId(), "rankLeads", input, recommendations, "SUCCESS", null, elapsedMs(toolStartedAt));
         String answer = "建议今天优先跟进：" + recommendations.stream()
                 .limit(3)
@@ -188,8 +234,11 @@ public class AgentOrchestrator {
     }
 
     private AgentChatResponse analyzeCustomer(AgentChatRequest request, AgentSession session, AgentRun run) {
+        return analyzeCustomer(request, session, run, resolveCustomer(request));
+    }
+
+    private AgentChatResponse analyzeCustomer(AgentChatRequest request, AgentSession session, AgentRun run, Customer customer) {
         Instant profileStartedAt = Instant.now();
-        Customer customer = resolveCustomer(request);
         if (customer == null) {
             String answer = "没有找到对应客户，请提供客户名称或 customerId。";
             run.setStatus("COMPLETED");
@@ -213,8 +262,8 @@ public class AgentOrchestrator {
         return finalAnswer(session.getId(), run.getId(), answer, List.of(view(profileCall), view(historyCall), view(knowledgeCall)));
     }
 
-    private AgentChatResponse proposeTask(AgentChatRequest request, AgentSession session, AgentRun run) {
-        Customer customer = resolveCustomer(request);
+    private AgentChatResponse proposeTask(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
+        Customer customer = resolveCustomer(request, args);
         if (customer == null) {
             customer = customerService.getById(1001L);
         }
@@ -225,17 +274,17 @@ public class AgentOrchestrator {
                 .stream()
                 .findFirst()
                 .orElse(null);
-        LocalDateTime dueTime = LocalDateTime.now().plusDays(1).with(LocalTime.of(10, 0));
+        LocalDateTime dueTime = dateTimeArg(args, "dueTime", LocalDateTime.now().plusDays(1).with(LocalTime.of(10, 0)));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("customerId", customer.getId());
         payload.put("leadId", lead == null ? null : lead.getId());
         payload.put("salesRepId", defaultSalesRepId(request.salesRepId()));
-        String title = "跟进" + customer.getName() + "续费意向";
+        String title = stringArg(args, "title", "跟进" + customer.getName() + "续费意向");
         String idempotencyKey = "agent-task-" + customer.getId() + "-"
                 + dueTime.toLocalDate() + "-"
                 + Integer.toHexString(Objects.hash(customer.getId(), title, dueTime));
         payload.put("title", title);
-        payload.put("content", "围绕套餐到期、曝光效果、价格异议和下一步复盘沟通。");
+        payload.put("content", stringArg(args, "content", "围绕套餐到期、曝光效果、价格异议和下一步复盘沟通。"));
         payload.put("dueTime", dueTime.toString());
         payload.put("idempotencyKey", idempotencyKey);
 
@@ -268,13 +317,168 @@ public class AgentOrchestrator {
         );
     }
 
-    private AgentChatResponse answerKnowledge(AgentChatRequest request, AgentSession session, AgentRun run) {
+    private AgentChatResponse answerKnowledge(AgentChatRequest request, AgentSession session, AgentRun run, String query, int topK) {
         Instant toolStartedAt = Instant.now();
-        KnowledgeAnswer answer = ragService.ask(request.message(), 5);
-        AgentToolCall call = recordTool(run.getId(), "searchKnowledge", Map.of("query", request.message()), answer, "SUCCESS", null, elapsedMs(toolStartedAt));
+        KnowledgeAnswer answer = ragService.ask(query, Math.max(1, Math.min(topK, 20)));
+        AgentToolCall call = recordTool(run.getId(), "searchKnowledge", Map.of("query", query), answer, "SUCCESS", null, elapsedMs(toolStartedAt));
         run.setStatus("COMPLETED");
         run.setAgentOutput(answer.answer());
         return finalAnswer(session.getId(), run.getId(), answer.answer(), List.of(view(call)));
+    }
+
+    private AgentChatResponse queryCustomerProfile(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
+        Customer customer = resolveCustomer(request, args);
+        if (customer == null) {
+            String answer = "没有找到对应客户，请提供客户名称或 customerId。";
+            run.setStatus("COMPLETED");
+            run.setAgentOutput(answer);
+            return finalAnswer(session.getId(), run.getId(), answer, List.of());
+        }
+        Instant toolStartedAt = Instant.now();
+        AgentToolCall call = recordTool(run.getId(), "queryCustomerProfile", Map.of("customerId", customer.getId()), customer, "SUCCESS", null, elapsedMs(toolStartedAt));
+        String answer = "客户 " + customer.getName() + " 属于 " + customer.getIndustry()
+                + " 行业，价值等级 " + customer.getValueLevel()
+                + "，风险等级 " + customer.getRiskLevel()
+                + "，标签：" + customer.getTags();
+        run.setStatus("COMPLETED");
+        run.setAgentOutput(answer);
+        return finalAnswer(session.getId(), run.getId(), answer, List.of(view(call)));
+    }
+
+    private AgentChatResponse queryContactHistory(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
+        Customer customer = resolveCustomer(request, args);
+        if (customer == null) {
+            String answer = "没有找到对应客户，请提供客户名称或 customerId。";
+            run.setStatus("COMPLETED");
+            run.setAgentOutput(answer);
+            return finalAnswer(session.getId(), run.getId(), answer, List.of());
+        }
+        Instant toolStartedAt = Instant.now();
+        List<ContactLog> logs = contactLogService.listByCustomerId(customer.getId());
+        AgentToolCall call = recordTool(run.getId(), "queryContactHistory", Map.of("customerId", customer.getId()), logs, "SUCCESS", null, elapsedMs(toolStartedAt));
+        String answer = customer.getName() + " 最近跟进：\n" + summarizeLogs(logs);
+        run.setStatus("COMPLETED");
+        run.setAgentOutput(answer);
+        return finalAnswer(session.getId(), run.getId(), answer, List.of(view(call)));
+    }
+
+    private AgentChatResponse queryProductPackage(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
+        String industry = stringArg(args, "industry", "");
+        Instant toolStartedAt = Instant.now();
+        List<ProductPackage> packages = productPackageService.list()
+                .stream()
+                .filter(item -> industry.isBlank() || (item.getIndustry() != null && item.getIndustry().contains(industry)))
+                .limit(5)
+                .toList();
+        AgentToolCall call = recordTool(run.getId(), "queryProductPackage", Map.of("industry", industry), packages, "SUCCESS", null, elapsedMs(toolStartedAt));
+        String answer = packages.isEmpty()
+                ? "没有找到匹配的套餐政策。"
+                : "匹配套餐：" + packages.stream()
+                .map(item -> item.getName() + "(" + item.getIndustry() + "，" + item.getPrice() + "元)")
+                .reduce((left, right) -> left + "；" + right)
+                .orElse("");
+        run.setStatus("COMPLETED");
+        run.setAgentOutput(answer);
+        return finalAnswer(session.getId(), run.getId(), answer, List.of(view(call)));
+    }
+
+    private AgentChatResponse proposeContactLog(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
+        Customer customer = resolveCustomer(request, args);
+        if (customer == null) {
+            String answer = "没有找到对应客户，暂不能生成联系记录写入确认。";
+            run.setStatus("COMPLETED");
+            run.setAgentOutput(answer);
+            return finalAnswer(session.getId(), run.getId(), answer, List.of());
+        }
+        Lead lead = leadService.list(new LambdaQueryWrapper<Lead>()
+                        .eq(Lead::getCustomerId, customer.getId())
+                        .orderByDesc(Lead::getScore)
+                        .last("limit 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("customerId", customer.getId());
+        payload.put("salesRepId", defaultSalesRepId(request.salesRepId()));
+        payload.put("leadId", lead == null ? null : lead.getId());
+        payload.put("channel", stringArg(args, "channel", "PHONE"));
+        payload.put("content", stringArg(args, "content", request.message()));
+        payload.put("summary", stringArg(args, "summary", "由 LLM Tool Calling 生成的联系记录写入建议"));
+        payload.put("customerIntent", stringArg(args, "customerIntent", "MEDIUM"));
+        payload.put("objections", stringArg(args, "objections", ""));
+        payload.put("nextAction", stringArg(args, "nextAction", "继续跟进"));
+        payload.put("contactAt", dateTimeArg(args, "contactAt", LocalDateTime.now()).toString());
+
+        AgentToolCall call = recordTool(run.getId(), "writeContactLog", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
+        AgentConfirmation confirmation = createConfirmation(run, call, "WRITE_CONTACT_LOG", "写入" + customer.getName() + "的联系记录", payload);
+        call.setConfirmationId(confirmation.getId());
+        call.setOutputJson(toJson(Map.of("confirmationId", confirmation.getId())));
+        toolCallService.updateById(call);
+
+        run.setStatus("NEED_CONFIRMATION");
+        run.setAgentOutput("需要你确认后才能写入 CRM 联系记录。");
+        return new AgentChatResponse(
+                "confirmation_required",
+                session.getId(),
+                run.getId(),
+                "需要你确认后才能写入 CRM 联系记录。",
+                confirmation.getId(),
+                confirmation.getActionSummary(),
+                payload,
+                List.of(view(call))
+        );
+    }
+
+    private AgentChatResponse proposeLeadStageUpdate(AgentSession session, AgentRun run, Map<String, Object> args) {
+        Long leadId = nullableLongArg(args, "leadId");
+        if (leadId == null || leadService.getById(leadId) == null) {
+            String answer = "没有找到对应商机，暂不能生成商机阶段变更确认。";
+            run.setStatus("COMPLETED");
+            run.setAgentOutput(answer);
+            return finalAnswer(session.getId(), run.getId(), answer, List.of());
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("leadId", leadId);
+        payload.put("stage", stringArg(args, "stage", "NEGOTIATING"));
+        payload.put("reason", stringArg(args, "reason", "由 LLM Tool Calling 生成的商机阶段变更建议"));
+
+        AgentToolCall call = recordTool(run.getId(), "updateLeadStage", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
+        AgentConfirmation confirmation = createConfirmation(run, call, "UPDATE_LEAD_STAGE", "更新商机 " + leadId + " 阶段为 " + payload.get("stage"), payload);
+        call.setConfirmationId(confirmation.getId());
+        call.setOutputJson(toJson(Map.of("confirmationId", confirmation.getId())));
+        toolCallService.updateById(call);
+
+        run.setStatus("NEED_CONFIRMATION");
+        run.setAgentOutput("需要你确认后才能更新 CRM 商机阶段。");
+        return new AgentChatResponse(
+                "confirmation_required",
+                session.getId(),
+                run.getId(),
+                "需要你确认后才能更新 CRM 商机阶段。",
+                confirmation.getId(),
+                confirmation.getActionSummary(),
+                payload,
+                List.of(view(call))
+        );
+    }
+
+    private AgentConfirmation createConfirmation(
+            AgentRun run,
+            AgentToolCall call,
+            String actionType,
+            String actionSummary,
+            Map<String, Object> payload
+    ) {
+        AgentConfirmation confirmation = new AgentConfirmation();
+        confirmation.setRunId(run.getId());
+        confirmation.setToolCallId(call.getId());
+        confirmation.setActionType(actionType);
+        confirmation.setActionSummary(actionSummary);
+        confirmation.setPayloadJson(toJson(payload));
+        confirmation.setStatus("PENDING");
+        confirmation.setExpiredAt(LocalDateTime.now().plusHours(24));
+        confirmationService.save(confirmation);
+        return confirmation;
     }
 
     private AgentChatResponse fallback(AgentSession session, AgentRun run) {
@@ -288,6 +492,9 @@ public class AgentOrchestrator {
         if (!Objects.equals(confirmation.getActionType(), "CREATE_FOLLOWUP_TASK")) {
             if (Objects.equals(confirmation.getActionType(), "WRITE_CONTACT_LOG")) {
                 return executeWriteContactLog(confirmation);
+            }
+            if (Objects.equals(confirmation.getActionType(), "UPDATE_LEAD_STAGE")) {
+                return executeUpdateLeadStage(confirmation);
             }
             return Map.of("status", "UNSUPPORTED_ACTION");
         }
@@ -338,6 +545,23 @@ public class AgentOrchestrator {
         }
     }
 
+    private Object executeUpdateLeadStage(AgentConfirmation confirmation) {
+        try {
+            JsonNode payload = objectMapper.readTree(confirmation.getPayloadJson());
+            Lead lead = leadService.getById(payload.get("leadId").asLong());
+            if (lead == null) {
+                return Map.of("status", "NOT_FOUND");
+            }
+            lead.setStage(payload.get("stage").asText());
+            lead.setScoreReason(payload.get("reason").asText());
+            lead.setUpdatedAt(LocalDateTime.now());
+            leadService.updateById(lead);
+            return lead;
+        } catch (JsonProcessingException ex) {
+            return Map.of("status", "PAYLOAD_ERROR", "message", ex.getMessage());
+        }
+    }
+
     private AgentSession getOrCreateSession(AgentChatRequest request) {
         if (request.sessionId() != null) {
             AgentSession existing = sessionService.getById(request.sessionId());
@@ -370,7 +594,7 @@ public class AgentOrchestrator {
 
     private AgentToolCall recordTool(Long runId, String toolName, Object input, Object output, String status, String errorMessage, long latencyMs) {
         AgentToolDefinition definition = toolRegistry.find(toolName)
-                .orElse(new AgentToolDefinition(toolName, "unknown", ToolType.READ, false, List.of()));
+                .orElse(new AgentToolDefinition(toolName, "unknown", ToolType.READ, false, List.of(), Map.of()));
         AgentToolCall call = new AgentToolCall();
         call.setRunId(runId);
         call.setToolName(toolName);
@@ -458,17 +682,17 @@ public class AgentOrchestrator {
         }
     }
 
-    private void publishCrmTaskCreatedAfterCommit(CrmTask task) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            eventPublisher.publishCrmTaskCreated(task);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishCrmTaskCreated(task);
-            }
-        });
+    private String toolRoutingSystemPrompt() {
+        return """
+                你是 CRM-AgentPilot 的 LLM Tool Calling 路由器。
+                你的任务是根据用户请求选择一个最合适的工具，并填入可确定的参数。
+                客户分析、客户画像、跟进策略类问题优先选择 analyzeCustomer。
+                商机优先级、今天跟进谁选择 rankLeads。
+                销售 SOP、政策、质检、话术问题选择 searchKnowledge。
+                创建任务、写联系记录、更新商机阶段属于 CRM 写操作，也要选择对应写工具；系统会生成人工确认，不会直接落库。
+                如果只知道客户名称不知道 customerId，请填 customerName。
+                当前时间：%s。
+                """.formatted(LocalDateTime.now());
     }
 
     private String routeIntent(String message) {
@@ -493,6 +717,75 @@ public class AgentOrchestrator {
         }
         String message = request.message();
         return customerService.findMentionedIn(message).orElse(null);
+    }
+
+    private Customer resolveCustomer(AgentChatRequest request, Map<String, Object> args) {
+        Long customerId = nullableLongArg(args, "customerId");
+        if (customerId != null) {
+            Customer customer = customerService.getById(customerId);
+            if (customer != null) {
+                return customer;
+            }
+        }
+        String customerName = stringArg(args, "customerName", "");
+        if (!customerName.isBlank()) {
+            Optional<Customer> customer = customerService.findMentionedIn(customerName);
+            if (customer.isPresent()) {
+                return customer.get();
+            }
+        }
+        return resolveCustomer(request);
+    }
+
+    private String stringArg(Map<String, Object> args, String key, String fallback) {
+        Object value = args.get(key);
+        if (value == null) {
+            return fallback;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isBlank() || "null".equalsIgnoreCase(text) ? fallback : text;
+    }
+
+    private int intArg(Map<String, Object> args, String key, int fallback) {
+        Object value = args.get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Integer.parseInt(text);
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
+    }
+
+    private Long nullableLongArg(Map<String, Object> args, String key) {
+        Object value = args.get(key);
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isBlank() && !"null".equalsIgnoreCase(text)) {
+            try {
+                return Long.parseLong(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private LocalDateTime dateTimeArg(Map<String, Object> args, String key, LocalDateTime fallback) {
+        String value = stringArg(args, key, "");
+        if (value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
     }
 
     private AgentChatResponse finalAnswer(Long sessionId, Long runId, String answer, List<ToolCallView> toolCalls) {

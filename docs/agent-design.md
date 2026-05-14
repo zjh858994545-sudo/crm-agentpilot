@@ -16,6 +16,14 @@ RECEIVED
   -> FAILED
 ```
 
+## Routing Strategy
+
+The main `chat` path tries LLM Tool Calling first when a real provider is configured.
+The model receives the OpenAI-compatible tool schema from `ToolRegistry` and chooses
+one tool plus JSON arguments. If the provider is unavailable, times out, or returns an
+unknown tool, the orchestrator falls back to deterministic rule routing so the demo and
+evaluation remain repeatable.
+
 ## Tool Types
 
 Read tools:
@@ -34,9 +42,9 @@ Write tools:
 
 All write tools must set `requiresConfirmation=true`.
 
-The current demo routes `rankLeads`, `queryCustomerProfile`, `queryContactHistory`,
-`searchKnowledge`, and `createFollowupTask`. Other registered write tools are kept
-as extension points and are not advertised as completed demo paths.
+The current demo routes all listed tools. Read tools return final answers directly.
+Write tools return `confirmation_required` and are executed only through the
+confirmation endpoint.
 
 ## Output Types
 

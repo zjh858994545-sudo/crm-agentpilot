@@ -1,6 +1,6 @@
 package com.agentpilot.rag.service;
 
-import com.agentpilot.rag.embedding.MockEmbeddingService;
+import com.agentpilot.rag.embedding.EmbeddingService;
 import com.agentpilot.rag.entity.KnowledgeChunk;
 import com.agentpilot.rag.entity.KnowledgeDoc;
 import com.agentpilot.rag.entity.RetrievalLog;
@@ -30,7 +30,7 @@ public class RagService {
     private final KnowledgeChunkService chunkService;
     private final RetrievalLogService retrievalLogService;
     private final KnowledgeSplitter splitter;
-    private final MockEmbeddingService embeddingService;
+    private final EmbeddingService embeddingService;
     private final QueryRewriteService queryRewriteService;
     private final HybridRetriever retriever;
     private final ObjectMapper objectMapper;
@@ -40,7 +40,7 @@ public class RagService {
             KnowledgeChunkService chunkService,
             RetrievalLogService retrievalLogService,
             KnowledgeSplitter splitter,
-            MockEmbeddingService embeddingService,
+            EmbeddingService embeddingService,
             QueryRewriteService queryRewriteService,
             HybridRetriever retriever,
             ObjectMapper objectMapper
@@ -68,6 +68,7 @@ public class RagService {
 
         List<ChunkDraft> chunks = splitter.split(request.title(), request.content());
         for (ChunkDraft draft : chunks) {
+            double[] vector = embeddingService.embed(draft.content());
             KnowledgeChunk chunk = new KnowledgeChunk();
             chunk.setDocId(doc.getId());
             chunk.setChunkIndex(draft.index());
@@ -75,8 +76,9 @@ public class RagService {
             chunk.setContent(draft.content());
             chunk.setTokenCount(draft.tokenCount());
             chunk.setKeywords(draft.keywords());
-            chunk.setEmbedding(embeddingService.serialize(embeddingService.embed(draft.content())));
+            chunk.setEmbedding(embeddingService.serialize(vector));
             chunkService.save(chunk);
+            chunkService.updateEmbeddingVector(chunk.getId(), embeddingService.serializeForPgVector(vector));
         }
         return doc;
     }

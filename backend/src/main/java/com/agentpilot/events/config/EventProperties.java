@@ -8,6 +8,7 @@ public class EventProperties {
     private String agentRunTopic = "agent-run-events";
     private String agentToolCallTopic = "agent-tool-call-events";
     private String crmTaskTopic = "crm-task-events";
+    private long outboxDispatchDelayMs = 5000L;
 
     public boolean isKafkaEnabled() {
         return kafkaEnabled;
@@ -39,5 +40,13 @@ public class EventProperties {
 
     public void setCrmTaskTopic(String crmTaskTopic) {
         this.crmTaskTopic = crmTaskTopic;
+    }
+
+    public long getOutboxDispatchDelayMs() {
+        return outboxDispatchDelayMs;
+    }
+
+    public void setOutboxDispatchDelayMs(long outboxDispatchDelayMs) {
+        this.outboxDispatchDelayMs = outboxDispatchDelayMs;
     }
 }

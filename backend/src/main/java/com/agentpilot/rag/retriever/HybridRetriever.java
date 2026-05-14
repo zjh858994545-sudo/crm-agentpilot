@@ -1,6 +1,6 @@
 package com.agentpilot.rag.retriever;
 
-import com.agentpilot.rag.embedding.MockEmbeddingService;
+import com.agentpilot.rag.embedding.EmbeddingService;
 import com.agentpilot.rag.entity.KnowledgeChunk;
 import com.agentpilot.rag.entity.KnowledgeDoc;
 import com.agentpilot.rag.service.KnowledgeChunkService;
@@ -20,12 +20,12 @@ import java.util.stream.Collectors;
 public class HybridRetriever {
     private final KnowledgeDocService docService;
     private final KnowledgeChunkService chunkService;
-    private final MockEmbeddingService embeddingService;
+    private final EmbeddingService embeddingService;
 
     public HybridRetriever(
             KnowledgeDocService docService,
             KnowledgeChunkService chunkService,
-            MockEmbeddingService embeddingService
+            EmbeddingService embeddingService
     ) {
         this.docService = docService;
         this.chunkService = chunkService;
@@ -34,10 +34,26 @@ public class HybridRetriever {
 
     public List<KnowledgeItem> search(String query, String rewrittenQuery, int topK) {
         int limit = Math.max(1, Math.min(topK, 20));
+        double[] queryVector = embeddingService.embed(rewrittenQuery);
+        if (chunkService.pgvectorAvailable()) {
+            List<KnowledgeItem> vectorItems = chunkService.searchByVector(
+                            embeddingService.serializeForPgVector(queryVector),
+                            Math.max(limit * 4, 20)
+                    )
+                    .stream()
+                    .map(row -> toItem(row, rewrittenQuery))
+                    .filter(item -> item.score() > 0.02)
+                    .sorted(Comparator.comparingDouble(KnowledgeItem::score).reversed())
+                    .limit(limit)
+                    .toList();
+            if (!vectorItems.isEmpty()) {
+                return vectorItems;
+            }
+        }
+
         Map<Long, KnowledgeDoc> docs = docService.list()
                 .stream()
                 .collect(Collectors.toMap(KnowledgeDoc::getId, Function.identity()));
-        double[] queryVector = embeddingService.embed(rewrittenQuery);
 
         return chunkService.list()
                 .stream()
@@ -46,6 +62,23 @@ public class HybridRetriever {
                 .sorted(Comparator.comparingDouble(KnowledgeItem::score).reversed())
                 .limit(limit)
                 .toList();
+    }
+
+    private KnowledgeItem toItem(VectorSearchRow row, String rewrittenQuery) {
+        String text = row.chunkTitle() + " " + row.content() + " " + row.keywords();
+        double keywordScore = keywordScore(rewrittenQuery, text);
+        double docBoost = !row.docType().isBlank() && rewrittenQuery.contains(row.docType()) ? 0.08 : 0.0;
+        double score = guardedScore(keywordScore, row.vectorScore(), docBoost, 0.45, 0.50);
+        return new KnowledgeItem(
+                row.chunkId(),
+                row.docId(),
+                row.docTitle(),
+                row.docType(),
+                row.chunkTitle(),
+                row.content(),
+                score,
+                "pgvector-hybrid"
+        );
     }
 
     private KnowledgeItem toItem(
@@ -58,7 +91,7 @@ public class HybridRetriever {
         double keywordScore = keywordScore(rewrittenQuery, text);
         double vectorScore = embeddingService.cosine(queryVector, embeddingService.embed(text));
         double docBoost = doc != null && rewrittenQuery.contains(doc.getDocType()) ? 0.08 : 0.0;
-        double score = Math.min(1.0, round(keywordScore * 0.78 + vectorScore * 0.18 + docBoost));
+        double score = guardedScore(keywordScore, vectorScore, docBoost, 0.78, 0.18);
         return new KnowledgeItem(
                 chunk.getId(),
                 chunk.getDocId(),
@@ -84,6 +117,22 @@ public class HybridRetriever {
         }
         long hits = terms.stream().filter(normalizedText::contains).count();
         return Math.min(1.0, hits / 6.0);
+    }
+
+    private double guardedScore(
+            double keywordScore,
+            double vectorScore,
+            double docBoost,
+            double keywordWeight,
+            double vectorWeight
+    ) {
+        double score = Math.min(1.0, keywordScore * keywordWeight + vectorScore * vectorWeight + docBoost);
+        if (keywordScore == 0.0) {
+            score = Math.min(score, 0.18);
+        } else if (keywordScore < 0.17) {
+            score = Math.min(score, 0.21);
+        }
+        return round(score);
     }
 
     private double round(double value) {
