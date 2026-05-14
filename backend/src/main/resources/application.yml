@@ -68,6 +68,6 @@ agentpilot:
     outbox-dispatch-delay-ms: ${AGENT_OUTBOX_DISPATCH_DELAY_MS:5000}
   security:
     mode: ${AGENTPILOT_SECURITY_MODE:permissive}
-    api-token: ${AGENTPILOT_API_TOKEN:dev-agentpilot-token}
+    api-token: ${AGENTPILOT_API_TOKEN:}
     demo-user-id: ${AGENTPILOT_DEMO_USER_ID:1}
     demo-sales-rep-id: ${AGENTPILOT_DEMO_SALES_REP_ID:1}

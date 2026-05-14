@@ -48,9 +48,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class AgentOrchestrator {
+    private static final Set<String> ALLOWED_LEAD_STAGES = Set.of(
+            "NEW",
+            "CONTACTED",
+            "QUALIFIED",
+            "NEGOTIATING",
+            "WON",
+            "LOST"
+    );
+
     private final AgentSessionService sessionService;
     private final AgentRunService runService;
     private final AgentToolCallService toolCallService;
@@ -265,7 +275,10 @@ public class AgentOrchestrator {
     private AgentChatResponse proposeTask(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
         Customer customer = resolveCustomer(request, args);
         if (customer == null) {
-            customer = customerService.getById(1001L);
+            String answer = "没有找到对应客户，暂不能生成 CRM 任务确认。请提供准确客户名称或 customerId。";
+            run.setStatus("COMPLETED");
+            run.setAgentOutput(answer);
+            return finalAnswer(session.getId(), run.getId(), answer, List.of());
         }
         Lead lead = leadService.list(new LambdaQueryWrapper<Lead>()
                 .eq(Lead::getCustomerId, customer.getId())
@@ -439,7 +452,14 @@ public class AgentOrchestrator {
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("leadId", leadId);
-        payload.put("stage", stringArg(args, "stage", "NEGOTIATING"));
+        String stage = normalizeLeadStage(stringArg(args, "stage", "NEGOTIATING"));
+        if (!ALLOWED_LEAD_STAGES.contains(stage)) {
+            String answer = "商机阶段值不在允许范围内，暂不能生成阶段变更确认。允许值：" + ALLOWED_LEAD_STAGES;
+            run.setStatus("COMPLETED");
+            run.setAgentOutput(answer);
+            return finalAnswer(session.getId(), run.getId(), answer, List.of());
+        }
+        payload.put("stage", stage);
         payload.put("reason", stringArg(args, "reason", "由 LLM Tool Calling 生成的商机阶段变更建议"));
 
         AgentToolCall call = recordTool(run.getId(), "updateLeadStage", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
@@ -552,7 +572,11 @@ public class AgentOrchestrator {
             if (lead == null) {
                 return Map.of("status", "NOT_FOUND");
             }
-            lead.setStage(payload.get("stage").asText());
+            String stage = normalizeLeadStage(payload.get("stage").asText());
+            if (!ALLOWED_LEAD_STAGES.contains(stage)) {
+                return Map.of("status", "INVALID_STAGE", "allowed", ALLOWED_LEAD_STAGES);
+            }
+            lead.setStage(stage);
             lead.setScoreReason(payload.get("reason").asText());
             lead.setUpdatedAt(LocalDateTime.now());
             leadService.updateById(lead);
@@ -744,6 +768,13 @@ public class AgentOrchestrator {
         }
         String text = String.valueOf(value).trim();
         return text.isBlank() || "null".equalsIgnoreCase(text) ? fallback : text;
+    }
+
+    private String normalizeLeadStage(String stage) {
+        if (stage == null || stage.isBlank()) {
+            return "NEGOTIATING";
+        }
+        return stage.trim().toUpperCase();
     }
 
     private int intArg(Map<String, Object> args, String key, int fallback) {

@@ -19,6 +19,7 @@ import java.util.List;
 @Service
 public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, KnowledgeChunk> {
     private static final Logger log = LoggerFactory.getLogger(KnowledgeChunkService.class);
+    private static final int PGVECTOR_DIMENSION = 1024;
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingService embeddingService;
     private boolean pgvectorAvailable;
@@ -45,6 +46,12 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
                     Boolean.class
             );
             pgvectorAvailable = Boolean.TRUE.equals(extensionAvailable);
+            if (pgvectorAvailable && embeddingService.dimension() != PGVECTOR_DIMENSION) {
+                pgvectorAvailable = false;
+                log.info("RAG vector store mode=java-fallback reason=embedding dimension {} does not match pgvector dimension {}",
+                        embeddingService.dimension(), PGVECTOR_DIMENSION);
+                return;
+            }
             log.info("RAG vector store mode={}", pgvectorAvailable ? "pgvector" : "java-fallback");
             if (pgvectorAvailable) {
                 backfillMissingEmbeddingVectors();
@@ -63,6 +70,21 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
 
     public boolean pgvectorAvailable() {
         return pgvectorAvailable;
+    }
+
+    public String vectorStoreMode() {
+        return pgvectorAvailable ? "pgvector-hybrid" : "java-fallback";
+    }
+
+    public long vectorizedChunkCount() {
+        if (!pgvectorAvailable) {
+            return 0L;
+        }
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM crm_knowledge_chunk WHERE embedding_vector IS NOT NULL",
+                Long.class
+        );
+        return count == null ? 0L : count;
     }
 
     public void updateEmbeddingVector(Long chunkId, String vectorLiteral) {
@@ -115,9 +137,16 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
     }
 
     private void backfillMissingEmbeddingVectors() {
-        List<KnowledgeChunk> chunks = list();
+        List<Long> missingChunkIds = jdbcTemplate.queryForList(
+                "SELECT id FROM crm_knowledge_chunk WHERE embedding_vector IS NULL ORDER BY id",
+                Long.class
+        );
         int updated = 0;
-        for (KnowledgeChunk chunk : chunks) {
+        for (Long chunkId : missingChunkIds) {
+            KnowledgeChunk chunk = getById(chunkId);
+            if (chunk == null) {
+                continue;
+            }
             String source = chunk.getContent() + " " + chunk.getKeywords();
             double[] vector = embeddingService.embed(source);
             if (chunk.getEmbedding() == null || chunk.getEmbedding().isBlank()) {
@@ -127,6 +156,6 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
             updateEmbeddingVector(chunk.getId(), embeddingService.serializeForPgVector(vector));
             updated++;
         }
-        log.info("RAG pgvector backfill checked {} chunks", updated);
+        log.info("RAG pgvector backfill updated {} missing chunks", updated);
     }
 }

@@ -13,7 +13,7 @@
 - 设计 `agent_run`、`agent_tool_call`、`agent_confirmation`、`retrieval_log`、`agent_outbox_event` 等审计表，记录输入、输出、状态、耗时、确认人和事件分发状态。
 - 对写 CRM 动作建立人工确认流：创建任务、写联系记录、更新商机阶段等写工具先生成 confirmation，用户确认后才落库，并记录确认人 userId。
 - 引入 Spring Security API Token 与方法级权限控制；本地演示默认 permissive，strict 模式下通过 `X-AgentPilot-Token` 保护业务 API。
-- 实现 outbox 事件机制：Agent run、tool call、CRM task 事件先落 `agent_outbox_event`，事务提交后异步分发到 log-only 或 Kafka topic。
+- 实现 outbox 事件机制：CRM 写操作事件在业务事务内落 `agent_outbox_event` 表，Agent run / tool call 审计事件走 at-least-once 重试落库分发，统一异步推送到 log-only 或 Kafka topic。
 - 搭建 Docker Compose 与一键演示脚本，支持 PostgreSQL/pgvector、Redis、Kafka、后端、前端联动；Docker Hub 不可用时自动回退本地后端/前端启动。
 - 建立 JSONL 自动评测脚本，量化 RAG Recall@5、引用命中率、拒答准确率、工具调用成功率、写操作确认覆盖率和延迟指标，并生成 Markdown 报告。
 
@@ -30,6 +30,6 @@ Tech stack: Java 17, Spring Boot 3, MyBatis-Plus, PostgreSQL/pgvector, Redis, Ka
 - Designed audit tables including `agent_run`, `agent_tool_call`, `agent_confirmation`, `retrieval_log`, and `agent_outbox_event` to record inputs, outputs, status, latency, confirmer, and event dispatch state.
 - Added a human-confirmation guardrail for CRM writes: creating tasks, writing contact logs, and updating lead stages must create a confirmation record before any CRM mutation.
 - Added Spring Security API-token authentication with method-level permissions; local demos run in permissive mode, while strict mode protects APIs through `X-AgentPilot-Token`.
-- Implemented an outbox event mechanism that stores Agent run, tool-call, and CRM task events in `agent_outbox_event` before asynchronous log-only or Kafka dispatch.
+- Implemented an outbox event mechanism: CRM write events are stored in `agent_outbox_event` inside the business transaction, while Agent run and tool-call audit events use the same table for at-least-once retry before log-only or Kafka dispatch.
 - Added Docker Compose and one-command demo scripts for PostgreSQL/pgvector, Redis, Kafka, backend, and frontend; scripts fall back to local services when Docker Hub is unavailable.
 - Added JSONL evaluation scripts measuring RAG Recall@5, citation hit rate, refusal accuracy, tool-calling success rate, write-confirmation coverage, and latency.

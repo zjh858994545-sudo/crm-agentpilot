@@ -16,7 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@TestPropertySource(properties = "agentpilot.security.mode=strict")
+@TestPropertySource(properties = {
+        "agentpilot.security.mode=strict",
+        "agentpilot.security.api-token=test-agentpilot-token"
+})
 class SecurityStrictModeTest {
 
     @Autowired
@@ -29,7 +32,7 @@ class SecurityStrictModeTest {
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
 
         mockMvc.perform(get("/api/customers")
-                        .header("X-AgentPilot-Token", "dev-agentpilot-token"))
+                        .header("X-AgentPilot-Token", "test-agentpilot-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)));
     }

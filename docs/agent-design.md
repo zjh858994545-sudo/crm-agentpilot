@@ -30,6 +30,7 @@ Read tools:
 
 - `queryCustomerProfile`
 - `queryContactHistory`
+- `analyzeCustomer`
 - `rankLeads`
 - `searchKnowledge`
 - `queryProductPackage`

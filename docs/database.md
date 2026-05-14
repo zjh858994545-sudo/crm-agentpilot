@@ -36,4 +36,4 @@ The complete database design is implemented through Flyway migrations during Day
 - Retrieval logs store query rewrite, retriever type, top K, result JSON, and latency.
 - CRM writes are never executed before confirmation.
 - The first version stores serialized embeddings as text so H2 integration tests can run without PostgreSQL-specific vector syntax; PostgreSQL runtimes also maintain a 1024-dimensional pgvector column for real vector-distance retrieval.
-- Agent run, tool-call, and confirmed CRM task events are inserted into `agent_outbox_event` before dispatch, so event delivery can be retried and inspected independently of the request thread.
+- Confirmed CRM task events are inserted into `agent_outbox_event` inside the confirmation transaction. Agent run and tool-call events use the same table for audit and at-least-once retry, so delivery can be retried and inspected independently of the request thread.

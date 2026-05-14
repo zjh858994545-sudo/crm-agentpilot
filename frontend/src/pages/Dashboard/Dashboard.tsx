@@ -1,13 +1,18 @@
-import { Alert, Card, Col, Descriptions, Progress, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { Alert, Card, Col, Descriptions, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import {
   EventStatus,
   fetchEventStatus,
   fetchHealth,
+  fetchKnowledgeStatus,
   fetchModelStatus,
   fetchOpenAiTools,
+  fetchSecurityStatus,
   HealthView,
-  ModelStatus
+  KnowledgeStatus,
+  ModelStatus,
+  OpenAiToolDefinition,
+  SecurityStatus
 } from '../../api/client';
 
 const { Text } = Typography;
@@ -21,16 +26,6 @@ const moduleCatalog = [
   { key: 'evaluation', healthKey: 'evaluation', module: 'Evaluation', owner: 'JSONL 用例、指标统计、报告生成' }
 ];
 
-const readinessRows = [
-  { key: 'api', item: '真实接口', status: '已接通', detail: 'Knowledge、Agent Runs、Evaluation、CallCenter 均走后端 API' },
-  { key: 'llm', item: 'LLM Tool Calling', status: '已接通', detail: '主流程先让模型按 tools schema 选工具，失败自动回退规则路由' },
-  { key: 'embedding', item: '真实 Embedding', status: '已接通', detail: '阿里云百炼 text-embedding-v4 + pgvector 1024 维检索' },
-  { key: 'tool-schema', item: 'Tool Schema', status: '已接通', detail: 'OpenAI-compatible function schema 可直接查看与讲解' },
-  { key: 'write', item: '写入安全', status: '已接通', detail: '写 CRM 前进入 confirmation，确认人 userId 必填' },
-  { key: 'outbox', item: '事件可靠性', status: '已接通', detail: '业务事务内落 outbox，提交后异步分发到 log/Kafka' },
-  { key: 'docker', item: '启动脚本', status: '可演示', detail: 'Docker Hub 不通时自动回退到 Docker 基础设施 + 本地服务' }
-];
-
 const statusColor: Record<string, string> = {
   UP: 'green',
   READY: 'green',
@@ -38,10 +33,16 @@ const statusColor: Record<string, string> = {
   LOCAL: 'orange',
   已接通: 'green',
   可演示: 'cyan',
+  已验证: 'green',
+  可切换: 'blue',
+  待配置: 'orange',
+  审计重试: 'blue',
+  mock: 'orange',
   strict: 'green',
   permissive: 'orange',
   'real-embedding': 'green',
   'pgvector-hybrid': 'green',
+  'java-fallback': 'orange',
   'llm-enabled': 'blue',
   'log-only': 'default'
 };
@@ -69,7 +70,9 @@ export default function Dashboard() {
   const [health, setHealth] = useState<HealthView | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
-  const [toolCount, setToolCount] = useState<number>(0);
+  const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
+  const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
+  const [tools, setTools] = useState<OpenAiToolDefinition[]>([]);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
@@ -78,7 +81,9 @@ export default function Dashboard() {
       .catch(() => setError('后端未连接，当前仅显示前端静态工作台。'));
     fetchModelStatus().then(setModelStatus).catch(() => undefined);
     fetchEventStatus().then(setEventStatus).catch(() => undefined);
-    fetchOpenAiTools().then((tools) => setToolCount(tools.length)).catch(() => undefined);
+    fetchKnowledgeStatus().then(setKnowledgeStatus).catch(() => undefined);
+    fetchSecurityStatus().then(setSecurityStatus).catch(() => undefined);
+    fetchOpenAiTools().then(setTools).catch(() => undefined);
   }, []);
 
   const moduleRows = useMemo(
@@ -89,6 +94,59 @@ export default function Dashboard() {
       })),
     [health]
   );
+
+  const toolCount = tools.length;
+  const writeToolCount = tools.filter((tool) =>
+    ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(tool.function.name)
+  ).length;
+  const readinessRows = [
+    {
+      key: 'api',
+      item: '真实接口',
+      status: health?.status === 'UP' ? '已验证' : 'LOCAL',
+      detail: 'Health 返回模块状态，前端页面通过 Axios 调后端 API'
+    },
+    {
+      key: 'llm',
+      item: 'LLM Tool Calling',
+      status: modelStatus?.configured && toolCount > 0 ? '已验证' : '待配置',
+      detail: `${toolCount} 个工具 schema，模型失败或超时时回退规则路由`
+    },
+    {
+      key: 'embedding',
+      item: '真实 Embedding',
+      status: modelStatus?.embedding?.configured ? '已验证' : 'mock',
+      detail: embeddingLine(modelStatus)
+    },
+    {
+      key: 'vector',
+      item: '向量检索',
+      status: knowledgeStatus?.vectorStoreMode ?? 'java-fallback',
+      detail: knowledgeStatus
+        ? `${knowledgeStatus.vectorizedChunkCount}/${knowledgeStatus.chunkCount} chunks 已写入向量列`
+        : '等待 /api/knowledge/status'
+    },
+    {
+      key: 'write',
+      item: '写入确认',
+      status: writeToolCount > 0 ? '已验证' : '待配置',
+      detail: `${writeToolCount} 个写工具进入 confirmation 后再写 CRM`
+    },
+    {
+      key: 'outbox',
+      item: '事件分发',
+      status: eventStatus ? '审计重试' : 'LOCAL',
+      detail: `pending=${eventStatus?.outboxPending ?? 0}；CRM task 事件与确认事务绑定，run/tool call 走 at-least-once 审计分发`
+    },
+    {
+      key: 'security',
+      item: '权限模式',
+      status: securityStatus?.mode ?? 'permissive',
+      detail: securityStatus
+        ? `${securityStatus.permissionCount} 个权限点；默认 token ${securityStatus.defaultTokenInUse ? '仍是开发值' : '未使用'}`
+        : '等待 /api/security/status'
+    }
+  ];
 
   const capabilityRows = [
     {
@@ -106,14 +164,18 @@ export default function Dashboard() {
     {
       key: 'vector-store',
       item: 'Vector Store',
-      status: 'pgvector-hybrid',
-      detail: 'PostgreSQL pgvector + HNSW，检索结果返回 retriever=pgvector-hybrid'
+      status: knowledgeStatus?.vectorStoreMode ?? 'java-fallback',
+      detail: knowledgeStatus
+        ? `doc=${knowledgeStatus.docCount}，chunk=${knowledgeStatus.chunkCount}，vectorized=${knowledgeStatus.vectorizedChunkCount}`
+        : '等待 /api/knowledge/status'
     },
     {
       key: 'security',
       item: 'Security',
-      status: 'permissive',
-      detail: '本地演示默认 permissive；设置 AGENTPILOT_SECURITY_MODE=strict 后启用 X-AgentPilot-Token'
+      status: securityStatus?.mode ?? 'permissive',
+      detail: securityStatus?.strict
+        ? 'strict 模式已启用 X-AgentPilot-Token'
+        : '本地演示 permissive；strict 模式可启用 X-AgentPilot-Token'
     },
     {
       key: 'outbox',
@@ -233,6 +295,8 @@ export default function Dashboard() {
               <Descriptions.Item label="模型">{providerLine(modelStatus)}</Descriptions.Item>
               <Descriptions.Item label="协议">{modelStatus?.protocol ?? 'mock'}</Descriptions.Item>
               <Descriptions.Item label="Embedding">{embeddingLine(modelStatus)}</Descriptions.Item>
+              <Descriptions.Item label="Vector Store">{knowledgeStatus?.vectorStoreMode ?? 'java-fallback'}</Descriptions.Item>
+              <Descriptions.Item label="Security">{securityStatus?.mode ?? 'permissive'}</Descriptions.Item>
               <Descriptions.Item label="事件">{eventStatus?.mode ?? 'log-only'}</Descriptions.Item>
               <Descriptions.Item label="Outbox Pending">{eventStatus?.outboxPending ?? 0}</Descriptions.Item>
             </Descriptions>
@@ -261,23 +325,20 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} xl={8}>
-          <Card title="完整度判断">
+          <Card title="边界说明">
             <Space direction="vertical" style={{ width: '100%' }} size={14}>
               <div>
-                <Text strong>简历可讲</Text>
-                <Progress percent={95} status="active" />
+                <Text strong>Outbox 语义</Text>
+                <div className="metric-label">CRM 写操作事件与确认事务绑定；Agent run / tool call 事件用于审计和 at-least-once 重试。</div>
               </div>
               <div>
-                <Text strong>现场 demo</Text>
-                <Progress percent={92} />
+                <Text strong>权限模型</Text>
+                <div className="metric-label">当前是单租户 API Token 演示；企业级场景需要继续接 JWT/SSO/RBAC 和数据范围权限。</div>
               </div>
               <div>
-                <Text strong>工程化追问</Text>
-                <Progress percent={90} />
+                <Text strong>向量检索</Text>
+                <div className="metric-label">PostgreSQL 环境走 pgvector；测试环境保留 Java fallback，保证自动测试稳定。</div>
               </div>
-              <Text className="metric-label">
-                当前版本保留少量已知限制：鉴权默认演示模式、Kafka 默认 log-only、复杂多租户权限和生产级监控属于落地演进项。
-              </Text>
             </Space>
           </Card>
         </Col>

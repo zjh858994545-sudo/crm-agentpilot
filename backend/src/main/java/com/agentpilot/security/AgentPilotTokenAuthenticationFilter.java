@@ -14,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -41,7 +42,7 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!token.equals(properties.getApiToken())) {
+        if (!constantTimeEquals(token, properties.getApiToken())) {
             writeUnauthorized(response, "Invalid AgentPilot API token");
             return;
         }
@@ -60,6 +61,16 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
             return authorization.substring("Bearer ".length()).trim();
         }
         return null;
+    }
+
+    private boolean constantTimeEquals(String actual, String expected) {
+        if (actual == null || expected == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                actual.getBytes(StandardCharsets.UTF_8),
+                expected.getBytes(StandardCharsets.UTF_8)
+        );
     }
 
     private void authenticateDemoUser() {

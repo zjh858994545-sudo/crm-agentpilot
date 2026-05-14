@@ -22,6 +22,10 @@ The RAG module supports sales SOP retrieval, package policy lookup, objection ha
 - The implementation remains deterministic in mock mode, which makes tests repeatable.
 - In configured local/demo environments, `AGENT_EMBEDDING_PROVIDER=openai-compatible` calls the provider's `/embeddings` endpoint and stores 1024-dimensional vectors in pgvector.
 
+## Migration Note
+
+`V8` introduced pgvector support while the project still used a deterministic 16-dimensional placeholder vector in local experiments. `V9` is the explicit dimension transition used when Alibaba Bailian `text-embedding-v4` became the configured provider, rebuilding the PostgreSQL vector column as `vector(1024)` and recreating the HNSW index. In a production migration history, these two steps should be squashed before first release, or handled as a data-preserving online backfill.
+
 ## First Knowledge Documents
 
 - Renewal SOP.

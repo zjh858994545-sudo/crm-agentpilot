@@ -18,14 +18,14 @@ The central design question is: how can an AI Agent help sales reps work faster 
 - Alibaba Bailian Qwen access is isolated behind `ChatModelClient` through the OpenAI-compatible protocol. The provider selects tools for the main Agent flow and is also available through `/api/model/chat`.
 - Spring Security provides API-token authentication and method-level permissions in strict mode; local demos run in permissive mode for convenience.
 - Swagger UI, Actuator, and `X-Trace-Id` show that the project is operated as an engineering service, not just a local script.
-- Agent run, tool call, and confirmed CRM task events go through an outbox-backed publisher. Local demos use log-only mode; setting `AGENT_EVENTS_KAFKA_ENABLED=true` publishes the same events to Kafka topics.
+- Confirmed CRM task events go through the outbox inside the confirmation transaction. Agent run and tool-call events use the same outbox table for audit and at-least-once retry, while avoiding a long database transaction around external LLM HTTP calls. Local demos use log-only mode; setting `AGENT_EVENTS_KAFKA_ENABLED=true` publishes the same events to Kafka topics.
 
 ## Trade-offs
 
 - Tests still use mock model and mock embedding for repeatability; configured demos use Qwen chat, LLM Tool Calling, and Bailian embedding.
 - Rule scoring ships before ML scoring because interviewers can inspect and reason about it.
 - Kafka is used for event recording and future async processing, but core writes remain transactional.
-- Event publishing is isolated through the outbox table. A Kafka outage should not let the Agent skip confirmation or corrupt CRM data; it only leaves retryable outbox records.
+- Event publishing is isolated through the outbox table. A Kafka outage should not let the Agent skip confirmation or corrupt CRM data; it only leaves retryable outbox records. The current implementation is at-least-once, so Kafka consumers should deduplicate by `eventId`.
 - The RAG API is provider-agnostic: `EmbeddingService` can use deterministic mock mode or OpenAI-compatible real embeddings. In the current configured demo, it uses Bailian `text-embedding-v4` with 1024-dimensional pgvector storage.
 
 ## Interview Demo Order

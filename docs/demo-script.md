@@ -201,7 +201,7 @@ GET /v3/api-docs
 
 > Agent 每次运行、每次工具调用、以及确认后的 CRM 任务创建都会经过事件发布层。为了本地演示稳定，默认是 log-only；如果设置 `AGENT_EVENTS_KAFKA_ENABLED=true`，同一套事件会发布到 Kafka topic，供后续审计、告警、离线评测或运营看板消费。
 
-> 现在事件不是直接 fire-and-forget，而是先写入 `agent_outbox_event`。请求事务提交后再分发，`/api/events/status` 里的 `outboxPending` 可以看到待分发积压。
+> 对 CRM task 这类业务写入事件，事件和任务创建共享确认事务，提交后再分发；Agent run 和 tool call 属于审计事件，使用同一张 outbox 表做 at-least-once 重试。`/api/events/status` 里的 `outboxPending` 可以看到待分发积压。
 
 ## 工程化追问：权限、pgvector 与 Tool Schema
 

@@ -68,7 +68,7 @@ public class HybridRetriever {
         String text = row.chunkTitle() + " " + row.content() + " " + row.keywords();
         double keywordScore = keywordScore(rewrittenQuery, text);
         double docBoost = !row.docType().isBlank() && rewrittenQuery.contains(row.docType()) ? 0.08 : 0.0;
-        double score = guardedScore(keywordScore, row.vectorScore(), docBoost, 0.45, 0.50);
+        double score = guardedScore(keywordScore, row.vectorScore(), docBoost, 0.30, 0.62, false);
         return new KnowledgeItem(
                 row.chunkId(),
                 row.docId(),
@@ -91,7 +91,7 @@ public class HybridRetriever {
         double keywordScore = keywordScore(rewrittenQuery, text);
         double vectorScore = embeddingService.cosine(queryVector, embeddingService.embed(text));
         double docBoost = doc != null && rewrittenQuery.contains(doc.getDocType()) ? 0.08 : 0.0;
-        double score = guardedScore(keywordScore, vectorScore, docBoost, 0.78, 0.18);
+        double score = guardedScore(keywordScore, vectorScore, docBoost, 0.78, 0.18, true);
         return new KnowledgeItem(
                 chunk.getId(),
                 chunk.getDocId(),
@@ -124,9 +124,13 @@ public class HybridRetriever {
             double vectorScore,
             double docBoost,
             double keywordWeight,
-            double vectorWeight
+            double vectorWeight,
+            boolean requireKeywordAnchor
     ) {
         double score = Math.min(1.0, keywordScore * keywordWeight + vectorScore * vectorWeight + docBoost);
+        if (!requireKeywordAnchor) {
+            return round(score);
+        }
         if (keywordScore == 0.0) {
             score = Math.min(score, 0.18);
         } else if (keywordScore < 0.17) {

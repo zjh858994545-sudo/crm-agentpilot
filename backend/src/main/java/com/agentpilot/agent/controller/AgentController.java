@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/agent")
@@ -50,7 +51,7 @@ public class AgentController {
     @PostMapping("/chat")
     public ApiResponse<AgentChatResponse> chat(@Valid @RequestBody AgentChatRequest request) {
         Long currentUserId = CurrentUser.userId();
-        if (request.userId() != null && !request.userId().equals(currentUserId)) {
+        if (!Objects.equals(request.userId(), currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
         AgentChatRequest securedRequest = new AgentChatRequest(

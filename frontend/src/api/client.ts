@@ -45,6 +45,23 @@ export interface EventStatus {
   outboxPending?: number;
 }
 
+export interface KnowledgeStatus {
+  vectorStoreMode: string;
+  pgvectorAvailable: boolean;
+  docCount: number;
+  chunkCount: number;
+  vectorizedChunkCount: number;
+}
+
+export interface SecurityStatus {
+  mode: string;
+  strict: boolean;
+  demoUserId: number;
+  demoSalesRepId: number;
+  permissionCount: number;
+  defaultTokenInUse: boolean;
+}
+
 export interface OpenAiToolDefinition {
   type: string;
   function: {
@@ -254,6 +271,16 @@ export async function fetchModelStatus() {
 
 export async function fetchEventStatus() {
   const response = await apiClient.get<ApiResponse<EventStatus>>('/events/status');
+  return response.data.data;
+}
+
+export async function fetchKnowledgeStatus() {
+  const response = await apiClient.get<ApiResponse<KnowledgeStatus>>('/knowledge/status');
+  return response.data.data;
+}
+
+export async function fetchSecurityStatus() {
+  const response = await apiClient.get<ApiResponse<SecurityStatus>>('/security/status');
   return response.data.data;
 }
 

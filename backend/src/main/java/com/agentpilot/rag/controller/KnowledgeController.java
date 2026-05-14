@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/knowledge")
@@ -49,6 +50,17 @@ public class KnowledgeController {
     @GetMapping("/docs")
     public ApiResponse<List<KnowledgeDoc>> docs() {
         return ApiResponse.ok(docService.list());
+    }
+
+    @GetMapping("/status")
+    public ApiResponse<Map<String, Object>> status() {
+        return ApiResponse.ok(Map.of(
+                "vectorStoreMode", chunkService.vectorStoreMode(),
+                "pgvectorAvailable", chunkService.pgvectorAvailable(),
+                "docCount", docService.count(),
+                "chunkCount", chunkService.count(),
+                "vectorizedChunkCount", chunkService.vectorizedChunkCount()
+        ));
     }
 
     @GetMapping("/docs/{id}")

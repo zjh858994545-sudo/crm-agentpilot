@@ -8,7 +8,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "agentpilot.security")
 public class AgentPilotSecurityProperties {
     private String mode = "permissive";
-    private String apiToken = "dev-agentpilot-token";
+    private String apiToken = "";
     private Long demoUserId = 1L;
     private Long demoSalesRepId = 1L;
     private List<String> permissions = new ArrayList<>(List.of(

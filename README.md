@@ -258,14 +258,14 @@ npm run build
 - 已加入 OpenAI-compatible 模型适配、Swagger UI、Actuator 基础端点、`X-Trace-Id` 请求追踪
 - 已加入 Spring Security API Token 权限层：默认 permissive 方便本地演示，设置 `AGENTPILOT_SECURITY_MODE=strict` 后所有业务 API 需要 `X-AgentPilot-Token`
 - 已接入阿里百炼真实 embedding：默认 `text-embedding-v4`、1024 维，写入 PostgreSQL `crm_knowledge_chunk.embedding_vector vector(1024)`，并通过 HNSW 索引和 `pgvector-hybrid` 检索路径跑通
-- 已加入 outbox 事件表 `agent_outbox_event`：Agent run、tool call、确认后的 CRM task 事件先落库，再在事务提交后分发；默认 log-only，设置 `AGENT_EVENTS_KAFKA_ENABLED=true` 后发布到 Kafka
+- 已加入 outbox 事件表 `agent_outbox_event`：确认后的 CRM task 事件与业务写入共享事务；Agent run / tool call 审计事件统一落库并按 at-least-once 语义重试分发；默认 log-only，设置 `AGENT_EVENTS_KAFKA_ENABLED=true` 后发布到 Kafka
 - Tool Registry 已 schema 化，并通过 `GET /api/agent/tools/openai` 暴露 OpenAI-compatible tools JSON Schema；主 Agent 会优先让 LLM 选择工具，失败或超时再回退规则路由
 
 ## 已知限制
 
 - 主 Agent 已接入 LLM Tool Calling 主流程；为了保证演示稳定，模型选工具失败或外部接口超时时会自动回退 deterministic 规则路由。
 - RAG 已使用 PostgreSQL pgvector 存储和相似度检索；配置 `AGENT_EMBEDDING_PROVIDER=openai-compatible` 后走阿里百炼 `text-embedding-v4` 真实 embedding。本地/测试仍可回退 deterministic mock，保证用例稳定。
-- 事件层已实现应用级 outbox；生产大规模场景可以继续演进为 outbox + CDC/Debezium，以减少应用进程调度压力。
+- 事件层已实现应用级 outbox。CRM 写操作事件在确认事务内落库，强调事务-事件一致；Agent run / tool call 是审计型事件，走 at-least-once 落库重试，不声明 exactly-once。生产大规模场景可以继续演进为 outbox + CDC/Debezium。
 - 当前鉴权是适合演示和内网工具的 API Token + 方法级权限，不是完整企业级 SSO/JWT/RBAC/多租户权限体系。
 - Tool Schema 已能暴露给 OpenAI-compatible function calling，当前已覆盖客户分析、商机推荐、知识检索、产品查询、创建任务、写联系记录、更新商机阶段等主工具；生产化仍需要补更严格的参数校验、权限边界和多轮消歧。
 - JSONL 评测集是小规模面试样例，用于验证评测框架，生产化需要扩展真实业务样本。
