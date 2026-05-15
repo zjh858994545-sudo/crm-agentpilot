@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 
@@ -26,6 +27,9 @@ public class SecurityConfig {
             AgentPilotSecurityProperties properties,
             ObjectMapper objectMapper
     ) {
+        if (properties.strict() && !StringUtils.hasText(properties.getApiToken())) {
+            throw new IllegalStateException("strict security mode requires AGENTPILOT_API_TOKEN to be set");
+        }
         return new AgentPilotTokenAuthenticationFilter(properties, objectMapper);
     }
 

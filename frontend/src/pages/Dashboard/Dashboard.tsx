@@ -143,7 +143,7 @@ export default function Dashboard() {
       item: '权限模式',
       status: securityStatus?.mode ?? 'permissive',
       detail: securityStatus
-        ? `${securityStatus.permissionCount} 个权限点；默认 token ${securityStatus.defaultTokenInUse ? '仍是开发值' : '未使用'}`
+        ? `${securityStatus.permissionCount} 个权限点；token ${securityStatus.tokenConfigured ? '已配置' : '未配置'}${securityStatus.strictWithoutToken ? '；strict 模式会启动失败' : ''}`
         : '等待 /api/security/status'
     }
   ];

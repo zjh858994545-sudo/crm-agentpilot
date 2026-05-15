@@ -59,7 +59,8 @@ export interface SecurityStatus {
   demoUserId: number;
   demoSalesRepId: number;
   permissionCount: number;
-  defaultTokenInUse: boolean;
+  tokenConfigured: boolean;
+  strictWithoutToken: boolean;
 }
 
 export interface OpenAiToolDefinition {

@@ -57,6 +57,8 @@ public class AgentOrchestrator {
             "CONTACTED",
             "QUALIFIED",
             "NEGOTIATING",
+            "OBJECTION",
+            "FOLLOWING",
             "WON",
             "LOST"
     );
