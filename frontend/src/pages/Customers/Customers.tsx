@@ -1,14 +1,17 @@
 import {
   ClockCircleOutlined,
   EnvironmentOutlined,
+  MessageOutlined,
   PhoneOutlined,
   ProfileOutlined,
   SearchOutlined,
+  ThunderboltOutlined,
   UserOutlined,
   WarningOutlined
 } from '@ant-design/icons';
 import {
   Alert,
+  Button,
   Card,
   Col,
   Descriptions,
@@ -24,6 +27,7 @@ import {
   Typography
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ContactLog,
   Customer,
@@ -120,21 +124,41 @@ function daysUntil(value?: string) {
   return Number.isFinite(days) ? `${days} 天` : '-';
 }
 
+function agentUrlForCustomer(customer: Customer) {
+  const prompt = `请基于客户 360 信息分析${customer.name}，重点判断续费/成交风险、历史异议、可用话术，并给出下一步跟进动作。`;
+  return `/agent?prompt=${encodeURIComponent(prompt)}&customerId=${customer.id}&source=customer`;
+}
+
+function leadUrlForCustomer(customer: Customer) {
+  return `/leads?customerId=${customer.id}`;
+}
+
 export default function Customers() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<Customer[]>(fallbackData);
   const [keyword, setKeyword] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [contactLogs, setContactLogs] = useState<ContactLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dataMode, setDataMode] = useState<'real' | 'sample'>('sample');
   const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
     fetchCustomers()
-      .then(setData)
-      .catch(() => setError('后端未连接，当前显示离线样例客户。'))
+      .then((items) => {
+        setData(items);
+        setDataMode('real');
+      })
+      .catch(() => {
+        setDataMode('sample');
+        setError('后端未连接，当前显示离线样例客户。');
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  const urlCustomerId = Number(searchParams.get('customerId'));
+  const resolvedUrlCustomerId = Number.isFinite(urlCustomerId) && urlCustomerId > 0 ? urlCustomerId : undefined;
 
   const filteredData = useMemo(() => {
     const term = keyword.trim().toLowerCase();
@@ -155,7 +179,12 @@ export default function Customers() {
     return { total: data.length, highRisk, aLevel, renewal };
   }, [data]);
 
-  const openCustomer = async (customer: Customer) => {
+  const openCustomer = async (customer: Customer, syncUrl = true) => {
+    if (syncUrl) {
+      const next = new URLSearchParams(searchParams);
+      next.set('customerId', String(customer.id));
+      setSearchParams(next, { replace: true });
+    }
     setSelectedCustomer(customer);
     setContactLogs([]);
     try {
@@ -170,9 +199,46 @@ export default function Customers() {
     }
   };
 
+  useEffect(() => {
+    if (!resolvedUrlCustomerId || selectedCustomer?.id === resolvedUrlCustomerId) {
+      return;
+    }
+    const target = data.find((item) => item.id === resolvedUrlCustomerId);
+    if (target) {
+      openCustomer(target, false);
+    }
+  }, [data, resolvedUrlCustomerId, selectedCustomer?.id]);
+
+  const closeCustomer = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('customerId');
+    setSearchParams(next, { replace: true });
+    setSelectedCustomer(null);
+    setContactLogs([]);
+  };
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {error && <Alert type="warning" showIcon message={error} />}
+
+      <div className="workflow-hero compact">
+        <div>
+          <Text className="eyebrow">Customer Context</Text>
+          <Typography.Title level={4}>先理解客户，再决定跟进动作</Typography.Title>
+          <Paragraph className="overview-copy">
+            客户 360 是销售作业流的上下文入口：先看价值、风险、标签和历史跟进，再把客户带到 Agent 或商机优先级里继续处理。
+          </Paragraph>
+          <Tag color={dataMode === 'real' ? 'green' : 'orange'}>
+            {dataMode === 'real' ? '真实 CRM 数据' : '离线样例数据'}
+          </Tag>
+        </div>
+        <div className="workflow-stepper">
+          <span className="mini-flow-node active"><UserOutlined />客户</span>
+          <Link to="/leads" className="mini-flow-node"><ThunderboltOutlined />商机</Link>
+          <Link to="/agent" className="mini-flow-node"><MessageOutlined />Agent</Link>
+          <span className="mini-flow-node muted"><ProfileOutlined />确认</span>
+        </div>
+      </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12} xl={6}>
@@ -281,6 +347,24 @@ export default function Customers() {
                   ))}
                 </Space>
               )
+            },
+            {
+              title: '下一步',
+              width: 220,
+              render: (_, record) => (
+                <Space size={6} wrap onClick={(event) => event.stopPropagation()}>
+                  <Link to={agentUrlForCustomer(record)}>
+                    <Button size="small" type="primary" icon={<MessageOutlined />}>
+                      Agent 分析
+                    </Button>
+                  </Link>
+                  <Link to={leadUrlForCustomer(record)}>
+                    <Button size="small" icon={<ThunderboltOutlined />}>
+                      看商机
+                    </Button>
+                  </Link>
+                </Space>
+              )
             }
           ]}
         />
@@ -290,7 +374,7 @@ export default function Customers() {
         title={selectedCustomer ? `客户详情 · ${selectedCustomer.name}` : '客户详情'}
         open={Boolean(selectedCustomer)}
         width={760}
-        onClose={() => setSelectedCustomer(null)}
+        onClose={closeCustomer}
       >
         {selectedCustomer && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -311,6 +395,21 @@ export default function Customers() {
                 </Card>
               </Col>
             </Row>
+
+            <div className="drawer-action-bar">
+              <div>
+                <Text strong>下一步推荐</Text>
+                <div className="metric-label">把当前客户带入 Agent 分析，或回到商机优先级看排序原因。</div>
+              </div>
+              <Space wrap>
+                <Link to={agentUrlForCustomer(selectedCustomer)}>
+                  <Button type="primary" icon={<MessageOutlined />}>让 Agent 分析</Button>
+                </Link>
+                <Link to={leadUrlForCustomer(selectedCustomer)}>
+                  <Button icon={<ThunderboltOutlined />}>查看相关商机</Button>
+                </Link>
+              </Space>
+            </div>
 
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="客户 ID">{selectedCustomer.id}</Descriptions.Item>

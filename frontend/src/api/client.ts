@@ -225,6 +225,12 @@ export interface AgentChatResponse {
   toolCalls: ToolCallView[];
 }
 
+export interface AgentMessageContext {
+  sessionId?: number;
+  customerId?: number;
+  salesRepId?: number;
+}
+
 export interface AgentRun {
   id: number;
   sessionId: number;
@@ -254,6 +260,19 @@ export interface AgentToolCall {
   requiresConfirmation: boolean;
   confirmationId?: number;
   completedAt?: string;
+}
+
+export interface AgentConfirmation {
+  id: number;
+  runId: number;
+  toolCallId?: number;
+  actionType: string;
+  actionSummary: string;
+  payloadJson?: string;
+  status: string;
+  confirmedBy?: number;
+  confirmedAt?: string;
+  expiredAt?: string;
 }
 
 export interface EvaluationMetric {
@@ -419,11 +438,12 @@ export async function askKnowledge(question: string, topK = 5) {
   return response.data.data;
 }
 
-export async function sendAgentMessage(message: string, sessionId?: number) {
+export async function sendAgentMessage(message: string, context: AgentMessageContext = {}) {
   const response = await apiClient.post<ApiResponse<AgentChatResponse>>('/agent/chat', {
     userId: 1,
-    salesRepId: 1,
-    sessionId,
+    salesRepId: context.salesRepId ?? 1,
+    sessionId: context.sessionId,
+    customerId: context.customerId,
     message
   });
   return response.data.data;
@@ -442,6 +462,13 @@ export async function rejectAgentAction(confirmationId: number) {
     `/agent/confirmations/${confirmationId}/reject`,
     { userId: 1 }
   );
+  return response.data.data;
+}
+
+export async function fetchAgentConfirmations(status = 'PENDING') {
+  const response = await apiClient.get<ApiResponse<AgentConfirmation[]>>('/agent/confirmations', {
+    params: { status }
+  });
   return response.data.data;
 }
 

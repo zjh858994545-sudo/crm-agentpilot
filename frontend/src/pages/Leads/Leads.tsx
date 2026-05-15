@@ -2,12 +2,15 @@ import {
   DollarOutlined,
   FilterOutlined,
   FireOutlined,
+  MessageOutlined,
   ProfileOutlined,
   RiseOutlined,
+  TeamOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
 import {
   Alert,
+  Button,
   Card,
   Col,
   Descriptions,
@@ -23,6 +26,7 @@ import {
   Typography
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   fetchLeadRecommendations,
   fetchLeads,
@@ -101,14 +105,26 @@ function daysUntil(value?: string) {
   return Number.isFinite(days) ? `${days} 天` : '-';
 }
 
+function agentUrlForLead(lead: LeadRecommendation) {
+  const reasons = lead.reasons.join('、');
+  const prompt = `请基于商机 ${lead.leadId} 分析${lead.customerName}，推荐理由是：${reasons}。请给出跟进策略，并判断是否需要创建跟进任务。`;
+  return `/agent?prompt=${encodeURIComponent(prompt)}&leadId=${lead.leadId}&customerId=${lead.customerId}&source=lead`;
+}
+
 export default function Leads() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [recommendations, setRecommendations] = useState<LeadRecommendation[]>(fallbackData);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [industryFilter, setIndustryFilter] = useState<string>('ALL');
   const [selected, setSelected] = useState<LeadRecommendation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dataMode, setDataMode] = useState<'real' | 'sample'>('sample');
   const [error, setError] = useState('');
+  const urlLeadId = Number(searchParams.get('leadId'));
+  const urlCustomerId = Number(searchParams.get('customerId'));
+  const resolvedUrlLeadId = Number.isFinite(urlLeadId) && urlLeadId > 0 ? urlLeadId : undefined;
+  const resolvedUrlCustomerId = Number.isFinite(urlCustomerId) && urlCustomerId > 0 ? urlCustomerId : undefined;
 
   useEffect(() => {
     setLoading(true);
@@ -116,8 +132,12 @@ export default function Leads() {
       .then(([nextRecommendations, nextLeads]) => {
         setRecommendations(nextRecommendations);
         setLeads(nextLeads);
+        setDataMode('real');
       })
-      .catch(() => setError('后端未连接，当前显示离线样例商机。'))
+      .catch(() => {
+        setDataMode('sample');
+        setError('后端未连接，当前显示离线样例商机。');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -150,9 +170,58 @@ export default function Leads() {
     [leads, selected]
   );
 
+  const openLead = (lead: LeadRecommendation, syncUrl = true) => {
+    if (syncUrl) {
+      const next = new URLSearchParams(searchParams);
+      next.set('leadId', String(lead.leadId));
+      next.set('customerId', String(lead.customerId));
+      setSearchParams(next, { replace: true });
+    }
+    setSelected(lead);
+  };
+
+  useEffect(() => {
+    if (selected?.leadId === resolvedUrlLeadId || (!resolvedUrlLeadId && selected?.customerId === resolvedUrlCustomerId)) {
+      return;
+    }
+    const target = recommendations.find((item) =>
+      resolvedUrlLeadId ? item.leadId === resolvedUrlLeadId : item.customerId === resolvedUrlCustomerId
+    );
+    if (target) {
+      openLead(target, false);
+    }
+  }, [recommendations, resolvedUrlLeadId, resolvedUrlCustomerId, selected?.leadId, selected?.customerId]);
+
+  const closeLead = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('leadId');
+    next.delete('customerId');
+    setSearchParams(next, { replace: true });
+    setSelected(null);
+  };
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {error && <Alert type="warning" showIcon message={error} />}
+
+      <div className="workflow-hero compact">
+        <div>
+          <Text className="eyebrow">Opportunity Priority</Text>
+          <Title level={4}>先排优先级，再推动下一步动作</Title>
+          <Paragraph className="overview-copy">
+            商机页面向销售主管和一线销售：用评分解释确定今天先跟谁，再进入客户 360 补上下文，最后交给 Agent 生成跟进任务或话术。
+          </Paragraph>
+          <Tag color={dataMode === 'real' ? 'green' : 'orange'}>
+            {dataMode === 'real' ? '真实商机数据' : '离线样例数据'}
+          </Tag>
+        </div>
+        <div className="workflow-stepper">
+          <Link to="/customers" className="mini-flow-node"><TeamOutlined />客户</Link>
+          <span className="mini-flow-node active"><ThunderboltOutlined />商机</span>
+          <Link to="/agent" className="mini-flow-node"><MessageOutlined />Agent</Link>
+          <span className="mini-flow-node muted"><ProfileOutlined />确认</span>
+        </div>
+      </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12} xl={6}>
@@ -222,7 +291,7 @@ export default function Leads() {
                 </div>
                 <Space direction="vertical" size={10} style={{ width: '100%' }}>
                   {items.map((item) => (
-                    <button className="lead-card-button" key={item.leadId} onClick={() => setSelected(item)}>
+                    <button className="lead-card-button" key={item.leadId} onClick={() => openLead(item)}>
                       <Space direction="vertical" size={8} style={{ width: '100%' }}>
                         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                           <Text strong>{item.customerName}</Text>
@@ -249,7 +318,7 @@ export default function Leads() {
           loading={loading}
           dataSource={filtered}
           pagination={{ pageSize: 8 }}
-          onRow={(record) => ({ onClick: () => setSelected(record) })}
+          onRow={(record) => ({ onClick: () => openLead(record) })}
           rowClassName="clickable-table-row"
           columns={[
             { title: '商机 ID', dataIndex: 'leadId', width: 110 },
@@ -278,7 +347,21 @@ export default function Leads() {
                 </Space>
               )
             },
-            { title: '下一步动作', dataIndex: 'suggestedAction' }
+            { title: '下一步动作', dataIndex: 'suggestedAction' },
+            {
+              title: '进入流程',
+              width: 220,
+              render: (_, record) => (
+                <Space size={6} wrap onClick={(event) => event.stopPropagation()}>
+                  <Link to={`/customers?customerId=${record.customerId}`}>
+                    <Button size="small" icon={<TeamOutlined />}>看客户</Button>
+                  </Link>
+                  <Link to={agentUrlForLead(record)}>
+                    <Button size="small" type="primary" icon={<MessageOutlined />}>Agent 处理</Button>
+                  </Link>
+                </Space>
+              )
+            }
           ]}
         />
       </Card>
@@ -287,7 +370,7 @@ export default function Leads() {
         title={selected ? `商机解释 · ${selected.customerName}` : '商机解释'}
         open={Boolean(selected)}
         width={720}
-        onClose={() => setSelected(null)}
+        onClose={closeLead}
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -308,6 +391,21 @@ export default function Leads() {
                 </Card>
               </Col>
             </Row>
+
+            <div className="drawer-action-bar">
+              <div>
+                <Text strong>推荐处理路径</Text>
+                <div className="metric-label">先确认客户背景，再让 Agent 生成跟进策略或创建确认任务。</div>
+              </div>
+              <Space wrap>
+                <Link to={`/customers?customerId=${selected.customerId}`}>
+                  <Button icon={<TeamOutlined />}>查看客户 360</Button>
+                </Link>
+                <Link to={agentUrlForLead(selected)}>
+                  <Button type="primary" icon={<MessageOutlined />}>让 Agent 处理</Button>
+                </Link>
+              </Space>
+            </div>
 
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="商机 ID">{selected.leadId}</Descriptions.Item>

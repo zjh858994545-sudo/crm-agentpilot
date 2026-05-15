@@ -2,7 +2,9 @@ package com.agentpilot.agent.controller;
 
 import com.agentpilot.agent.entity.AgentRun;
 import com.agentpilot.agent.entity.AgentToolCall;
+import com.agentpilot.agent.entity.AgentConfirmation;
 import com.agentpilot.agent.orchestrator.AgentOrchestrator;
+import com.agentpilot.agent.service.AgentConfirmationService;
 import com.agentpilot.agent.service.AgentRunService;
 import com.agentpilot.agent.service.AgentToolCallService;
 import com.agentpilot.agent.tool.AgentToolDefinition;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -32,17 +35,20 @@ import java.util.Objects;
 @PreAuthorize("hasAuthority('agent:use')")
 public class AgentController {
     private final AgentOrchestrator orchestrator;
+    private final AgentConfirmationService confirmationService;
     private final AgentRunService runService;
     private final AgentToolCallService toolCallService;
     private final ToolRegistry toolRegistry;
 
     public AgentController(
             AgentOrchestrator orchestrator,
+            AgentConfirmationService confirmationService,
             AgentRunService runService,
             AgentToolCallService toolCallService,
             ToolRegistry toolRegistry
     ) {
         this.orchestrator = orchestrator;
+        this.confirmationService = confirmationService;
         this.runService = runService;
         this.toolCallService = toolCallService;
         this.toolRegistry = toolRegistry;
@@ -88,6 +94,19 @@ public class AgentController {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
         return ApiResponse.ok(orchestrator.reject(id, currentUserId));
+    }
+
+    @GetMapping("/confirmations")
+    @PreAuthorize("hasAuthority('crm:write')")
+    public ApiResponse<List<AgentConfirmation>> confirmations(
+            @RequestParam(defaultValue = "PENDING") String status
+    ) {
+        LambdaQueryWrapper<AgentConfirmation> wrapper = new LambdaQueryWrapper<AgentConfirmation>()
+                .orderByDesc(AgentConfirmation::getId);
+        if (!"ALL".equalsIgnoreCase(status)) {
+            wrapper.eq(AgentConfirmation::getStatus, status.toUpperCase());
+        }
+        return ApiResponse.ok(confirmationService.list(wrapper));
     }
 
     @GetMapping("/tools")
