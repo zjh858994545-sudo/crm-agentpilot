@@ -1,14 +1,19 @@
 import {
   ApiOutlined,
+  BookOutlined,
   CheckCircleOutlined,
   CloudServerOutlined,
   DatabaseOutlined,
-  DeploymentUnitOutlined,
   FieldTimeOutlined,
-  SafetyCertificateOutlined
+  MessageOutlined,
+  PhoneOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
-import { Alert, Card, Col, Descriptions, Row, Space, Statistic, Table, Tag, Timeline, Typography } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Row, Space, Statistic, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   EventStatus,
   fetchEventStatus,
@@ -24,27 +29,13 @@ import {
   SecurityStatus
 } from '../../api/client';
 
-const { Text, Title } = Typography;
-
-const moduleCatalog = [
-  { key: 'crm-core', healthKey: 'crm', module: 'CRM Core', owner: '客户、商机、任务、产品包、联系记录' },
-  { key: 'lead-scoring', healthKey: 'crm', module: 'Lead Scoring', owner: '优先级打分、推荐理由、下一步动作' },
-  { key: 'rag', healthKey: 'rag', module: 'RAG', owner: '知识导入、pgvector 检索、引用、低置信拒答' },
-  { key: 'agent', healthKey: 'agent', module: 'Agent Orchestrator', owner: 'LLM Tool Calling、确认流、运行审计' },
-  { key: 'call-center', healthKey: 'callcenter', module: 'Call Center', owner: '摘要、质检、客户记忆、联系记录确认' },
-  { key: 'evaluation', healthKey: 'evaluation', module: 'Evaluation', owner: 'JSONL 用例、指标统计、报告生成' }
-];
+const { Paragraph, Text, Title } = Typography;
 
 const statusColor: Record<string, string> = {
   UP: 'green',
   READY: 'green',
   ready: 'green',
   LOCAL: 'orange',
-  已验证: 'green',
-  已接通: 'green',
-  可切换: 'blue',
-  待配置: 'orange',
-  审计重试: 'blue',
   mock: 'orange',
   strict: 'green',
   permissive: 'orange',
@@ -52,9 +43,7 @@ const statusColor: Record<string, string> = {
   'pgvector-hybrid': 'green',
   'java-fallback': 'orange',
   'llm-enabled': 'blue',
-  'log-only': 'default',
-  healthy: 'green',
-  warning: 'orange'
+  'log-only': 'default'
 };
 
 function tag(value: string) {
@@ -88,7 +77,7 @@ export default function Dashboard() {
   useEffect(() => {
     fetchHealth()
       .then(setHealth)
-      .catch(() => setError('后端未连接，当前仅显示前端静态工作台。'));
+      .catch(() => setError('后端未连接，部分运行状态暂不可用。'));
     fetchModelStatus().then(setModelStatus).catch(() => undefined);
     fetchEventStatus().then(setEventStatus).catch(() => undefined);
     fetchKnowledgeStatus().then(setKnowledgeStatus).catch(() => undefined);
@@ -96,16 +85,6 @@ export default function Dashboard() {
     fetchOpenAiTools().then(setTools).catch(() => undefined);
   }, []);
 
-  const moduleRows = useMemo(
-    () =>
-      moduleCatalog.map((item) => ({
-        ...item,
-        status: health?.modules?.[item.healthKey] ?? 'READY'
-      })),
-    [health]
-  );
-
-  const toolCount = tools.length;
   const writeToolCount = tools.filter((tool) =>
     ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(tool.function.name)
   ).length;
@@ -113,93 +92,63 @@ export default function Dashboard() {
     ? Math.round((knowledgeStatus.vectorizedChunkCount / knowledgeStatus.chunkCount) * 100)
     : 0;
 
-  const readinessRows = [
+  const serviceReadyCount = useMemo(
+    () => Object.values(health?.modules ?? {}).filter((value) => value === 'ready' || value === 'READY').length,
+    [health]
+  );
+
+  const quickActions = [
     {
-      key: 'api',
-      item: '真实接口',
-      icon: <ApiOutlined />,
-      status: health?.status === 'UP' ? '已验证' : 'LOCAL',
-      detail: '前端页面通过 Axios 调用后端 API，Health 返回模块状态。'
+      title: '开始 Agent 对话',
+      desc: '分析客户、检索知识、生成写操作确认',
+      icon: <MessageOutlined />,
+      to: '/agent'
     },
     {
-      key: 'llm',
-      item: 'LLM Tool Calling',
-      icon: <DeploymentUnitOutlined />,
-      status: modelStatus?.configured && toolCount > 0 ? '已验证' : '待配置',
-      detail: `${toolCount} 个 schema 化工具；模型失败或超时时回退规则路由。`
+      title: '查看高优商机',
+      desc: '按评分和风险优先处理跟进客户',
+      icon: <ThunderboltOutlined />,
+      to: '/leads'
     },
     {
-      key: 'embedding',
-      item: '真实 Embedding',
-      icon: <DatabaseOutlined />,
-      status: modelStatus?.embedding?.configured ? '已验证' : 'mock',
-      detail: embeddingLine(modelStatus)
+      title: '检索销售知识',
+      desc: '查 SOP、套餐政策和质检规则',
+      icon: <BookOutlined />,
+      to: '/knowledge'
     },
     {
-      key: 'vector',
-      item: '向量检索',
-      icon: <CloudServerOutlined />,
-      status: knowledgeStatus?.vectorStoreMode ?? 'java-fallback',
-      detail: knowledgeStatus
-        ? `${knowledgeStatus.vectorizedChunkCount}/${knowledgeStatus.chunkCount} chunks 已写入向量列。`
-        : '等待 /api/knowledge/status'
-    },
-    {
-      key: 'write',
-      item: '写入确认',
-      icon: <SafetyCertificateOutlined />,
-      status: writeToolCount > 0 ? '已验证' : '待配置',
-      detail: `${writeToolCount} 个写工具进入 confirmation 后再写 CRM。`
-    },
-    {
-      key: 'outbox',
-      item: '事件分发',
+      title: '查看运行审计',
+      desc: '追踪每一次 Agent Run 和 Tool Call',
       icon: <FieldTimeOutlined />,
-      status: eventStatus ? '审计重试' : 'LOCAL',
-      detail: `pending=${eventStatus?.outboxPending ?? 0}；CRM task 事件绑定确认事务，run/tool call 走 at-least-once 审计分发。`
+      to: '/runs'
     }
   ];
 
-  const capabilityRows = [
+  const workflowCards = [
     {
-      key: 'chat',
-      item: 'Chat Model',
-      status: modelStatus?.mode ?? 'deterministic-mock',
-      detail: `${providerLine(modelStatus)}，协议：${modelStatus?.protocol ?? 'mock'}`
+      title: '客户理解',
+      icon: <TeamOutlined />,
+      text: '聚合客户画像、标签、跟进记录和风险状态。'
     },
     {
-      key: 'embedding',
-      item: 'Embedding',
-      status: modelStatus?.embedding?.mode ?? 'deterministic-mock',
-      detail: `${embeddingLine(modelStatus)}，协议：${modelStatus?.embedding?.protocol ?? 'mock'}`
+      title: '商机排序',
+      icon: <ThunderboltOutlined />,
+      text: '用可解释评分帮助销售决定今天先跟谁。'
     },
     {
-      key: 'vector-store',
-      item: 'Vector Store',
-      status: knowledgeStatus?.vectorStoreMode ?? 'java-fallback',
-      detail: knowledgeStatus
-        ? `doc=${knowledgeStatus.docCount}，chunk=${knowledgeStatus.chunkCount}，vectorized=${knowledgeStatus.vectorizedChunkCount}`
-        : '等待 /api/knowledge/status'
+      title: '知识辅助',
+      icon: <BookOutlined />,
+      text: '从销售 SOP、套餐政策和质检规则中检索证据。'
     },
     {
-      key: 'security',
-      item: 'Security',
-      status: securityStatus?.mode ?? 'permissive',
-      detail: securityStatus
-        ? `${securityStatus.permissionCount} 个权限点；token ${securityStatus.tokenConfigured ? '已配置' : '未配置'}`
-        : '等待 /api/security/status'
+      title: '安全写入',
+      icon: <SafetyCertificateOutlined />,
+      text: '任务、联系记录、商机阶段变更先确认再落库。'
     },
     {
-      key: 'outbox',
-      item: 'Outbox',
-      status: eventStatus?.mode ?? 'log-only',
-      detail: `pending=${eventStatus?.outboxPending ?? 0}；可切 Kafka topic`
-    },
-    {
-      key: 'tools',
-      item: 'LLM Tools',
-      status: toolCount > 0 ? '已接通' : 'LOCAL',
-      detail: `${toolCount || 0} 个 OpenAI-compatible function schema`
+      title: '通话质检',
+      icon: <PhoneOutlined />,
+      text: '识别承诺类风险，沉淀摘要和下一步动作。'
     }
   ];
 
@@ -207,173 +156,134 @@ export default function Dashboard() {
     <Space direction="vertical" size={18} style={{ width: '100%' }}>
       {error && <Alert type="warning" showIcon message={error} />}
 
-      <div className="summary-panel">
+      <div className="overview-hero">
         <div>
-          <Text className="eyebrow">System Proof</Text>
-          <Title level={4}>可演示、可追踪、可解释的 CRM Agent 原型</Title>
-          <Text className="page-subtitle">
-            这页所有核心状态都来自真实后端接口，用来证明系统不是静态页面。
-          </Text>
+          <Text className="eyebrow">Workspace Overview</Text>
+          <Title level={3}>销售作业 AI 工作台</Title>
+          <Paragraph className="overview-copy">
+            把客户分析、商机推荐、知识库问答、通话质检和 CRM 写操作确认放在一个工作流里。读操作快速执行，写操作先确认再落库。
+          </Paragraph>
+          <Space wrap>
+            <Link to="/agent">
+              <Button type="primary" icon={<MessageOutlined />}>进入 Agent 工作台</Button>
+            </Link>
+            <Link to="/leads">
+              <Button icon={<ThunderboltOutlined />}>查看商机推荐</Button>
+            </Link>
+          </Space>
         </div>
-        <Space size={8} wrap>
-          {tag(health?.status ?? 'LOCAL')}
-          {tag(modelStatus?.mode ?? 'deterministic-mock')}
-          {tag(knowledgeStatus?.vectorStoreMode ?? 'java-fallback')}
-          {tag(securityStatus?.mode ?? 'permissive')}
-        </Space>
+        <div className="overview-status-card">
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+              <Text strong>运行状态</Text>
+              {tag(health?.status ?? 'LOCAL')}
+            </Space>
+            <Descriptions column={1} size="small">
+              <Descriptions.Item label="模型">{providerLine(modelStatus)}</Descriptions.Item>
+              <Descriptions.Item label="Embedding">{embeddingLine(modelStatus)}</Descriptions.Item>
+              <Descriptions.Item label="向量库">{knowledgeStatus?.vectorStoreMode ?? 'java-fallback'}</Descriptions.Item>
+              <Descriptions.Item label="权限">{securityStatus?.mode ?? 'permissive'}</Descriptions.Item>
+            </Descriptions>
+          </Space>
+        </div>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
-            <Statistic title="系统状态" value={health?.status ?? 'LOCAL'} />
-            <Text className="metric-label">/api/health</Text>
+            <Statistic title="服务模块" value={serviceReadyCount} suffix="个" prefix={<ApiOutlined />} />
+            <Text className="metric-label">后端健康检查</Text>
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
-            <Statistic title="工具 Schema" value={toolCount} suffix="个" />
+            <Statistic title="LLM 工具" value={tools.length} suffix="个" />
             <Text className="metric-label">{writeToolCount} 个写工具受确认流保护</Text>
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
-            <Statistic title="向量化覆盖" value={vectorRatio} suffix="%" />
+            <Statistic title="知识向量化" value={vectorRatio} suffix="%" prefix={<DatabaseOutlined />} />
             <Text className="metric-label">{knowledgeStatus?.vectorStoreMode ?? 'java-fallback'}</Text>
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
-            <Statistic title="Outbox Pending" value={eventStatus?.outboxPending ?? 0} />
-            <Text className="metric-label">事件审计与重试队列</Text>
+            <Statistic title="待分发事件" value={eventStatus?.outboxPending ?? 0} prefix={<CloudServerOutlined />} />
+            <Text className="metric-label">Outbox 审计与重试</Text>
           </Card>
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={15}>
-          <Card className="command-card" title="系统能力证明">
-            <Table
-              size="small"
-              pagination={false}
-              dataSource={readinessRows}
-              columns={[
-                {
-                  title: '能力',
-                  dataIndex: 'item',
-                  width: 190,
-                  render: (_, row) => (
-                    <Space>
-                      {row.icon}
-                      <Text strong>{row.item}</Text>
-                    </Space>
-                  )
-                },
-                {
-                  title: '状态',
-                  dataIndex: 'status',
-                  width: 150,
-                  render: (value: string) => tag(value)
-                },
-                { title: '可验证证据', dataIndex: 'detail' }
-              ]}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} xl={9}>
-          <Card className="command-card" title="演示路线">
-            <Timeline
-              items={[
-                {
-                  dot: <CheckCircleOutlined />,
-                  children: '总览页核对模型、向量库、权限和事件状态。'
-                },
-                {
-                  dot: <DeploymentUnitOutlined />,
-                  children: 'Agent 工作台演示商机推荐、客户分析和创建任务。'
-                },
-                {
-                  dot: <SafetyCertificateOutlined />,
-                  children: '写操作先生成确认单，确认后才写入 CRM。'
-                },
-                {
-                  dot: <DatabaseOutlined />,
-                  children: '知识库展示真实 embedding + pgvector 检索和引用返回。'
-                }
-              ]}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <Card className="command-card" title="快捷入口">
+        <div className="quick-action-grid">
+          {quickActions.map((item) => (
+            <Link to={item.to} className="quick-action-card" key={item.title}>
+              <div className="quick-action-icon">{item.icon}</div>
+              <div>
+                <Text strong>{item.title}</Text>
+                <span>{item.desc}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="command-card" title="业务工作流">
+        <div className="workflow-strip">
+          {workflowCards.map((item, index) => (
+            <div className="workflow-step" key={item.title}>
+              <div className="workflow-index">{index + 1}</div>
+              <div className="workflow-icon">{item.icon}</div>
+              <Text strong>{item.title}</Text>
+              <span>{item.text}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>
-          <Card className="command-card" title="运行画像">
-            <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="模型">{providerLine(modelStatus)}</Descriptions.Item>
-              <Descriptions.Item label="协议">{modelStatus?.protocol ?? 'mock'}</Descriptions.Item>
-              <Descriptions.Item label="Embedding">{embeddingLine(modelStatus)}</Descriptions.Item>
-              <Descriptions.Item label="Vector Store">{knowledgeStatus?.vectorStoreMode ?? 'java-fallback'}</Descriptions.Item>
-              <Descriptions.Item label="Security">{securityStatus?.mode ?? 'permissive'}</Descriptions.Item>
-              <Descriptions.Item label="Events">{eventStatus?.mode ?? 'log-only'}</Descriptions.Item>
-            </Descriptions>
+          <Card className="command-card" title="系统能力">
+            <div className="status-list">
+              <div className="status-row">
+                <Space><CheckCircleOutlined /> <Text strong>模型调用</Text></Space>
+                <Space>{tag(modelStatus?.mode ?? 'deterministic-mock')}<Text type="secondary">{providerLine(modelStatus)}</Text></Space>
+              </div>
+              <div className="status-row">
+                <Space><DatabaseOutlined /> <Text strong>向量检索</Text></Space>
+                <Space>{tag(knowledgeStatus?.vectorStoreMode ?? 'java-fallback')}<Text type="secondary">{knowledgeStatus?.vectorizedChunkCount ?? 0}/{knowledgeStatus?.chunkCount ?? 0} chunks</Text></Space>
+              </div>
+              <div className="status-row">
+                <Space><SafetyCertificateOutlined /> <Text strong>写入确认</Text></Space>
+                <Space>{tag(writeToolCount > 0 ? 'READY' : 'LOCAL')}<Text type="secondary">{writeToolCount} write tools</Text></Space>
+              </div>
+              <div className="status-row">
+                <Space><FieldTimeOutlined /> <Text strong>事件分发</Text></Space>
+                <Space>{tag(eventStatus?.mode ?? 'log-only')}<Text type="secondary">pending={eventStatus?.outboxPending ?? 0}</Text></Space>
+              </div>
+            </div>
           </Card>
         </Col>
         <Col xs={24} xl={10}>
           <Card className="command-card" title="工程边界">
-            <Space direction="vertical" style={{ width: '100%' }} size={14}>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <div className="boundary-item">
-                <Text strong>Outbox 语义</Text>
-                <div className="metric-label">CRM 写事件与确认事务绑定；run/tool call 事件用于审计和 at-least-once 重试。</div>
+                <Text strong>写操作安全</Text>
+                <div className="metric-label">Agent 只生成确认单，用户确认后才写入 CRM。</div>
               </div>
               <div className="boundary-item">
-                <Text strong>权限模型</Text>
-                <div className="metric-label">当前是单租户 API Token 演示；企业场景可扩展 JWT/SSO/RBAC 和数据范围权限。</div>
+                <Text strong>事件语义</Text>
+                <div className="metric-label">CRM 写事件与事务绑定；运行审计事件采用 at-least-once 分发。</div>
               </div>
               <div className="boundary-item">
-                <Text strong>向量检索</Text>
-                <div className="metric-label">PostgreSQL 环境走 pgvector；测试环境保留 Java fallback，保证自动化测试稳定。</div>
+                <Text strong>权限模式</Text>
+                <div className="metric-label">当前为 API Token 模式，可扩展到 JWT / SSO / RBAC。</div>
               </div>
             </Space>
           </Card>
         </Col>
       </Row>
-
-      <Card className="command-card" title="模块交付清单">
-        <Table
-          size="small"
-          pagination={false}
-          dataSource={moduleRows}
-          columns={[
-            { title: '模块', dataIndex: 'module', width: 190 },
-            {
-              title: '状态',
-              dataIndex: 'status',
-              width: 140,
-              render: (value: string) => tag(value)
-            },
-            { title: '面试展示点', dataIndex: 'owner' }
-          ]}
-        />
-      </Card>
-
-      <Card className="command-card" title="能力明细">
-        <Table
-          size="small"
-          pagination={false}
-          dataSource={capabilityRows}
-          columns={[
-            { title: '能力', dataIndex: 'item', width: 180 },
-            {
-              title: '运行状态',
-              dataIndex: 'status',
-              width: 160,
-              render: (value: string) => tag(value)
-            },
-            { title: '说明', dataIndex: 'detail' }
-          ]}
-        />
-      </Card>
     </Space>
   );
 }

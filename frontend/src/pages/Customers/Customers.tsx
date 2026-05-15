@@ -132,7 +132,7 @@ export default function Customers() {
     setLoading(true);
     fetchCustomers()
       .then(setData)
-      .catch(() => setError('后端未连接，当前显示本地示例客户。'))
+      .catch(() => setError('后端未连接，当前显示离线样例客户。'))
       .finally(() => setLoading(false));
   }, []);
 

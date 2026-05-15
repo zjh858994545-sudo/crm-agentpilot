@@ -117,7 +117,7 @@ export default function Leads() {
         setRecommendations(nextRecommendations);
         setLeads(nextLeads);
       })
-      .catch(() => setError('后端未连接，当前显示本地示例商机。'))
+      .catch(() => setError('后端未连接，当前显示离线样例商机。'))
       .finally(() => setLoading(false));
   }, []);
 

@@ -121,15 +121,15 @@ export default function AgentRuns() {
     }
   };
 
-  const createDemoRun = async () => {
+  const createSampleRun = async () => {
     setLoading(true);
     setError('');
     try {
       await sendAgentMessage('今天我应该优先跟进哪些客户？请给出推荐理由和下一步动作。');
       await loadRuns();
-      message.success('已生成一条演示运行记录');
+      message.success('已生成一条运行记录');
     } catch {
-      setError('生成演示运行失败，请确认后端服务已经启动。');
+      setError('生成运行记录失败，请确认后端服务已经启动。');
     } finally {
       setLoading(false);
     }
@@ -140,8 +140,8 @@ export default function AgentRuns() {
       {error && <Alert type="warning" showIcon message={error} />}
 
       <Space className="toolbar-line" wrap>
-        <Button icon={<ThunderboltOutlined />} loading={loading} onClick={createDemoRun}>
-          生成演示运行
+        <Button icon={<ThunderboltOutlined />} loading={loading} onClick={createSampleRun}>
+          生成运行记录
         </Button>
         <Button icon={<ReloadOutlined />} loading={loading} onClick={loadRuns}>
           刷新

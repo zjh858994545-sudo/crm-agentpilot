@@ -27,7 +27,7 @@ const { Header, Sider, Content } = Layout;
 const { Text, Title } = Typography;
 
 const navItems = [
-  { key: '/', icon: <DashboardOutlined />, label: <NavLink to="/">总览</NavLink> },
+  { key: '/', icon: <DashboardOutlined />, label: <NavLink to="/">运营总览</NavLink> },
   { key: '/agent', icon: <MessageOutlined />, label: <NavLink to="/agent">Agent 工作台</NavLink> },
   { key: '/customers', icon: <TeamOutlined />, label: <NavLink to="/customers">客户 360</NavLink> },
   { key: '/leads', icon: <ThunderboltOutlined />, label: <NavLink to="/leads">商机推荐</NavLink> },
@@ -39,20 +39,20 @@ const navItems = [
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '/': {
-    title: '系统总览',
-    subtitle: '真实接口、模型、向量检索、权限与事件状态'
+    title: '运营总览',
+    subtitle: '销售作业、知识检索、写入确认与系统运行状态'
   },
   '/agent': {
     title: 'Agent 工作台',
-    subtitle: '用自然语言驱动 CRM 工具调用和写操作确认'
+    subtitle: '用自然语言驱动客户分析、知识检索和 CRM 写操作确认'
   },
   '/customers': {
     title: '客户 360',
-    subtitle: '客户画像、价值等级、风险等级和销售标签'
+    subtitle: '客户画像、跟进记录、风险标签和价值分层'
   },
   '/leads': {
     title: '商机推荐',
-    subtitle: '基于到期时间、客户价值和跟进历史的可解释排序'
+    subtitle: '基于客户价值、跟进历史和成交窗口的可解释排序'
   },
   '/knowledge': {
     title: '销售知识库',
@@ -97,7 +97,7 @@ function Shell() {
     if (!modelStatus?.configured) {
       return 'Mock Model';
     }
-    return `${modelStatus.vendor ?? modelStatus.provider} · ${modelStatus.model}`;
+    return `${modelStatus.vendor ?? modelStatus.provider} / ${modelStatus.model}`;
   }, [modelStatus]);
 
   const embeddingText = useMemo(() => {
@@ -105,7 +105,7 @@ function Shell() {
     if (!embedding?.configured) {
       return 'Embedding Mock';
     }
-    return `${embedding.vendor ?? embedding.provider} · ${embedding.model} · ${embedding.dimension}d`;
+    return `${embedding.vendor ?? embedding.provider} / ${embedding.model} / ${embedding.dimension}d`;
   }, [modelStatus]);
 
   return (
@@ -117,7 +117,7 @@ function Shell() {
           </div>
           <div>
             <Title level={5}>CRM-AgentPilot</Title>
-            <Text>销售作业 AI Agent</Text>
+            <Text>销售作业 AI 工作台</Text>
           </div>
         </div>
         <div className="sider-section-label">Workspace</div>
@@ -125,7 +125,7 @@ function Shell() {
         <div className="sider-footer">
           <SafetyCertificateOutlined />
           <div>
-            <Text strong>安全写入边界</Text>
+            <Text strong>写入安全</Text>
             <span>写 CRM 前必须确认</span>
           </div>
         </div>
@@ -140,8 +140,8 @@ function Shell() {
           <Space size={8} wrap className="header-status">
             <Tag color={modelStatus?.configured ? 'blue' : 'default'}>{modelText}</Tag>
             <Tag color={modelStatus?.embedding?.configured ? 'green' : 'default'}>{embeddingText}</Tag>
-            <Tag color={eventMode === 'log-only' ? 'default' : 'cyan'}>Events · {eventMode}</Tag>
-            <Badge status="success" text="Demo Ready" />
+            <Tag color={eventMode === 'log-only' ? 'default' : 'cyan'}>Events / {eventMode}</Tag>
+            <Badge status="success" text="工作台在线" />
           </Space>
         </Header>
         <Content className="app-content">

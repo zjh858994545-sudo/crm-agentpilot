@@ -316,7 +316,7 @@ export default function KnowledgeBase() {
         </Col>
 
         <Col xs={24} xl={12}>
-          <Card className="command-card" title="快速导入演示文档">
+<Card className="command-card" title="导入知识文档">
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Space.Compact style={{ width: '100%' }}>
                 <Input value={importTitle} onChange={(event) => setImportTitle(event.target.value)} />

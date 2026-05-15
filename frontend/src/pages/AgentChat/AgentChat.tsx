@@ -57,7 +57,7 @@ const scenarioPrompts = [
   }
 ];
 
-const demoHints = [
+const accountHints = [
   '美家房产：A 类客户，套餐临近到期，近期关注续费 ROI。',
   '快招人力：招聘行业高意向客户，适合升级套餐。',
   '老街火锅：价格异议明显，适合用曝光数据和同行案例推进。'
@@ -145,7 +145,7 @@ export default function AgentChat() {
   return (
     <div className="agent-layout">
       <Space direction="vertical" size={16} className="agent-sidebar">
-        <Card title="演示场景" className="command-card">
+        <Card title="快捷指令" className="command-card">
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             {scenarioPrompts.map((item) => (
               <Button
@@ -163,7 +163,7 @@ export default function AgentChat() {
         <Card title="客户上下文" className="command-card">
           <List
             size="small"
-            dataSource={demoHints}
+            dataSource={accountHints}
             renderItem={(item) => (
               <List.Item>
                 <Text>{item}</Text>
