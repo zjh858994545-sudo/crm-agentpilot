@@ -77,10 +77,68 @@ export interface Customer {
   name: string;
   industry: string;
   city: string;
+  address?: string;
+  contactName?: string;
+  contactMobile?: string;
+  lifecycleStage?: string;
   valueLevel: string;
   riskLevel: string;
+  ownerSalesRepId?: number;
+  lastContactAt?: string;
+  nextFollowTime?: string;
   packageExpireAt?: string;
   tags?: string;
+  remark?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ContactLog {
+  id: number;
+  customerId: number;
+  salesRepId: number;
+  leadId?: number;
+  channel: string;
+  content: string;
+  summary: string;
+  customerIntent: string;
+  objections?: string;
+  nextAction?: string;
+  contactAt: string;
+  createdAt?: string;
+}
+
+export interface Lead {
+  id: number;
+  customerId: number;
+  salesRepId: number;
+  source: string;
+  stage: string;
+  intentLevel: string;
+  estimatedAmount: number;
+  expectedCloseDate: string;
+  score: number;
+  scoreReason?: string;
+  status: string;
+  version?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CrmTask {
+  id: number;
+  customerId: number;
+  leadId?: number;
+  salesRepId: number;
+  title: string;
+  content: string;
+  dueTime: string;
+  status: string;
+  source: string;
+  idempotencyKey?: string;
+  version?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface KnowledgeDoc {
@@ -295,10 +353,30 @@ export async function fetchCustomers() {
   return response.data.data;
 }
 
+export async function fetchCustomerDetail(customerId: number) {
+  const response = await apiClient.get<ApiResponse<Customer>>(`/customers/${customerId}`);
+  return response.data.data;
+}
+
+export async function fetchCustomerContactLogs(customerId: number) {
+  const response = await apiClient.get<ApiResponse<ContactLog[]>>(`/customers/${customerId}/contact-logs`);
+  return response.data.data;
+}
+
+export async function fetchLeads() {
+  const response = await apiClient.get<ApiResponse<Lead[]>>('/leads');
+  return response.data.data;
+}
+
 export async function fetchLeadRecommendations(topK = 10) {
   const response = await apiClient.get<ApiResponse<LeadRecommendation[]>>('/leads/recommend', {
     params: { topK }
   });
+  return response.data.data;
+}
+
+export async function fetchTasks() {
+  const response = await apiClient.get<ApiResponse<CrmTask[]>>('/tasks');
   return response.data.data;
 }
 

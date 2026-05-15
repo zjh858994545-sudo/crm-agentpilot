@@ -1,14 +1,21 @@
-import { CheckOutlined, FileDoneOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import {
+  CheckOutlined,
+  FileDoneOutlined,
+  PhoneOutlined,
+  SafetyCertificateOutlined
+} from '@ant-design/icons';
 import {
   Alert,
   Button,
   Card,
   Descriptions,
-  Divider,
   Input,
   InputNumber,
   List,
+  Row,
+  Col,
   Space,
+  Statistic,
   Tag,
   Typography,
   message
@@ -31,6 +38,12 @@ const { TextArea } = Input;
 
 const demoText =
   '客户说套餐有点贵，担心续费后没有效果。销售表示可以帮客户争取优惠，并说明会在明天上午提供上月曝光数据和同行案例，但不会承诺一定成交。';
+
+function riskColor(value?: string) {
+  if (value === 'HIGH') return 'red';
+  if (value === 'MEDIUM') return 'orange';
+  return 'green';
+}
 
 export default function CallCenter() {
   const [customerId, setCustomerId] = useState(1001);
@@ -64,7 +77,7 @@ export default function CallCenter() {
     try {
       setSummary(await summarizeCall(payload));
     } catch {
-      setError('通话摘要失败，请确认后端服务已启动。');
+      setError('通话摘要失败，请确认后端服务已经启动。');
     } finally {
       setLoading(false);
     }
@@ -76,7 +89,7 @@ export default function CallCenter() {
     try {
       setQuality(await checkCallQuality(payload));
     } catch {
-      setError('质检失败，请确认后端服务已启动。');
+      setError('质检失败，请确认后端服务已经启动。');
     } finally {
       setLoading(false);
     }
@@ -90,7 +103,7 @@ export default function CallCenter() {
       setConfirmation(result);
       message.info('已生成联系记录写入确认，请确认后再写入 CRM。');
     } catch {
-      setError('生成联系记录确认失败，请确认后端服务已启动。');
+      setError('生成联系记录确认失败，请确认后端服务已经启动。');
     } finally {
       setLoading(false);
     }
@@ -117,7 +130,8 @@ export default function CallCenter() {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {error && <Alert type="warning" showIcon message={error} />}
-      <Card title="呼叫中心 AI 辅助">
+
+      <Card className="command-card" title="通话质检工作台">
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Space wrap>
             <Text>客户 ID</Text>
@@ -142,13 +156,34 @@ export default function CallCenter() {
         </Space>
       </Card>
 
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card className="metric-card">
+            <Statistic title="客户意向" value={summary?.customerIntent ?? '-'} prefix={<PhoneOutlined />} />
+            <Text className="metric-label">来自通话摘要结果</Text>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card className="metric-card">
+            <Statistic title="质检风险" value={quality?.riskLevel ?? '-'} />
+            <Text className="metric-label">风险表达与合规规则</Text>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card className="metric-card">
+            <Statistic title="客户记忆" value={memory.length} />
+            <Text className="metric-label">可用于后续上下文</Text>
+          </Card>
+        </Col>
+      </Row>
+
       <div className="page-grid">
-        <Card className="span-6" title="结构化摘要">
+        <Card className="span-6 command-card" title="结构化摘要">
           {summary ? (
             <Descriptions bordered size="small" column={1}>
               <Descriptions.Item label="摘要">{summary.summary}</Descriptions.Item>
               <Descriptions.Item label="客户意向">{summary.customerIntent}</Descriptions.Item>
-              <Descriptions.Item label="异议">{summary.objections}</Descriptions.Item>
+              <Descriptions.Item label="异议">{summary.objections || '-'}</Descriptions.Item>
               <Descriptions.Item label="下一步">{summary.nextAction}</Descriptions.Item>
             </Descriptions>
           ) : (
@@ -156,14 +191,12 @@ export default function CallCenter() {
           )}
         </Card>
 
-        <Card className="span-6" title="质检结果">
+        <Card className="span-6 command-card" title="质检结果">
           {quality ? (
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               <Space>
                 <Text>风险等级</Text>
-                <Tag color={quality.riskLevel === 'HIGH' ? 'red' : quality.riskLevel === 'MEDIUM' ? 'orange' : 'green'}>
-                  {quality.riskLevel}
-                </Tag>
+                <Tag color={riskColor(quality.riskLevel)}>{quality.riskLevel}</Tag>
               </Space>
               <List
                 size="small"
@@ -173,7 +206,7 @@ export default function CallCenter() {
                   <List.Item>
                     <Space direction="vertical" size={2}>
                       <Space>
-                        <Tag color={item.severity === 'HIGH' ? 'red' : 'orange'}>{item.severity}</Tag>
+                        <Tag color={riskColor(item.severity)}>{item.severity}</Tag>
                         <Text strong>{item.rule}</Text>
                       </Space>
                       <Text type="secondary">证据：{item.evidence}</Text>
@@ -182,7 +215,6 @@ export default function CallCenter() {
                   </List.Item>
                 )}
               />
-              <Divider />
               <List
                 size="small"
                 dataSource={quality.citations}
@@ -194,11 +226,11 @@ export default function CallCenter() {
               />
             </Space>
           ) : (
-            <Text type="secondary">点击“质检”后会检索质检知识库并识别承诺类风险。</Text>
+            <Text type="secondary">点击“质检”后检索质检知识库并识别承诺类风险。</Text>
           )}
         </Card>
 
-        <Card className="span-6" title="客户记忆">
+        <Card className="span-6 command-card" title="客户记忆">
           <List
             dataSource={memory}
             locale={{ emptyText: '暂无客户记忆或后端未连接' }}
@@ -216,19 +248,17 @@ export default function CallCenter() {
           />
         </Card>
 
-        <Card className="span-6" title="写入确认">
+        <Card className="span-6 command-card" title="写入确认">
           {confirmation ? (
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Alert type="info" showIcon message={confirmation.actionSummary} />
-              <Paragraph className="json-preview">
-                {JSON.stringify(confirmation.payload, null, 2)}
-              </Paragraph>
+              <pre className="json-preview">{JSON.stringify(confirmation.payload, null, 2)}</pre>
               <Button type="primary" loading={loading} onClick={confirmWrite}>
                 确认写入 CRM
               </Button>
             </Space>
           ) : (
-            <Text type="secondary">写联系记录前必须先生成 confirmation，避免 Agent 直接改 CRM 数据。</Text>
+            <Text type="secondary">写联系记录前必须先生成 confirmation，避免 Agent 直接修改 CRM 数据。</Text>
           )}
         </Card>
       </div>
