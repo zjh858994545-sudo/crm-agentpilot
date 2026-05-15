@@ -6,11 +6,12 @@ import {
   ExperimentOutlined,
   MessageOutlined,
   PhoneOutlined,
+  SafetyCertificateOutlined,
   TeamOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
 import { Badge, Layout, Menu, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { fetchEventStatus, fetchModelStatus, ModelStatus } from './api/client';
 import AgentChat from './pages/AgentChat/AgentChat';
@@ -36,50 +37,110 @@ const navItems = [
   { key: '/evaluation', icon: <ExperimentOutlined />, label: <NavLink to="/evaluation">评测报告</NavLink> }
 ];
 
+const pageMeta: Record<string, { title: string; subtitle: string }> = {
+  '/': {
+    title: '系统总览',
+    subtitle: '真实接口、模型、向量检索、权限与事件状态'
+  },
+  '/agent': {
+    title: 'Agent 工作台',
+    subtitle: '用自然语言驱动 CRM 工具调用和写操作确认'
+  },
+  '/customers': {
+    title: '客户 360',
+    subtitle: '客户画像、价值等级、风险等级和销售标签'
+  },
+  '/leads': {
+    title: '商机推荐',
+    subtitle: '基于到期时间、客户价值和跟进历史的可解释排序'
+  },
+  '/knowledge': {
+    title: '销售知识库',
+    subtitle: 'SOP、套餐政策和质检规则的 RAG 检索'
+  },
+  '/callcenter': {
+    title: '呼叫中心',
+    subtitle: '通话摘要、质检风险和联系记录确认'
+  },
+  '/runs': {
+    title: '运行审计',
+    subtitle: 'Agent Run、Tool Call 与 Confirmation 全链路追踪'
+  },
+  '/evaluation': {
+    title: '评测报告',
+    subtitle: 'JSONL 用例、工具调用命中、RAG 引用和延迟指标'
+  }
+};
+
+function resolveSelectedKey(pathname: string) {
+  return (
+    navItems
+      .map((item) => item.key)
+      .filter((key) => key !== '/')
+      .find((key) => pathname.startsWith(key)) ?? '/'
+  );
+}
+
 function Shell() {
   const location = useLocation();
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [eventMode, setEventMode] = useState('log-only');
-  const selectedKey =
-    navItems
-      .map((item) => item.key)
-      .filter((key) => key !== '/')
-      .find((key) => location.pathname.startsWith(key)) ?? '/';
+  const selectedKey = resolveSelectedKey(location.pathname);
+  const meta = pageMeta[selectedKey] ?? pageMeta['/'];
 
   useEffect(() => {
     fetchModelStatus().then(setModelStatus).catch(() => undefined);
     fetchEventStatus().then((status) => setEventMode(status.mode)).catch(() => undefined);
   }, []);
 
-  const modelText = modelStatus?.configured
-    ? `${modelStatus.vendor ?? modelStatus.provider} / ${modelStatus.model}`
-    : 'deterministic mock';
-  const embeddingText = modelStatus?.embedding?.configured
-    ? `${modelStatus.embedding.vendor ?? modelStatus.embedding.provider} / ${modelStatus.embedding.model} / ${modelStatus.embedding.dimension}d`
-    : 'embedding: mock';
+  const modelText = useMemo(() => {
+    if (!modelStatus?.configured) {
+      return 'Mock Model';
+    }
+    return `${modelStatus.vendor ?? modelStatus.provider} · ${modelStatus.model}`;
+  }, [modelStatus]);
+
+  const embeddingText = useMemo(() => {
+    const embedding = modelStatus?.embedding;
+    if (!embedding?.configured) {
+      return 'Embedding Mock';
+    }
+    return `${embedding.vendor ?? embedding.provider} · ${embedding.model} · ${embedding.dimension}d`;
+  }, [modelStatus]);
 
   return (
     <Layout className="app-shell">
-      <Sider width={232} className="app-sider">
+      <Sider width={252} className="app-sider">
         <div className="brand">
-          <ApartmentOutlined className="brand-icon" />
+          <div className="brand-icon">
+            <ApartmentOutlined />
+          </div>
           <div>
             <Title level={5}>CRM-AgentPilot</Title>
             <Text>销售作业 AI Agent</Text>
           </div>
         </div>
+        <div className="sider-section-label">Workspace</div>
         <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]} items={navItems} />
+        <div className="sider-footer">
+          <SafetyCertificateOutlined />
+          <div>
+            <Text strong>安全写入边界</Text>
+            <span>写 CRM 前必须确认</span>
+          </div>
+        </div>
       </Sider>
-      <Layout>
+      <Layout className="app-main">
         <Header className="app-header">
-          <Space direction="vertical" size={0}>
-            <Text className="eyebrow">Interview Demo</Text>
-            <Title level={4}>CRM AI Agent 全栈平台</Title>
+          <Space direction="vertical" size={2} className="header-title">
+            <Text className="eyebrow">CRM AI Agent Platform</Text>
+            <Title level={3}>{meta.title}</Title>
+            <Text className="page-subtitle">{meta.subtitle}</Text>
           </Space>
-          <Space size={10} wrap className="header-status">
+          <Space size={8} wrap className="header-status">
             <Tag color={modelStatus?.configured ? 'blue' : 'default'}>{modelText}</Tag>
             <Tag color={modelStatus?.embedding?.configured ? 'green' : 'default'}>{embeddingText}</Tag>
-            <Tag color={eventMode === 'log-only' ? 'default' : 'green'}>events: {eventMode}</Tag>
+            <Tag color={eventMode === 'log-only' ? 'default' : 'cyan'}>Events · {eventMode}</Tag>
             <Badge status="success" text="Demo Ready" />
           </Space>
         </Header>
