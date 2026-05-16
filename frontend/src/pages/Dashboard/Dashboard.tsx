@@ -605,6 +605,9 @@ export default function Dashboard() {
                 <Space>
                   {statusTag(eventStatus?.mode ?? 'log-only')}
                   <Text type="secondary">pending={eventStatus?.outboxPending ?? 0}</Text>
+                  <Text type={(eventStatus?.outboxDeadLetters ?? 0) > 0 ? 'danger' : 'secondary'}>
+                    dead={eventStatus?.outboxDeadLetters ?? 0}
+                  </Text>
                 </Space>
               </Descriptions.Item>
             </Descriptions>

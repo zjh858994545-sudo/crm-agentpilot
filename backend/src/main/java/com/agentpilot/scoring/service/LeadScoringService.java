@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class LeadScoringService {
@@ -52,24 +54,54 @@ public class LeadScoringService {
             wrapper.eq(Lead::getSalesRepId, salesRepId);
         }
 
-        return leadService.list(wrapper)
+        List<Lead> leads = leadService.list(wrapper);
+        if (leads.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> customerIds = leads.stream()
+                .map(Lead::getCustomerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (customerIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Customer> customersById = customerService.listByIds(customerIds)
                 .stream()
-                .map(this::scoreLead)
+                .collect(Collectors.toMap(Customer::getId, Function.identity(), (left, right) -> left));
+        Map<Long, List<ContactLog>> logsByCustomerId = contactLogService.list(new LambdaQueryWrapper<ContactLog>()
+                        .in(ContactLog::getCustomerId, customerIds))
+                .stream()
+                .collect(Collectors.groupingBy(ContactLog::getCustomerId));
+        Map<Long, List<CrmTask>> tasksByCustomerId = taskService.list(new LambdaQueryWrapper<CrmTask>()
+                        .in(CrmTask::getCustomerId, customerIds))
+                .stream()
+                .collect(Collectors.groupingBy(CrmTask::getCustomerId));
+
+        return leads.stream()
+                .map(lead -> scoreLead(
+                        lead,
+                        customersById.get(lead.getCustomerId()),
+                        logsByCustomerId.getOrDefault(lead.getCustomerId(), List.of()),
+                        tasksByCustomerId.getOrDefault(lead.getCustomerId(), List.of())
+                ))
                 .flatMap(Optional::stream)
                 .sorted(Comparator.comparingDouble(LeadRecommendation::score).reversed())
                 .limit(limit)
                 .toList();
     }
 
-    private Optional<LeadRecommendation> scoreLead(Lead lead) {
-        Customer customer = customerService.getById(lead.getCustomerId());
+    private Optional<LeadRecommendation> scoreLead(
+            Lead lead,
+            Customer customer,
+            List<ContactLog> logs,
+            List<CrmTask> tasks
+    ) {
         if (customer == null) {
             return Optional.empty();
         }
 
-        List<ContactLog> logs = contactLogService.listByCustomerId(customer.getId());
-        List<CrmTask> tasks = taskService.list(new LambdaQueryWrapper<CrmTask>()
-                .eq(CrmTask::getCustomerId, customer.getId()));
         List<String> reasons = new ArrayList<>();
         double score = 20.0;
         LocalDateTime now = LocalDateTime.now();
@@ -178,7 +210,9 @@ public class LeadScoringService {
 
     private double scoreTaskStatus(List<CrmTask> tasks, LocalDateTime now, List<String> reasons) {
         boolean hasOverdueTask = tasks.stream()
-                .anyMatch(task -> Objects.equals(task.getStatus(), "PENDING") && task.getDueTime().isBefore(now));
+                .anyMatch(task -> Objects.equals(task.getStatus(), "PENDING")
+                        && task.getDueTime() != null
+                        && task.getDueTime().isBefore(now));
         if (hasOverdueTask) {
             reasons.add("存在已到期未完成跟进任务");
             return 9.0;
@@ -249,4 +283,3 @@ public class LeadScoringService {
                 .doubleValue();
     }
 }
-

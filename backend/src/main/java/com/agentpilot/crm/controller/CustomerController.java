@@ -5,6 +5,7 @@ import com.agentpilot.crm.entity.ContactLog;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.crm.service.CustomerService;
+import com.agentpilot.crm.vo.CustomerView;
 import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.security.access.AccessDeniedException;
@@ -30,19 +31,19 @@ public class CustomerController {
     }
 
     @GetMapping
-    public ApiResponse<List<Customer>> list(@RequestParam(required = false) Long salesRepId) {
+    public ApiResponse<List<CustomerView>> list(@RequestParam(required = false) Long salesRepId) {
         Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<Customer> wrapper = new LambdaQueryWrapper<Customer>()
                 .eq(Customer::getOwnerSalesRepId, scopedSalesRepId)
                 .orderByAsc(Customer::getId);
-        return ApiResponse.ok(customerService.list(wrapper));
+        return ApiResponse.ok(customerService.list(wrapper).stream().map(CustomerView::from).toList());
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<Customer> detail(@PathVariable Long id) {
+    public ApiResponse<CustomerView> detail(@PathVariable Long id) {
         Customer customer = customerService.getById(id);
         requireCustomerVisible(customer);
-        return ApiResponse.ok(customer);
+        return ApiResponse.ok(CustomerView.from(customer));
     }
 
     @GetMapping("/{id}/contact-logs")

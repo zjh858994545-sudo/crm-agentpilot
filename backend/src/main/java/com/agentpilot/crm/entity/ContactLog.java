@@ -19,6 +19,7 @@ public class ContactLog {
     private String customerIntent;
     private String objections;
     private String nextAction;
+    private String idempotencyKey;
     private LocalDateTime contactAt;
     private LocalDateTime createdAt;
 
@@ -102,6 +103,14 @@ public class ContactLog {
         this.nextAction = nextAction;
     }
 
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
     public LocalDateTime getContactAt() {
         return contactAt;
     }
@@ -118,4 +127,3 @@ public class ContactLog {
         this.createdAt = createdAt;
     }
 }
-

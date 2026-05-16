@@ -43,6 +43,8 @@ export interface EventStatus {
   agentToolCallTopic: string;
   crmTaskTopic: string;
   outboxPending?: number;
+  outboxDeadLetters?: number;
+  maxRetryCount?: number;
 }
 
 export interface KnowledgeStatus {

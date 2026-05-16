@@ -88,6 +88,8 @@ public class AgentPilotEventPublisher {
         result.put("agentToolCallTopic", properties.getAgentToolCallTopic());
         result.put("crmTaskTopic", properties.getCrmTaskTopic());
         result.put("outboxPending", outboxEventService.pendingCount());
+        result.put("outboxDeadLetters", outboxEventService.deadLetterCount());
+        result.put("maxRetryCount", OutboxEventService.MAX_RETRY_COUNT);
         return result;
     }
 
@@ -135,9 +137,17 @@ public class AgentPilotEventPublisher {
         outboxEventService.listDispatchable(20).forEach(event -> dispatchOne(event.getId()));
     }
 
+    public boolean retryDeadLetter(Long outboxId) {
+        if (!outboxEventService.reviveDeadLetter(outboxId)) {
+            return false;
+        }
+        dispatchOne(outboxId);
+        return true;
+    }
+
     private void dispatchOne(Long outboxId) {
         OutboxEvent outbox = outboxEventService.getById(outboxId);
-        if (outbox == null || "PUBLISHED".equals(outbox.getStatus())) {
+        if (outbox == null || "PUBLISHED".equals(outbox.getStatus()) || "DEAD_LETTER".equals(outbox.getStatus())) {
             return;
         }
         if (!properties.isKafkaEnabled()) {

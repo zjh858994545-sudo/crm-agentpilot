@@ -33,7 +33,8 @@ class CrmCoreControllerTest {
         mockMvc.perform(get("/api/customers/1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name", is("美家房产")))
-                .andExpect(jsonPath("$.data.valueLevel", is("A")));
+                .andExpect(jsonPath("$.data.valueLevel", is("A")))
+                .andExpect(jsonPath("$.data.contactMobile", is("139****1001")));
 
         mockMvc.perform(get("/api/customers/1002"))
                 .andExpect(status().isForbidden());

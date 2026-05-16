@@ -19,7 +19,8 @@ public class AgentPilotSecurityProperties {
             "knowledge:write",
             "product:read",
             "evaluation:run",
-            "events:read"
+            "events:read",
+            "events:write"
     ));
 
     public boolean strict() {

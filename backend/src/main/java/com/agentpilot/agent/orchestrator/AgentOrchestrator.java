@@ -432,16 +432,22 @@ public class AgentOrchestrator {
                 .findFirst()
                 .orElse(null);
         Map<String, Object> payload = new LinkedHashMap<>();
+        String content = stringArg(args, "content", request.message());
+        LocalDateTime contactAt = dateTimeArg(args, "contactAt", LocalDateTime.now());
+        String idempotencyKey = "agent-contact-log-" + customer.getId() + "-"
+                + contactAt.toLocalDate() + "-"
+                + Integer.toHexString(Objects.hash(customer.getId(), lead == null ? null : lead.getId(), content, contactAt.toLocalDate()));
         payload.put("customerId", customer.getId());
         payload.put("salesRepId", defaultSalesRepId(request.salesRepId()));
         payload.put("leadId", lead == null ? null : lead.getId());
         payload.put("channel", stringArg(args, "channel", "PHONE"));
-        payload.put("content", stringArg(args, "content", request.message()));
+        payload.put("content", content);
         payload.put("summary", stringArg(args, "summary", "由 LLM Tool Calling 生成的联系记录写入建议"));
         payload.put("customerIntent", stringArg(args, "customerIntent", "MEDIUM"));
         payload.put("objections", stringArg(args, "objections", ""));
         payload.put("nextAction", stringArg(args, "nextAction", "继续跟进"));
-        payload.put("contactAt", dateTimeArg(args, "contactAt", LocalDateTime.now()).toString());
+        payload.put("contactAt", contactAt.toString());
+        payload.put("idempotencyKey", idempotencyKey);
 
         AgentToolCall call = recordTool(run.getId(), "writeContactLog", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
         AgentConfirmation confirmation = createConfirmation(run, call, "WRITE_CONTACT_LOG", "写入" + customer.getName() + "的联系记录", payload);
@@ -570,6 +576,14 @@ public class AgentOrchestrator {
     private Object executeWriteContactLog(AgentConfirmation confirmation) {
         try {
             JsonNode payload = objectMapper.readTree(confirmation.getPayloadJson());
+            String idempotencyKey = payload.hasNonNull("idempotencyKey")
+                    ? payload.get("idempotencyKey").asText()
+                    : legacyContactLogIdempotencyKey(payload);
+            ContactLog existing = contactLogService.getOne(new LambdaQueryWrapper<ContactLog>()
+                    .eq(ContactLog::getIdempotencyKey, idempotencyKey), false);
+            if (existing != null) {
+                return existing;
+            }
             ContactLog log = new ContactLog();
             log.setCustomerId(payload.get("customerId").asLong());
             log.setSalesRepId(payload.get("salesRepId").asLong());
@@ -581,11 +595,22 @@ public class AgentOrchestrator {
             log.setObjections(payload.get("objections").asText());
             log.setNextAction(payload.get("nextAction").asText());
             log.setContactAt(LocalDateTime.parse(payload.get("contactAt").asText()));
+            log.setIdempotencyKey(idempotencyKey);
             contactLogService.save(log);
             return log;
         } catch (JsonProcessingException ex) {
             return Map.of("status", "PAYLOAD_ERROR", "message", ex.getMessage());
         }
+    }
+
+    private String legacyContactLogIdempotencyKey(JsonNode payload) {
+        Long customerId = payload.get("customerId").asLong();
+        Long leadId = payload.get("leadId").isNull() ? null : payload.get("leadId").asLong();
+        String content = payload.get("content").asText();
+        LocalDateTime contactAt = LocalDateTime.parse(payload.get("contactAt").asText());
+        return "agent-contact-log-" + customerId + "-"
+                + contactAt.toLocalDate() + "-"
+                + Integer.toHexString(Objects.hash(customerId, leadId, content, contactAt.toLocalDate()));
     }
 
     private Object executeUpdateLeadStage(AgentConfirmation confirmation) {

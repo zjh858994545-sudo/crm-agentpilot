@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class CallCenterService {
@@ -91,6 +92,10 @@ public class CallCenterService {
     public ContactLogConfirmationResponse proposeContactLog(CallTextRequest request) {
         CallSummaryResponse summary = summarize(request);
         Long currentUserId = CurrentUser.userId();
+        LocalDateTime contactAt = LocalDateTime.now();
+        String idempotencyKey = "agent-contact-log-" + request.customerId() + "-"
+                + contactAt.toLocalDate() + "-"
+                + Integer.toHexString(Objects.hash(request.customerId(), request.leadId(), request.text(), contactAt.toLocalDate()));
 
         AgentSession session = new AgentSession();
         session.setUserId(currentUserId);
@@ -123,7 +128,8 @@ public class CallCenterService {
         payload.put("customerIntent", summary.customerIntent());
         payload.put("objections", summary.objections());
         payload.put("nextAction", summary.nextAction());
-        payload.put("contactAt", LocalDateTime.now().toString());
+        payload.put("contactAt", contactAt.toString());
+        payload.put("idempotencyKey", idempotencyKey);
 
         AgentToolCall toolCall = new AgentToolCall();
         toolCall.setRunId(run.getId());

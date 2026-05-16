@@ -81,12 +81,37 @@ class CallCenterServiceTest {
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         long confirmationId = root.at("/data/confirmationId").asLong();
 
-        mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
+        MvcResult firstConfirm = mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
-                .andExpect(jsonPath("$.data.result.channel", is("PHONE")));
+                .andExpect(jsonPath("$.data.result.channel", is("PHONE")))
+                .andReturn();
+
+        long firstContactLogId = objectMapper.readTree(firstConfirm.getResponse().getContentAsString())
+                .at("/data/result/id")
+                .asLong();
+
+        MvcResult duplicate = mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":1001,"salesRepId":1,"leadId":3001,
+                                "text":"客户说套餐有点贵，担心续费后没有效果。销售表示明天提供曝光数据。"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        long duplicateConfirmationId = objectMapper.readTree(duplicate.getResponse().getContentAsString())
+                .at("/data/confirmationId")
+                .asLong();
+
+        mockMvc.perform(post("/api/agent/confirmations/" + duplicateConfirmationId + "/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
+                .andExpect(jsonPath("$.data.result.id", is((int) firstContactLogId)));
     }
 
     @Test
