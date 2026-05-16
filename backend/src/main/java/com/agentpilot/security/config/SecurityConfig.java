@@ -66,12 +66,14 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/health",
                                 "/actuator/health",
-                                "/actuator/info",
+                                "/actuator/info"
+                        ).permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**"
-                        ).permitAll()
-                        .requestMatchers("/api/**").authenticated()
+                        ).authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(tokenFilter, UsernamePasswordAuthenticationFilter.class);

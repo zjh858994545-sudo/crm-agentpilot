@@ -37,10 +37,17 @@ class SecurityStrictModeTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
 
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(get("/api/customers")
                 .header("X-AgentPilot-Token", "test-agentpilot-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)));
+
+        mockMvc.perform(get("/v3/api-docs")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk());
     }
 
     @Test
