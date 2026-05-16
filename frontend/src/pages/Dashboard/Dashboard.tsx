@@ -443,7 +443,7 @@ export default function Dashboard() {
             ) : (
               <div className="priority-queue">
                 {topLeads.map((lead, index) => (
-                  <div className="queue-card" key={lead.leadId}>
+                  <div className={`queue-card priority-${lead.priority.toLowerCase()}`} key={lead.leadId}>
                     <div className="queue-rank">{index + 1}</div>
                     <div className="queue-content">
                       <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">

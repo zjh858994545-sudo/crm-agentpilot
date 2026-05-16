@@ -9,10 +9,12 @@ import {
   SearchOutlined,
   TeamOutlined,
   ToolOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  UserOutlined
 } from '@ant-design/icons';
 import {
   Alert,
+  Avatar,
   Button,
   Card,
   Descriptions,
@@ -428,8 +430,16 @@ export default function AgentChat() {
           {error && <Alert type="warning" showIcon message={error} style={{ marginBottom: 12 }} />}
           <div className="chat-window">
             {messages.map((item, index) => (
-              <div className={`message ${item.role}`} key={`${item.role}-${index}`}>
-                <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{item.content}</Paragraph>
+              <div className={`message-row ${item.role}`} key={`${item.role}-${index}`}>
+                {item.role === 'agent' && (
+                  <Avatar size={28} icon={<MessageOutlined />} className="message-avatar agent" />
+                )}
+                <div className={`message ${item.role}`}>
+                  <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{item.content}</Paragraph>
+                </div>
+                {item.role === 'user' && (
+                  <Avatar size={28} icon={<UserOutlined />} className="message-avatar user" />
+                )}
               </div>
             ))}
           </div>
