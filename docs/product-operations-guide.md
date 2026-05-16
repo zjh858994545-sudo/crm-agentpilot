@@ -87,6 +87,7 @@ npm run build
 - 后端测试通过。
 - 前端生产构建通过。
 - Playwright 业务链路通过。
+- 系统管理页“上线检查清单”没有 `FAIL` 阻塞项。
 - `/api/auth/me` 能返回真实用户和权限。
 - `/api/knowledge/status` 显示向量库模式符合预期。
 - `/api/events/status` 没有异常堆积的 outbox 事件。
@@ -96,6 +97,7 @@ npm run build
 
 系统管理页负责展示运行中心能力：
 
+- 上线检查：安全、RBAC、限流、模型、Embedding、pgvector、Outbox、数据保留是否达到上线门槛。
 - 模型状态：LLM 是否配置、当前模型、模型模式。
 - 知识库状态：文档数、分块数、向量化分块数、pgvector 是否可用。
 - 安全状态：strict/permissive、RBAC token、种子账号开关。

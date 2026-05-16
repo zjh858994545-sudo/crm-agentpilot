@@ -170,6 +170,25 @@ export interface RetentionCleanupResult {
   categories: RetentionCategoryResult[];
 }
 
+export interface LaunchReadinessCheck {
+  key: string;
+  name: string;
+  status: 'PASS' | 'WARN' | 'FAIL';
+  severity: string;
+  detail: string;
+  action: string;
+}
+
+export interface LaunchReadinessStatus {
+  overallStatus: 'READY' | 'WARN' | 'BLOCKED';
+  phase: string;
+  checkedAt: string;
+  passCount: number;
+  warnCount: number;
+  failCount: number;
+  checks: LaunchReadinessCheck[];
+}
+
 export interface DashboardSummary {
   highLeadCount: number;
   highLeadAmount: number;
@@ -580,6 +599,11 @@ export async function fetchSecurityUsers() {
 
 export async function fetchRetentionStatus() {
   const response = await apiClient.get<ApiResponse<RetentionStatus>>('/operations/retention');
+  return response.data.data;
+}
+
+export async function fetchLaunchReadiness() {
+  const response = await apiClient.get<ApiResponse<LaunchReadinessStatus>>('/operations/readiness');
   return response.data.data;
 }
 

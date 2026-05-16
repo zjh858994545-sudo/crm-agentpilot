@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   EventStatus,
   KnowledgeStatus,
+  LaunchReadinessStatus,
   ModelStatus,
   OpenAiToolDefinition,
   OutboxEvent,
@@ -23,6 +24,7 @@ import {
   fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
+  fetchLaunchReadiness,
   fetchModelStatus,
   fetchOpenAiTools,
   fetchRetentionStatus,
@@ -78,6 +80,7 @@ export default function SystemAdmin() {
   const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
   const [deadLetters, setDeadLetters] = useState<OutboxEvent[]>([]);
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
+  const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -92,7 +95,8 @@ export default function SystemAdmin() {
       fetchOpenAiTools(),
       fetchSecurityUsers(),
       fetchDeadLetters(),
-      fetchRetentionStatus()
+      fetchRetentionStatus(),
+      fetchLaunchReadiness()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -102,6 +106,7 @@ export default function SystemAdmin() {
     if (results[5].status === 'fulfilled') setSecurityUsers(results[5].value);
     if (results[6].status === 'fulfilled') setDeadLetters(results[6].value);
     if (results[7].status === 'fulfilled') setRetentionStatus(results[7].value);
+    if (results[8].status === 'fulfilled') setReadinessStatus(results[8].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分系统状态读取失败，请确认后端已经启动并且当前 token 具备系统管理权限。');
     }
@@ -170,8 +175,19 @@ export default function SystemAdmin() {
     : 0;
   const deadLetterCount = eventStatus?.outboxDeadLetters ?? 0;
   const retentionEligibleRows = retentionStatus?.totalEligibleRows ?? 0;
+  const readinessColor =
+    readinessStatus?.overallStatus === 'READY' ? 'green' : readinessStatus?.overallStatus === 'BLOCKED' ? 'red' : 'orange';
 
   const riskItems: RiskItem[] = [
+    ...(readinessStatus?.overallStatus === 'BLOCKED'
+      ? [
+          {
+            title: '上线检查存在阻塞项',
+            detail: `当前 ${readinessStatus.failCount} 个阻塞项、${readinessStatus.warnCount} 个警告项。请先处理红色检查项。`,
+            color: 'red'
+          }
+        ]
+      : []),
     ...(securityStatus?.strictWithoutToken
       ? [
           {
@@ -229,6 +245,12 @@ export default function SystemAdmin() {
   ];
 
   const opsCards = [
+    {
+      title: '上线就绪',
+      value: readinessStatus?.overallStatus ?? '检查中',
+      color: readinessColor,
+      detail: `${readinessStatus?.passCount ?? 0} 通过 / ${readinessStatus?.warnCount ?? 0} 警告 / ${readinessStatus?.failCount ?? 0} 阻塞`
+    },
     {
       title: '访问控制',
       value: securityStatus?.rbacEnabled ? 'RBAC 已接入' : '本地身份',
@@ -427,6 +449,37 @@ export default function SystemAdmin() {
           </Card>
         </Col>
       </Row>
+
+      <Card
+        className="command-card"
+        title="上线检查清单"
+        extra={
+          <Space>
+            <Tag color={readinessColor}>{readinessStatus?.overallStatus ?? 'LOADING'}</Tag>
+            <Text type="secondary">phase: {readinessStatus?.phase ?? '-'}</Text>
+          </Space>
+        }
+      >
+        <Table
+          rowKey="key"
+          loading={loading}
+          pagination={false}
+          dataSource={readinessStatus?.checks ?? []}
+          columns={[
+            { title: '检查项', dataIndex: 'name', width: 180 },
+            {
+              title: '状态',
+              dataIndex: 'status',
+              width: 100,
+              render: (value) => (
+                <Tag color={value === 'PASS' ? 'green' : value === 'FAIL' ? 'red' : 'orange'}>{value}</Tag>
+              )
+            },
+            { title: '当前情况', dataIndex: 'detail' },
+            { title: '处理建议', dataIndex: 'action', render: (value) => <Text type="secondary">{value}</Text> }
+          ]}
+        />
+      </Card>
 
       <Card className="command-card" title="用户与权限范围">
         <Table

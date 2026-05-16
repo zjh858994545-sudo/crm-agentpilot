@@ -1,7 +1,9 @@
 package com.agentpilot.operations.controller;
 
 import com.agentpilot.common.response.ApiResponse;
+import com.agentpilot.operations.service.LaunchReadinessService;
 import com.agentpilot.operations.service.RetentionMaintenanceService;
+import com.agentpilot.operations.vo.LaunchReadinessStatus;
 import com.agentpilot.operations.vo.RetentionCleanupRequest;
 import com.agentpilot.operations.vo.RetentionCleanupResult;
 import com.agentpilot.operations.vo.RetentionStatus;
@@ -17,9 +19,19 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAuthority('ops:read')")
 public class OperationsController {
     private final RetentionMaintenanceService retentionMaintenanceService;
+    private final LaunchReadinessService launchReadinessService;
 
-    public OperationsController(RetentionMaintenanceService retentionMaintenanceService) {
+    public OperationsController(
+            RetentionMaintenanceService retentionMaintenanceService,
+            LaunchReadinessService launchReadinessService
+    ) {
         this.retentionMaintenanceService = retentionMaintenanceService;
+        this.launchReadinessService = launchReadinessService;
+    }
+
+    @GetMapping("/readiness")
+    public ApiResponse<LaunchReadinessStatus> readiness() {
+        return ApiResponse.ok(launchReadinessService.status());
     }
 
     @GetMapping("/retention")
