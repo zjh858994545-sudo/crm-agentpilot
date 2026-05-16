@@ -49,4 +49,13 @@ class SecurityStrictModeTest {
                         .header("X-AgentPilot-Token", "agentpilot-sales-2"))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    void strictModeCanAuthenticateSalesManagerRole() throws Exception {
+        mockMvc.perform(get("/api/dashboard/metrics")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.salesRepId", is(1)));
+    }
 }

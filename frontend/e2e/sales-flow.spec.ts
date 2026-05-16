@@ -1,8 +1,13 @@
 import { expect, test } from '@playwright/test';
 
+async function loginAs(page, testId: 'login-sales' | 'login-manager' | 'login-admin') {
+  await page.goto('/');
+  await page.getByTestId(testId).click();
+}
+
 test.describe('CRM-AgentPilot sales workflow', () => {
   test('opens customer and lead details from URL and carries context into Agent', async ({ page }) => {
-    await page.goto('/');
+    await loginAs(page, 'login-sales');
     await expect(page.getByText(/CRM-AgentPilot/).first()).toBeVisible();
 
     await page.goto('/customers?customerId=1001');
@@ -22,14 +27,17 @@ test.describe('CRM-AgentPilot sales workflow', () => {
     await expect(page.getByRole('textbox')).toHaveValue(/美家房产/);
   });
 
-  test('renders the workbench, confirmation center, and admin links', async ({ page }) => {
-    await page.goto('/');
+  test('renders the workbench, confirmation center, and role-scoped admin links', async ({ page }) => {
+    await loginAs(page, 'login-sales');
     await expect(page.getByRole('heading', { name: /今天先处理谁/ })).toBeVisible();
     await expect(page.getByText(/待确认写入/).first()).toBeVisible();
     await expect(page.getByText(/业务闭环/)).toBeVisible();
     await expect(page.getByText(/商机趋势/)).toBeVisible();
     await expect(page.getByText(/客户风险热力/)).toBeVisible();
+    await expect(page.getByRole('link', { name: '系统能力', exact: true })).toHaveCount(0);
 
+    await page.getByTestId('identity-switcher').click();
+    await page.getByTitle(/系统管理员/).click();
     await page.getByRole('link', { name: '系统能力', exact: true }).click();
     await expect(page.getByRole('heading', { name: /系统能力/ })).toBeVisible();
     await expect(page.getByText(/产品化能力清单/)).toBeVisible();
@@ -44,7 +52,7 @@ test.describe('CRM-AgentPilot sales workflow', () => {
   test('runs the complete demo route against a live backend', async ({ page }) => {
     test.skip(process.env.E2E_FULL_DEMO !== '1', 'Set E2E_FULL_DEMO=1 when a backend is running.');
 
-    await page.goto('/');
+    await loginAs(page, 'login-sales');
     await expect(page.getByRole('heading', { name: /今天先处理谁/ })).toBeVisible();
     await expect(page.getByText(/业务闭环/)).toBeVisible();
 

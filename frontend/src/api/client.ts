@@ -382,8 +382,34 @@ export const apiClient = axios.create({
   timeout: 30000
 });
 
+interface StoredDemoUser {
+  userId?: number;
+  salesRepId?: number;
+  token?: string;
+}
+
+function readStoredDemoUser(): StoredDemoUser {
+  try {
+    return JSON.parse(window.localStorage.getItem('agentpilot.demoUser') || '{}') as StoredDemoUser;
+  } catch {
+    return {};
+  }
+}
+
+function currentUserId() {
+  return readStoredDemoUser().userId ?? 1;
+}
+
+function currentSalesRepId(fallback?: number) {
+  return fallback ?? readStoredDemoUser().salesRepId ?? 1;
+}
+
 apiClient.interceptors.request.use((config) => {
-  const token = import.meta.env.VITE_AGENTPILOT_API_TOKEN || window.localStorage.getItem('agentpilot.apiToken');
+  const storedUser = readStoredDemoUser();
+  const token =
+    import.meta.env.VITE_AGENTPILOT_API_TOKEN ||
+    storedUser.token ||
+    window.localStorage.getItem('agentpilot.apiToken');
   if (token) {
     config.headers.set('X-AgentPilot-Token', token);
   }
@@ -498,8 +524,8 @@ export async function askKnowledge(question: string, topK = 5) {
 
 export async function sendAgentMessage(message: string, context: AgentMessageContext = {}) {
   const response = await apiClient.post<ApiResponse<AgentChatResponse>>('/agent/chat', {
-    userId: 1,
-    salesRepId: context.salesRepId ?? 1,
+    userId: currentUserId(),
+    salesRepId: currentSalesRepId(context.salesRepId),
     sessionId: context.sessionId,
     customerId: context.customerId,
     message
@@ -510,7 +536,7 @@ export async function sendAgentMessage(message: string, context: AgentMessageCon
 export async function confirmAgentAction(confirmationId: number) {
   const response = await apiClient.post<ApiResponse<Record<string, unknown>>>(
     `/agent/confirmations/${confirmationId}/confirm`,
-    { userId: 1 }
+    { userId: currentUserId() }
   );
   return response.data.data;
 }
@@ -518,7 +544,7 @@ export async function confirmAgentAction(confirmationId: number) {
 export async function rejectAgentAction(confirmationId: number) {
   const response = await apiClient.post<ApiResponse<Record<string, unknown>>>(
     `/agent/confirmations/${confirmationId}/reject`,
-    { userId: 1 }
+    { userId: currentUserId() }
   );
   return response.data.data;
 }
