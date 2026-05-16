@@ -8,6 +8,7 @@ Thumbs.db
 *.log
 logs/
 .demo-logs/
+backups/
 
 # Environment
 .env

@@ -276,7 +276,7 @@ npm run build
 - 设置 `AGENTPILOT_SEED_USERS_ENABLED=false` 并创建真实 RBAC 用户。
 - 配置真实模型和 embedding key，避免生产环境使用 mock provider。
 - 配置 Kafka 或明确保留 log-only 模式的业务影响。
-- 完成业务数据备份、日志脱敏、数据保留策略、告警和运维值班策略。
+- 完成业务数据备份/恢复演练、日志脱敏、数据保留策略、告警和运维值班策略。
 
 ## 已知边界
 

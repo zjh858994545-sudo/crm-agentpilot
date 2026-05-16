@@ -151,7 +151,38 @@ Agent run 和 tool call 是审计事件，使用同一张 outbox 表做 at-least
 - 联系记录、通话摘要和质检结果属于业务敏感数据，需要保留审计。
 - 多租户场景需要在 salesRepId 之外引入 tenantId。
 
-## 9. 数据生命周期
+## 9. 备份与恢复
+
+生产环境做任何数据清理、版本升级或迁移前，必须先完成备份。
+
+本地 Docker PostgreSQL 备份：
+
+```powershell
+cd "F:\后端开发新项目\crm-agentpilot"
+.\scripts\backup-postgres.ps1
+```
+
+脚本会在 `backups/postgres/` 下生成 `*.dump` 文件。该目录已加入 `.gitignore`，不要把真实业务备份提交到仓库。
+
+恢复演练：
+
+```powershell
+.\scripts\restore-postgres.ps1 -BackupFile "F:\后端开发新项目\crm-agentpilot\backups\postgres\agentpilot-postgres-YYYYMMDD-HHmmss.dump" -ConfirmRestore
+```
+
+恢复是破坏性操作，必须满足：
+
+- 已经确认备份文件来源可靠。
+- 已停止业务流量或确认没有长事务锁表。
+- 恢复后运行 `.\scripts\smoke-demo.ps1 -RunDemo` 做最小链路验证。
+
+上线建议：
+
+- 每次发版、执行保留策略清理、重建 pgvector 索引前都先备份。
+- 定期做恢复演练，不能只保留“看起来存在”的备份文件。
+- 真实生产环境建议使用云数据库自动备份 + 异地备份 + 定期恢复演练，脚本作为私有化/本地部署兜底。
+
+## 10. 数据生命周期
 
 系统提供保留策略中心，避免审计、检索和事件日志无限增长。
 
@@ -180,7 +211,7 @@ AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN=10000
 - 如果 dry-run 结果超过 `AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN`，先分批或提高上限，不要在高峰期一次性清理大批数据。
 - 定时清理只在 `AGENTPILOT_RETENTION_ENABLED=true` 且 `AGENTPILOT_RETENTION_SCHEDULED_CLEANUP_ENABLED=true` 时执行。
 
-## 10. 故障处理
+## 11. 故障处理
 
 模型调用失败：
 
@@ -213,7 +244,7 @@ Outbox 堆积：
 - 如果后端返回超过单次清理上限，先备份数据库，再调整 `AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN`。
 - 如果清理被禁用，确认 `AGENTPILOT_RETENTION_ENABLED=true`。
 
-## 11. 后续商业化路线
+## 12. 后续商业化路线
 
 已经具备的产品化能力：
 
@@ -235,4 +266,4 @@ Outbox 堆积：
 - Prometheus/OpenTelemetry 指标与告警。
 - 更大规模真实评测集与失败样例库。
 - 联系记录写入幂等和 confirmation 乐观锁。
-- 生产级数据备份和恢复演练。
+- 云数据库自动备份、异地灾备和恢复演练自动化。
