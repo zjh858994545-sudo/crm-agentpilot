@@ -36,7 +36,7 @@ test.describe('CRM-AgentPilot product workflow', () => {
     await expect(page.locator('a[href="/system"]')).toHaveCount(0);
 
     await page.getByTestId('identity-switcher').click();
-    await page.getByTitle(/绯荤粺绠＄悊鍛?|系统管理员/).click();
+    await page.getByTitle(/系统管理员/).click();
     await expect(page.locator('a[href="/system"]')).toHaveCount(1);
     await page.locator('a[href="/system"]').click();
     await expect(page).toHaveURL(/\/system/);
