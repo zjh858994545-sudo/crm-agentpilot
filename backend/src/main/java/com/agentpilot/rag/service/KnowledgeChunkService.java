@@ -136,7 +136,14 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
         );
     }
 
-    private void backfillMissingEmbeddingVectors() {
+    public int rebuildMissingEmbeddingVectors() {
+        if (!pgvectorAvailable) {
+            return 0;
+        }
+        return backfillMissingEmbeddingVectors();
+    }
+
+    private int backfillMissingEmbeddingVectors() {
         List<Long> missingChunkIds = jdbcTemplate.queryForList(
                 "SELECT id FROM crm_knowledge_chunk WHERE embedding_vector IS NULL ORDER BY id",
                 Long.class
@@ -157,5 +164,6 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
             updated++;
         }
         log.info("RAG pgvector backfill updated {} missing chunks", updated);
+        return updated;
     }
 }

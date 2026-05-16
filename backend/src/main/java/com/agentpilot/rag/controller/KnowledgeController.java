@@ -63,6 +63,17 @@ public class KnowledgeController {
         ));
     }
 
+    @PostMapping("/vectors/rebuild")
+    @PreAuthorize("hasAuthority('knowledge:write')")
+    public ApiResponse<Map<String, Object>> rebuildMissingVectors() {
+        int updatedChunks = chunkService.rebuildMissingEmbeddingVectors();
+        return ApiResponse.ok(Map.of(
+                "vectorStoreMode", chunkService.vectorStoreMode(),
+                "updatedChunks", updatedChunks,
+                "vectorizedChunkCount", chunkService.vectorizedChunkCount()
+        ));
+    }
+
     @GetMapping("/docs/{id}")
     public ApiResponse<List<KnowledgeChunk>> chunks(@PathVariable Long id) {
         return ApiResponse.ok(chunkService.listByDocId(id));

@@ -64,6 +64,10 @@ class HybridRetrieverTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.refused", is(false)))
                 .andExpect(jsonPath("$.data.citations.length()", greaterThanOrEqualTo(1)));
+
+        mockMvc.perform(post("/api/knowledge/vectors/rebuild"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.updatedChunks", greaterThanOrEqualTo(0)));
     }
 }
-

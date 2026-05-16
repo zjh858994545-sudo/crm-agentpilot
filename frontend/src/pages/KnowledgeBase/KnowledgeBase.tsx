@@ -1,8 +1,10 @@
 import {
   BookOutlined,
+  DatabaseOutlined,
   FileSearchOutlined,
   ImportOutlined,
   LinkOutlined,
+  ReloadOutlined,
   SearchOutlined
 } from '@ant-design/icons';
 import {
@@ -14,6 +16,7 @@ import {
   Empty,
   Input,
   List,
+  Progress,
   Row,
   Select,
   Space,
@@ -27,11 +30,14 @@ import {
   askKnowledge,
   fetchKnowledgeChunks,
   fetchKnowledgeDocs,
+  fetchKnowledgeStatus,
   importKnowledgeDoc,
   KnowledgeAnswer,
   KnowledgeChunk,
   KnowledgeDoc,
   KnowledgeItem,
+  KnowledgeStatus,
+  rebuildKnowledgeVectors,
   searchKnowledge
 } from '../../api/client';
 
@@ -52,8 +58,18 @@ function scorePercent(score: number) {
   return `${Math.round(score * 100)}%`;
 }
 
+function currentDemoRole() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('agentpilot.demoUser') || '{}') as { role?: string };
+    return stored.role;
+  } catch {
+    return undefined;
+  }
+}
+
 export default function KnowledgeBase() {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
+  const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<number>();
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([]);
   const [query, setQuery] = useState('客户嫌套餐贵，销售应该怎么处理？');
@@ -68,6 +84,10 @@ export default function KnowledgeBase() {
   const [error, setError] = useState('');
 
   const selectedDoc = useMemo(() => docs.find((item) => item.id === selectedDocId), [docs, selectedDocId]);
+  const canManageKnowledge = currentDemoRole() === 'admin';
+  const vectorPercent = knowledgeStatus?.chunkCount
+    ? Math.round((knowledgeStatus.vectorizedChunkCount / knowledgeStatus.chunkCount) * 100)
+    : 0;
   const docTypeCount = useMemo(
     () => docs.reduce<Record<string, number>>((acc, doc) => {
       acc[doc.docType] = (acc[doc.docType] ?? 0) + 1;
@@ -82,8 +102,12 @@ export default function KnowledgeBase() {
     setSelectedDocId((current) => current ?? nextDocs[0]?.id);
   };
 
+  const loadStatus = async () => {
+    setKnowledgeStatus(await fetchKnowledgeStatus());
+  };
+
   useEffect(() => {
-    loadDocs().catch(() => setError('知识库接口暂不可用，请先启动后端服务。'));
+    Promise.all([loadDocs(), loadStatus()]).catch(() => setError('知识库接口暂不可用，请先启动后端服务。'));
   }, []);
 
   useEffect(() => {
@@ -131,6 +155,10 @@ export default function KnowledgeBase() {
   };
 
   const submitImport = async () => {
+    if (!canManageKnowledge) {
+      setError('当前身份只能查询知识库；导入和重建索引需要切换到系统管理员。');
+      return;
+    }
     if (!importTitle.trim() || !importType.trim() || !importContent.trim()) {
       setError('标题、类型和正文都不能为空。');
       return;
@@ -144,10 +172,29 @@ export default function KnowledgeBase() {
         content: importContent.trim()
       });
       await loadDocs();
+      await loadStatus();
       setSelectedDocId(created.id);
       message.success('文档已导入并自动分块');
     } catch {
       setError('导入失败，请确认后端和数据库已经启动。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rebuildVectors = async () => {
+    if (!canManageKnowledge) {
+      setError('重建向量需要系统管理员权限。');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await rebuildKnowledgeVectors();
+      await loadStatus();
+      message.success(`向量补齐完成，更新 ${result.updatedChunks} 个分块`);
+    } catch {
+      setError('重建向量失败，请确认当前身份拥有知识库写权限，且后端服务已启动。');
     } finally {
       setLoading(false);
     }
@@ -160,23 +207,58 @@ export default function KnowledgeBase() {
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
           <Card className="metric-card">
-            <Statistic title="知识文档" value={docs.length} prefix={<BookOutlined />} />
+            <Statistic title="知识文档" value={knowledgeStatus?.docCount ?? docs.length} prefix={<BookOutlined />} />
             <Text className="metric-label">销售 SOP / 质检规则 / 产品政策</Text>
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card className="metric-card">
-            <Statistic title="当前分块" value={chunks.length} prefix={<FileSearchOutlined />} />
-            <Text className="metric-label">{selectedDoc?.title ?? '请选择文档'}</Text>
+            <Statistic title="知识分块" value={knowledgeStatus?.chunkCount ?? chunks.length} prefix={<FileSearchOutlined />} />
+            <Text className="metric-label">当前文档：{selectedDoc?.title ?? '请选择文档'}</Text>
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card className="metric-card">
-            <Statistic title="文档类型" value={Object.keys(docTypeCount).length} />
-            <Text className="metric-label">支持按业务知识类型扩展</Text>
+            <Statistic title="向量化进度" value={vectorPercent} suffix="%" prefix={<DatabaseOutlined />} />
+            <Text className="metric-label">{knowledgeStatus?.vectorStoreMode ?? 'java-fallback'}</Text>
           </Card>
         </Col>
       </Row>
+
+      <Card className="command-card" title="知识库管理闭环">
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} xl={10}>
+            <Space direction="vertical" size={4}>
+              <Text strong>向量索引状态</Text>
+              <Text type="secondary">
+                文档导入后会自动切分并写入 embedding；如果迁移后出现缺失向量，管理员可以在这里补齐。
+              </Text>
+            </Space>
+          </Col>
+          <Col xs={24} xl={8}>
+            <Progress
+              percent={vectorPercent}
+              status={knowledgeStatus?.pgvectorAvailable ? 'active' : 'normal'}
+              strokeColor={knowledgeStatus?.pgvectorAvailable ? '#2563eb' : '#d97706'}
+            />
+            <Text className="metric-label">
+              {knowledgeStatus?.vectorizedChunkCount ?? 0} / {knowledgeStatus?.chunkCount ?? 0} 个分块已向量化
+            </Text>
+          </Col>
+          <Col xs={24} xl={6}>
+            <Button
+              block
+              icon={<ReloadOutlined />}
+              loading={loading}
+              disabled={!canManageKnowledge}
+              onClick={rebuildVectors}
+            >
+              补齐缺失向量
+            </Button>
+            {!canManageKnowledge && <Text className="metric-label">切换系统管理员后可执行恢复操作</Text>}
+          </Col>
+        </Row>
+      </Card>
 
       <div className="knowledge-layout">
         <Card className="command-card" title="文档列表">
@@ -316,21 +398,28 @@ export default function KnowledgeBase() {
         </Col>
 
         <Col xs={24} xl={12}>
-<Card className="command-card" title="导入知识文档">
+          <Card className="command-card" title="导入知识文档">
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Space.Compact style={{ width: '100%' }}>
-                <Input value={importTitle} onChange={(event) => setImportTitle(event.target.value)} />
+                <Input disabled={!canManageKnowledge} value={importTitle} onChange={(event) => setImportTitle(event.target.value)} />
                 <Select
                   style={{ width: 220 }}
+                  disabled={!canManageKnowledge}
                   value={importType}
                   onChange={setImportType}
                   options={docTypeOptions}
                 />
               </Space.Compact>
-              <TextArea rows={5} value={importContent} onChange={(event) => setImportContent(event.target.value)} />
-              <Button icon={<ImportOutlined />} loading={loading} onClick={submitImport}>
+              <TextArea
+                rows={5}
+                disabled={!canManageKnowledge}
+                value={importContent}
+                onChange={(event) => setImportContent(event.target.value)}
+              />
+              <Button icon={<ImportOutlined />} loading={loading} disabled={!canManageKnowledge} onClick={submitImport}>
                 导入并分块
               </Button>
+              {!canManageKnowledge && <Text type="secondary">当前身份只做知识问答；导入文档需要系统管理员。</Text>}
             </Space>
           </Card>
         </Col>

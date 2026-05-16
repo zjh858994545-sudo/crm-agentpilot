@@ -98,7 +98,7 @@ const navItems: NavEntry[] = [
   { key: '/agent', icon: <MessageOutlined />, label: 'Agent 工作台', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/customers', icon: <TeamOutlined />, label: '客户 360', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/leads', icon: <ThunderboltOutlined />, label: '商机优先级', group: 'manager', visibleFor: ['sales', 'manager'] },
-  { key: '/knowledge', icon: <BookOutlined />, label: '知识库问答', group: 'sales', visibleFor: ['sales', 'manager'] },
+  { key: '/knowledge', icon: <BookOutlined />, label: '知识库问答', group: 'sales', visibleFor: ['sales', 'manager', 'admin'] },
   { key: '/callcenter', icon: <PhoneOutlined />, label: '呼叫中心', group: 'sales', visibleFor: ['sales'] },
   { key: '/system', icon: <SettingOutlined />, label: '系统能力', group: 'admin', visibleFor: ['admin'] },
   { key: '/runs', icon: <AuditOutlined />, label: '运行审计', group: 'admin', visibleFor: ['admin'] },

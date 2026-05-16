@@ -57,6 +57,12 @@ export interface KnowledgeStatus {
   vectorizedChunkCount: number;
 }
 
+export interface KnowledgeVectorRebuildResult {
+  vectorStoreMode: string;
+  updatedChunks: number;
+  vectorizedChunkCount: number;
+}
+
 export interface SecurityStatus {
   mode: string;
   strict: boolean;
@@ -433,6 +439,11 @@ export async function fetchEventStatus() {
 
 export async function fetchKnowledgeStatus() {
   const response = await apiClient.get<ApiResponse<KnowledgeStatus>>('/knowledge/status');
+  return response.data.data;
+}
+
+export async function rebuildKnowledgeVectors() {
+  const response = await apiClient.post<ApiResponse<KnowledgeVectorRebuildResult>>('/knowledge/vectors/rebuild');
   return response.data.data;
 }
 
