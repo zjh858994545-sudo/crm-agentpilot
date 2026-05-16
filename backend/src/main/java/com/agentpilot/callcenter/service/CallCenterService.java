@@ -15,6 +15,7 @@ import com.agentpilot.callcenter.vo.QualityCheckResponse;
 import com.agentpilot.callcenter.vo.QualityViolation;
 import com.agentpilot.rag.service.RagService;
 import com.agentpilot.rag.vo.KnowledgeAnswer;
+import com.agentpilot.security.CurrentUser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -89,8 +90,10 @@ public class CallCenterService {
     @Transactional
     public ContactLogConfirmationResponse proposeContactLog(CallTextRequest request) {
         CallSummaryResponse summary = summarize(request);
+        Long currentUserId = CurrentUser.userId();
+
         AgentSession session = new AgentSession();
-        session.setUserId(1L);
+        session.setUserId(currentUserId);
         session.setSalesRepId(request.salesRepId() == null ? 1L : request.salesRepId());
         session.setCustomerId(request.customerId());
         session.setTitle("通话摘要写入确认");
@@ -99,7 +102,7 @@ public class CallCenterService {
 
         AgentRun run = new AgentRun();
         run.setSessionId(session.getId());
-        run.setUserId(1L);
+        run.setUserId(currentUserId);
         run.setSalesRepId(session.getSalesRepId());
         run.setCustomerId(request.customerId());
         run.setUserInput(request.text());

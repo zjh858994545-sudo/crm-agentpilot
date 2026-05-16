@@ -36,6 +36,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -159,12 +160,13 @@ public class AgentOrchestrator {
     }
 
     @Transactional
-    public Map<String, Object> confirm(Long confirmationId, Long userId) {
+    public Map<String, Object> confirm(Long confirmationId, Long userId, Long salesRepId) {
         requireUserId(userId);
         AgentConfirmation confirmation = confirmationService.getById(confirmationId);
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
         }
+        requireConfirmationOwner(confirmation, userId, salesRepId);
         if (!Objects.equals(confirmation.getStatus(), "PENDING")) {
             return Map.of("status", confirmation.getStatus(), "confirmationId", confirmationId);
         }
@@ -197,12 +199,13 @@ public class AgentOrchestrator {
     }
 
     @Transactional
-    public Map<String, Object> reject(Long confirmationId, Long userId) {
+    public Map<String, Object> reject(Long confirmationId, Long userId, Long salesRepId) {
         requireUserId(userId);
         AgentConfirmation confirmation = confirmationService.getById(confirmationId);
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
         }
+        requireConfirmationOwner(confirmation, userId, salesRepId);
         if (!Objects.equals(confirmation.getStatus(), "PENDING")) {
             return Map.of("status", confirmation.getStatus(), "confirmationId", confirmationId);
         }
@@ -238,7 +241,7 @@ public class AgentOrchestrator {
             case "queryProductPackage" -> Optional.of(queryProductPackage(request, session, run, args));
             case "createFollowupTask" -> Optional.of(proposeTask(request, session, run, args));
             case "writeContactLog" -> Optional.of(proposeContactLog(request, session, run, args));
-            case "updateLeadStage" -> Optional.of(proposeLeadStageUpdate(session, run, args));
+            case "updateLeadStage" -> Optional.of(proposeLeadStageUpdate(request, session, run, args));
             default -> Optional.empty();
         };
     }
@@ -298,6 +301,7 @@ public class AgentOrchestrator {
         }
         Lead lead = leadService.list(new LambdaQueryWrapper<Lead>()
                 .eq(Lead::getCustomerId, customer.getId())
+                .eq(Lead::getSalesRepId, defaultSalesRepId(request.salesRepId()))
                 .orderByDesc(Lead::getScore)
                 .last("limit 1"))
                 .stream()
@@ -421,6 +425,7 @@ public class AgentOrchestrator {
         }
         Lead lead = leadService.list(new LambdaQueryWrapper<Lead>()
                         .eq(Lead::getCustomerId, customer.getId())
+                        .eq(Lead::getSalesRepId, defaultSalesRepId(request.salesRepId()))
                         .orderByDesc(Lead::getScore)
                         .last("limit 1"))
                 .stream()
@@ -458,9 +463,10 @@ public class AgentOrchestrator {
         );
     }
 
-    private AgentChatResponse proposeLeadStageUpdate(AgentSession session, AgentRun run, Map<String, Object> args) {
+    private AgentChatResponse proposeLeadStageUpdate(AgentChatRequest request, AgentSession session, AgentRun run, Map<String, Object> args) {
         Long leadId = nullableLongArg(args, "leadId");
-        if (leadId == null || leadService.getById(leadId) == null) {
+        Lead lead = leadId == null ? null : leadService.getById(leadId);
+        if (lead == null || !Objects.equals(lead.getSalesRepId(), defaultSalesRepId(request.salesRepId()))) {
             String answer = "没有找到对应商机，暂不能生成商机阶段变更确认。";
             run.setStatus("COMPLETED");
             run.setAgentOutput(answer);
@@ -468,6 +474,7 @@ public class AgentOrchestrator {
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("leadId", leadId);
+        payload.put("salesRepId", defaultSalesRepId(request.salesRepId()));
         String stage = normalizeLeadStage(stringArg(args, "stage", "NEGOTIATING"));
         if (!ALLOWED_LEAD_STAGES.contains(stage)) {
             String answer = "商机阶段值不在允许范围内，暂不能生成阶段变更确认。允许值：" + ALLOWED_LEAD_STAGES;
@@ -587,6 +594,10 @@ public class AgentOrchestrator {
             Lead lead = leadService.getById(payload.get("leadId").asLong());
             if (lead == null) {
                 return Map.of("status", "NOT_FOUND");
+            }
+            Long salesRepId = payload.hasNonNull("salesRepId") ? payload.get("salesRepId").asLong() : null;
+            if (salesRepId != null && !Objects.equals(lead.getSalesRepId(), salesRepId)) {
+                return Map.of("status", "ACCESS_DENIED");
             }
             String stage = normalizeLeadStage(payload.get("stage").asText());
             if (!ALLOWED_LEAD_STAGES.contains(stage)) {
@@ -722,6 +733,15 @@ public class AgentOrchestrator {
         }
     }
 
+    private void requireConfirmationOwner(AgentConfirmation confirmation, Long userId, Long salesRepId) {
+        AgentRun run = runService.getById(confirmation.getRunId());
+        if (run == null
+                || !Objects.equals(run.getUserId(), userId)
+                || !Objects.equals(run.getSalesRepId(), salesRepId)) {
+            throw new AccessDeniedException("confirmation is outside current data scope");
+        }
+    }
+
     private String toolRoutingSystemPrompt() {
         return """
                 你是 CRM-AgentPilot 的 LLM Tool Calling 路由器。
@@ -753,28 +773,34 @@ public class AgentOrchestrator {
 
     private Customer resolveCustomer(AgentChatRequest request) {
         if (request.customerId() != null) {
-            return customerService.getById(request.customerId());
+            Customer customer = customerService.getById(request.customerId());
+            return customerVisibleTo(customer, defaultSalesRepId(request.salesRepId())) ? customer : null;
         }
         String message = request.message();
-        return customerService.findMentionedIn(message).orElse(null);
+        return customerService.findMentionedIn(message, defaultSalesRepId(request.salesRepId())).orElse(null);
     }
 
     private Customer resolveCustomer(AgentChatRequest request, Map<String, Object> args) {
+        Long salesRepId = defaultSalesRepId(request.salesRepId());
         Long customerId = nullableLongArg(args, "customerId");
         if (customerId != null) {
             Customer customer = customerService.getById(customerId);
-            if (customer != null) {
+            if (customerVisibleTo(customer, salesRepId)) {
                 return customer;
             }
         }
         String customerName = stringArg(args, "customerName", "");
         if (!customerName.isBlank()) {
-            Optional<Customer> customer = customerService.findMentionedIn(customerName);
+            Optional<Customer> customer = customerService.findMentionedIn(customerName, salesRepId);
             if (customer.isPresent()) {
                 return customer.get();
             }
         }
         return resolveCustomer(request);
+    }
+
+    private boolean customerVisibleTo(Customer customer, Long salesRepId) {
+        return customer != null && Objects.equals(customer.getOwnerSalesRepId(), salesRepId);
     }
 
     private String stringArg(Map<String, Object> args, String key, String fallback) {

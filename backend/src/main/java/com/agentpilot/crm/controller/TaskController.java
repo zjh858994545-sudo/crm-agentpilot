@@ -3,7 +3,9 @@ package com.agentpilot.crm.controller;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.crm.entity.CrmTask;
 import com.agentpilot.crm.service.CrmTaskService;
+import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,11 +26,18 @@ public class TaskController {
 
     @GetMapping
     public ApiResponse<List<CrmTask>> list(@RequestParam(required = false) Long salesRepId) {
+        Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<CrmTask> wrapper = new LambdaQueryWrapper<CrmTask>()
+                .eq(CrmTask::getSalesRepId, scopedSalesRepId)
                 .orderByAsc(CrmTask::getDueTime);
-        if (salesRepId != null) {
-            wrapper.eq(CrmTask::getSalesRepId, salesRepId);
-        }
         return ApiResponse.ok(taskService.list(wrapper));
+    }
+
+    private Long scopedSalesRepId(Long requestedSalesRepId) {
+        Long currentSalesRepId = CurrentUser.salesRepId();
+        if (requestedSalesRepId != null && !requestedSalesRepId.equals(currentSalesRepId)) {
+            throw new AccessDeniedException("salesRepId is outside current data scope");
+        }
+        return currentSalesRepId;
     }
 }

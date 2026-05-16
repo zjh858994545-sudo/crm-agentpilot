@@ -13,6 +13,8 @@ import com.agentpilot.agent.vo.AgentChatRequest;
 import com.agentpilot.agent.vo.AgentChatResponse;
 import com.agentpilot.agent.vo.ConfirmationDecisionRequest;
 import com.agentpilot.common.response.ApiResponse;
+import com.agentpilot.crm.entity.Customer;
+import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.validation.Valid;
@@ -39,31 +41,41 @@ public class AgentController {
     private final AgentRunService runService;
     private final AgentToolCallService toolCallService;
     private final ToolRegistry toolRegistry;
+    private final CustomerService customerService;
 
     public AgentController(
             AgentOrchestrator orchestrator,
             AgentConfirmationService confirmationService,
             AgentRunService runService,
             AgentToolCallService toolCallService,
-            ToolRegistry toolRegistry
+            ToolRegistry toolRegistry,
+            CustomerService customerService
     ) {
         this.orchestrator = orchestrator;
         this.confirmationService = confirmationService;
         this.runService = runService;
         this.toolCallService = toolCallService;
         this.toolRegistry = toolRegistry;
+        this.customerService = customerService;
     }
 
     @PostMapping("/chat")
     public ApiResponse<AgentChatResponse> chat(@Valid @RequestBody AgentChatRequest request) {
         Long currentUserId = CurrentUser.userId();
+        Long currentSalesRepId = CurrentUser.salesRepId();
         if (!Objects.equals(request.userId(), currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
+        }
+        if (request.salesRepId() != null && !Objects.equals(request.salesRepId(), currentSalesRepId)) {
+            throw new AccessDeniedException("request.salesRepId is outside current data scope");
+        }
+        if (request.customerId() != null) {
+            requireCustomerVisible(request.customerId(), currentSalesRepId);
         }
         AgentChatRequest securedRequest = new AgentChatRequest(
                 request.sessionId(),
                 currentUserId,
-                request.salesRepId() == null ? CurrentUser.salesRepId() : request.salesRepId(),
+                currentSalesRepId,
                 request.customerId(),
                 request.message()
         );
@@ -80,7 +92,7 @@ public class AgentController {
         if (!request.userId().equals(currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        return ApiResponse.ok(orchestrator.confirm(id, currentUserId));
+        return ApiResponse.ok(orchestrator.confirm(id, currentUserId, CurrentUser.salesRepId()));
     }
 
     @PostMapping("/confirmations/{id}/reject")
@@ -93,7 +105,7 @@ public class AgentController {
         if (!request.userId().equals(currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        return ApiResponse.ok(orchestrator.reject(id, currentUserId));
+        return ApiResponse.ok(orchestrator.reject(id, currentUserId, CurrentUser.salesRepId()));
     }
 
     @GetMapping("/confirmations")
@@ -101,7 +113,12 @@ public class AgentController {
     public ApiResponse<List<AgentConfirmation>> confirmations(
             @RequestParam(defaultValue = "PENDING") String status
     ) {
+        List<Long> visibleRunIds = visibleRunIds();
+        if (visibleRunIds.isEmpty()) {
+            return ApiResponse.ok(List.of());
+        }
         LambdaQueryWrapper<AgentConfirmation> wrapper = new LambdaQueryWrapper<AgentConfirmation>()
+                .in(AgentConfirmation::getRunId, visibleRunIds)
                 .orderByDesc(AgentConfirmation::getId);
         if (!"ALL".equalsIgnoreCase(status)) {
             wrapper.eq(AgentConfirmation::getStatus, status.toUpperCase());
@@ -121,11 +138,41 @@ public class AgentController {
 
     @GetMapping("/runs")
     public ApiResponse<List<AgentRun>> runs() {
-        return ApiResponse.ok(runService.list(new LambdaQueryWrapper<AgentRun>().orderByDesc(AgentRun::getId)));
+        return ApiResponse.ok(runService.list(new LambdaQueryWrapper<AgentRun>()
+                .eq(AgentRun::getUserId, CurrentUser.userId())
+                .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId())
+                .orderByDesc(AgentRun::getId)));
     }
 
     @GetMapping("/runs/{runId}/tool-calls")
     public ApiResponse<List<AgentToolCall>> toolCalls(@PathVariable Long runId) {
+        requireRunVisible(runId);
         return ApiResponse.ok(toolCallService.listByRunId(runId));
+    }
+
+    private List<Long> visibleRunIds() {
+        return runService.list(new LambdaQueryWrapper<AgentRun>()
+                        .select(AgentRun::getId)
+                        .eq(AgentRun::getUserId, CurrentUser.userId())
+                        .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId()))
+                .stream()
+                .map(AgentRun::getId)
+                .toList();
+    }
+
+    private void requireRunVisible(Long runId) {
+        AgentRun run = runService.getById(runId);
+        if (run == null
+                || !Objects.equals(run.getUserId(), CurrentUser.userId())
+                || !Objects.equals(run.getSalesRepId(), CurrentUser.salesRepId())) {
+            throw new AccessDeniedException("run is outside current data scope");
+        }
+    }
+
+    private void requireCustomerVisible(Long customerId, Long currentSalesRepId) {
+        Customer customer = customerService.getById(customerId);
+        if (customer == null || !Objects.equals(customer.getOwnerSalesRepId(), currentSalesRepId)) {
+            throw new AccessDeniedException("customer is outside current data scope");
+        }
     }
 }

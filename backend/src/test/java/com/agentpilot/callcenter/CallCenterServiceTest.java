@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -86,5 +87,19 @@ class CallCenterServiceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
                 .andExpect(jsonPath("$.data.result.channel", is("PHONE")));
+    }
+
+    @Test
+    void callCenterRejectsRequestsOutsideCurrentSalesRepScope() throws Exception {
+        mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":1002,"salesRepId":2,"leadId":3002,
+                                "text":"客户要求发送套餐对比。"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/callcenter/customers/1002/memory"))
+                .andExpect(status().isForbidden());
     }
 }

@@ -11,13 +11,21 @@ import java.util.Optional;
 @Service
 public class CustomerService extends ServiceImpl<CustomerMapper, Customer> {
     public Optional<Customer> findMentionedIn(String message) {
+        return findMentionedIn(message, null);
+    }
+
+    public Optional<Customer> findMentionedIn(String message, Long salesRepId) {
         if (message == null || message.isBlank()) {
             return Optional.empty();
         }
-        Customer customer = getOne(new LambdaQueryWrapper<Customer>()
+        LambdaQueryWrapper<Customer> wrapper = new LambdaQueryWrapper<Customer>()
                 .apply("{0} LIKE CONCAT('%', name, '%')", message)
                 .orderByAsc(Customer::getId)
-                .last("limit 1"), false);
+                .last("limit 1");
+        if (salesRepId != null) {
+            wrapper.eq(Customer::getOwnerSalesRepId, salesRepId);
+        }
+        Customer customer = getOne(wrapper, false);
         return Optional.ofNullable(customer);
     }
 }

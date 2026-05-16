@@ -69,6 +69,19 @@ class AgentOrchestratorTest {
     }
 
     @Test
+    void agentChatRejectsRequestsOutsideCurrentSalesRepScope() throws Exception {
+        mockMvc.perform(post("/api/agent/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1,\"salesRepId\":2,\"message\":\"今天我应该优先跟进哪些客户？\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/agent/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1,\"salesRepId\":1,\"customerId\":1002,\"message\":\"帮我分析快聘人力\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void writeToolRequiresConfirmationBeforeCreatingTask() throws Exception {
         MvcResult chatResult = mockMvc.perform(post("/api/agent/chat")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -102,6 +115,25 @@ class AgentOrchestratorTest {
 
         assertThat(outboxEventService.count(new LambdaQueryWrapper<OutboxEvent>()
                 .eq(OutboxEvent::getEventType, "crm_task.created"))).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void agentRunAndConfirmationQueriesAreScopedToCurrentUser() throws Exception {
+        mockMvc.perform(post("/api/agent/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1,\"salesRepId\":1,\"message\":\"帮我创建明天上午十点跟进美家房产续费的任务\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.type", is("confirmation_required")));
+
+        mockMvc.perform(get("/api/agent/runs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data[0].userId", is(1)))
+                .andExpect(jsonPath("$.data[0].salesRepId", is(1)));
+
+        mockMvc.perform(get("/api/agent/confirmations").param("status", "ALL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
     }
 
     @Test

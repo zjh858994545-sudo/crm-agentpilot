@@ -5,7 +5,9 @@ import com.agentpilot.crm.entity.ContactLog;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.crm.service.CustomerService;
+import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,21 +31,37 @@ public class CustomerController {
 
     @GetMapping
     public ApiResponse<List<Customer>> list(@RequestParam(required = false) Long salesRepId) {
+        Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<Customer> wrapper = new LambdaQueryWrapper<Customer>()
+                .eq(Customer::getOwnerSalesRepId, scopedSalesRepId)
                 .orderByAsc(Customer::getId);
-        if (salesRepId != null) {
-            wrapper.eq(Customer::getOwnerSalesRepId, salesRepId);
-        }
         return ApiResponse.ok(customerService.list(wrapper));
     }
 
     @GetMapping("/{id}")
     public ApiResponse<Customer> detail(@PathVariable Long id) {
-        return ApiResponse.ok(customerService.getById(id));
+        Customer customer = customerService.getById(id);
+        requireCustomerVisible(customer);
+        return ApiResponse.ok(customer);
     }
 
     @GetMapping("/{id}/contact-logs")
     public ApiResponse<List<ContactLog>> contactLogs(@PathVariable Long id) {
+        requireCustomerVisible(customerService.getById(id));
         return ApiResponse.ok(contactLogService.listByCustomerId(id));
+    }
+
+    private Long scopedSalesRepId(Long requestedSalesRepId) {
+        Long currentSalesRepId = CurrentUser.salesRepId();
+        if (requestedSalesRepId != null && !requestedSalesRepId.equals(currentSalesRepId)) {
+            throw new AccessDeniedException("salesRepId is outside current data scope");
+        }
+        return currentSalesRepId;
+    }
+
+    private void requireCustomerVisible(Customer customer) {
+        if (customer == null || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
+            throw new AccessDeniedException("customer is outside current data scope");
+        }
     }
 }

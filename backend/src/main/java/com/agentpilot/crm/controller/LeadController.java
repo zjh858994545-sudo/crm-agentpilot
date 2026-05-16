@@ -5,7 +5,9 @@ import com.agentpilot.crm.entity.Lead;
 import com.agentpilot.crm.service.LeadService;
 import com.agentpilot.scoring.service.LeadScoringService;
 import com.agentpilot.scoring.vo.LeadRecommendation;
+import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,11 +30,10 @@ public class LeadController {
 
     @GetMapping
     public ApiResponse<List<Lead>> list(@RequestParam(required = false) Long salesRepId) {
+        Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<Lead> wrapper = new LambdaQueryWrapper<Lead>()
+                .eq(Lead::getSalesRepId, scopedSalesRepId)
                 .orderByAsc(Lead::getId);
-        if (salesRepId != null) {
-            wrapper.eq(Lead::getSalesRepId, salesRepId);
-        }
         return ApiResponse.ok(leadService.list(wrapper));
     }
 
@@ -41,6 +42,14 @@ public class LeadController {
             @RequestParam(required = false) Long salesRepId,
             @RequestParam(defaultValue = "10") int topK
     ) {
-        return ApiResponse.ok(leadScoringService.recommend(salesRepId, topK));
+        return ApiResponse.ok(leadScoringService.recommend(scopedSalesRepId(salesRepId), topK));
+    }
+
+    private Long scopedSalesRepId(Long requestedSalesRepId) {
+        Long currentSalesRepId = CurrentUser.salesRepId();
+        if (requestedSalesRepId != null && !requestedSalesRepId.equals(currentSalesRepId)) {
+            throw new AccessDeniedException("salesRepId is outside current data scope");
+        }
+        return currentSalesRepId;
     }
 }
