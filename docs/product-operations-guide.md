@@ -33,6 +33,7 @@ CRM-AgentPilot 是面向销售作业的 CRM AI Agent 工作台。系统允许 AI
 
 ```text
 SPRING_PROFILES_ACTIVE=local|prod
+AGENTPILOT_APP_PHASE=production
 AGENTPILOT_SECURITY_MODE=strict
 AGENTPILOT_SEED_USERS_ENABLED=false
 AGENTPILOT_RATE_LIMIT_ENABLED=true
@@ -42,6 +43,13 @@ AGENT_EVENTS_KAFKA_ENABLED=true
 ```
 
 本地开发可以使用 mock model、mock embedding 和 permissive security。生产环境必须显式配置模型、embedding、RBAC、安全模式和限流。
+
+当 `AGENTPILOT_APP_PHASE` 设置为 `production`、`prod`、`commercial` 或 `launch` 时，后端会执行启动前检查。以下条件不满足会直接启动失败：
+
+- 安全模式不是 strict。
+- 内置种子账号仍然启用。
+- Chat 模型仍然是 mock 或缺少 baseUrl / apiKey / model。
+- Embedding 模型仍然是 mock 或缺少 baseUrl / apiKey / model / dimensions。
 
 ## 4. 部署验收
 
