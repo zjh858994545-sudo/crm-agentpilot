@@ -8,21 +8,24 @@ import {
   SafetyCertificateOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Statistic, Table, Tag, Timeline, Typography } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Statistic, Table, Tag, Timeline, Typography, message as antdMessage } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import {
   EventStatus,
   KnowledgeStatus,
   ModelStatus,
   OpenAiToolDefinition,
+  OutboxEvent,
   SecurityStatus,
   SecurityUser,
+  fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
   fetchModelStatus,
   fetchOpenAiTools,
   fetchSecurityStatus,
-  fetchSecurityUsers
+  fetchSecurityUsers,
+  retryDeadLetter
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
@@ -61,6 +64,7 @@ export default function SystemAdmin() {
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [tools, setTools] = useState<OpenAiToolDefinition[]>([]);
   const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
+  const [deadLetters, setDeadLetters] = useState<OutboxEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -73,7 +77,8 @@ export default function SystemAdmin() {
       fetchKnowledgeStatus(),
       fetchModelStatus(),
       fetchOpenAiTools(),
-      fetchSecurityUsers()
+      fetchSecurityUsers(),
+      fetchDeadLetters()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -81,6 +86,7 @@ export default function SystemAdmin() {
     if (results[3].status === 'fulfilled') setModelStatus(results[3].value);
     if (results[4].status === 'fulfilled') setTools(results[4].value);
     if (results[5].status === 'fulfilled') setSecurityUsers(results[5].value);
+    if (results[6].status === 'fulfilled') setDeadLetters(results[6].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分系统状态读取失败，请确认后端已经启动并且当前 token 具备系统管理权限。');
     }
@@ -90,6 +96,23 @@ export default function SystemAdmin() {
   useEffect(() => {
     load();
   }, []);
+
+  const retryOutboxEvent = async (id: number) => {
+    setLoading(true);
+    try {
+      const result = await retryDeadLetter(id);
+      if (result.accepted) {
+        antdMessage.success('已重新加入待分发队列');
+      } else {
+        antdMessage.warning('事件当前状态不可重试');
+      }
+      await load();
+    } catch {
+      antdMessage.error('重试事件失败，请检查后端服务或权限。');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const writeToolCount = useMemo(
     () => tools.filter((tool) => ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(tool.function.name)).length,
@@ -362,6 +385,38 @@ export default function SystemAdmin() {
             { title: '销售范围', dataIndex: 'salesRepId', render: (value) => <Tag>salesRep #{value}</Tag> },
             { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
             { title: '权限数', dataIndex: 'permissions', render: (permissions: string[]) => permissions.length }
+          ]}
+        />
+      </Card>
+
+      <Card className="command-card" title="Outbox 死信处理">
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={deadLetters}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有死信事件" /> }}
+          pagination={deadLetters.length > 8 ? { pageSize: 8 } : false}
+          columns={[
+            { title: 'ID', dataIndex: 'id', width: 80 },
+            { title: '事件类型', dataIndex: 'eventType', render: (value) => <Text code>{value}</Text> },
+            { title: '聚合对象', render: (_, record) => `${record.aggregateType} #${record.aggregateId}` },
+            { title: 'Topic', dataIndex: 'topic' },
+            { title: '重试次数', dataIndex: 'retryCount', width: 100 },
+            {
+              title: '错误',
+              dataIndex: 'errorMessage',
+              ellipsis: true,
+              render: (value) => <Text type="secondary">{value || '-'}</Text>
+            },
+            {
+              title: '操作',
+              width: 120,
+              render: (_, record) => (
+                <Button size="small" type="link" onClick={() => retryOutboxEvent(record.id)}>
+                  重新分发
+                </Button>
+              )
+            }
           ]}
         />
       </Card>

@@ -49,6 +49,24 @@ export interface EventStatus {
   dispatcherWorkerId?: string;
 }
 
+export interface OutboxEvent {
+  id: number;
+  eventId: string;
+  topic: string;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  traceId?: string;
+  payloadJson?: string;
+  status: string;
+  retryCount: number;
+  errorMessage?: string;
+  lockedBy?: string;
+  lockedAt?: string;
+  createdAt?: string;
+  publishedAt?: string;
+}
+
 export interface KnowledgeStatus {
   vectorStoreMode: string;
   pgvectorAvailable: boolean;
@@ -479,6 +497,16 @@ export async function fetchModelStatus() {
 
 export async function fetchEventStatus() {
   const response = await apiClient.get<ApiResponse<EventStatus>>('/events/status');
+  return response.data.data;
+}
+
+export async function fetchDeadLetters() {
+  const response = await apiClient.get<ApiResponse<OutboxEvent[]>>('/events/dead-letters');
+  return response.data.data;
+}
+
+export async function retryDeadLetter(id: number) {
+  const response = await apiClient.post<ApiResponse<{ accepted: boolean; outboxId: number }>>(`/events/dead-letters/${id}/retry`);
   return response.data.data;
 }
 
