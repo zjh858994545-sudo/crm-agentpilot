@@ -75,6 +75,13 @@ class CrmCoreControllerTest {
                 .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.data[0].salesRepId", is(1)));
 
+        mockMvc.perform(get("/api/leads/3001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.salesRepId", is(1)));
+
+        mockMvc.perform(get("/api/leads/3002"))
+                .andExpect(status().isForbidden());
+
         mockMvc.perform(get("/api/tasks"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(1))))

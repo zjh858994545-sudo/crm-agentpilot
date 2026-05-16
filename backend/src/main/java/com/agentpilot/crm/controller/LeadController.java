@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,6 +38,13 @@ public class LeadController {
         return ApiResponse.ok(leadService.list(wrapper));
     }
 
+    @GetMapping("/{id}")
+    public ApiResponse<Lead> detail(@PathVariable Long id) {
+        Lead lead = leadService.getById(id);
+        requireLeadVisible(lead);
+        return ApiResponse.ok(lead);
+    }
+
     @GetMapping("/recommend")
     public ApiResponse<List<LeadRecommendation>> recommend(
             @RequestParam(required = false) Long salesRepId,
@@ -51,5 +59,11 @@ public class LeadController {
             throw new AccessDeniedException("salesRepId is outside current data scope");
         }
         return currentSalesRepId;
+    }
+
+    private void requireLeadVisible(Lead lead) {
+        if (lead == null || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
+            throw new AccessDeniedException("lead is outside current data scope");
+        }
     }
 }

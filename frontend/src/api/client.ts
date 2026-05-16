@@ -581,6 +581,11 @@ export async function fetchLeads() {
   return response.data.data;
 }
 
+export async function fetchLeadDetail(leadId: number) {
+  const response = await apiClient.get<ApiResponse<Lead>>(`/leads/${leadId}`);
+  return response.data.data;
+}
+
 export async function fetchLeadRecommendations(topK = 10) {
   const response = await apiClient.get<ApiResponse<LeadRecommendation[]>>('/leads/recommend', {
     params: { topK }

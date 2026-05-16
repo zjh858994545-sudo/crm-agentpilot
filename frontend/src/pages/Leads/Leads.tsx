@@ -29,8 +29,8 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  fetchLeadDetail,
   fetchLeadRecommendations,
-  fetchLeads,
   Lead,
   LeadRecommendation
 } from '../../api/client';
@@ -76,10 +76,10 @@ function agentUrlForLead(lead: LeadRecommendation) {
 export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [recommendations, setRecommendations] = useState<LeadRecommendation[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [industryFilter, setIndustryFilter] = useState<string>('ALL');
   const [selected, setSelected] = useState<LeadRecommendation | null>(null);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(false);
   const [dataMode, setDataMode] = useState<'connected' | 'unavailable'>('unavailable');
   const [error, setError] = useState('');
@@ -90,15 +90,14 @@ export default function Leads() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchLeadRecommendations(20), fetchLeads()])
-      .then(([nextRecommendations, nextLeads]) => {
+    fetchLeadRecommendations(20)
+      .then((nextRecommendations) => {
         setRecommendations(nextRecommendations);
-        setLeads(nextLeads);
         setDataMode('connected');
       })
       .catch(() => {
         setRecommendations([]);
-        setLeads([]);
+        setSelectedLead(null);
         setDataMode('unavailable');
         setError('商机服务暂不可用，优先级看板未加载。请稍后重试或联系系统管理员。');
       })
@@ -129,12 +128,7 @@ export default function Leads() {
     return { total: filtered.length, totalAmount, high, avgScore };
   }, [filtered]);
 
-  const selectedLead = useMemo(
-    () => leads.find((item) => item.id === selected?.leadId),
-    [leads, selected]
-  );
-
-  const openLead = (lead: LeadRecommendation, syncUrl = true) => {
+  const openLead = async (lead: LeadRecommendation, syncUrl = true) => {
     if (syncUrl) {
       const next = new URLSearchParams(searchParams);
       next.set('leadId', String(lead.leadId));
@@ -142,6 +136,12 @@ export default function Leads() {
       setSearchParams(next, { replace: true });
     }
     setSelected(lead);
+    setSelectedLead(null);
+    try {
+      setSelectedLead(await fetchLeadDetail(lead.leadId));
+    } catch {
+      setSelectedLead(null);
+    }
   };
 
   useEffect(() => {
@@ -162,6 +162,7 @@ export default function Leads() {
     next.delete('customerId');
     setSearchParams(next, { replace: true });
     setSelected(null);
+    setSelectedLead(null);
   };
 
   return (
