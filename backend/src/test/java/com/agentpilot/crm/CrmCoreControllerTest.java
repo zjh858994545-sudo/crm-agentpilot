@@ -77,4 +77,17 @@ class CrmCoreControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(5))));
     }
+
+    @Test
+    void dashboardMetricsAreComputedForCurrentSalesRep() throws Exception {
+        mockMvc.perform(get("/api/dashboard/metrics"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.salesRepId", is(1)))
+                .andExpect(jsonPath("$.data.summary.highLeadCount", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.summary.highLeadAmount").exists())
+                .andExpect(jsonPath("$.data.leadTrend", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.data.riskHeatmap.industries", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.data.riskHeatmap.cells", hasSize(greaterThanOrEqualTo(1))));
+    }
 }

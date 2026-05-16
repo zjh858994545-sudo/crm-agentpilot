@@ -35,9 +35,11 @@ import {
   confirmAgentAction,
   CrmTask,
   Customer,
+  DashboardMetrics,
   EventStatus,
   fetchAgentConfirmations,
   fetchCustomers,
+  fetchDashboardMetrics,
   fetchEventStatus,
   fetchHealth,
   fetchKnowledgeStatus,
@@ -205,6 +207,7 @@ export default function Dashboard() {
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<AgentConfirmation[]>([]);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [businessDataMode, setBusinessDataMode] = useState<'real' | 'sample'>('sample');
@@ -228,7 +231,8 @@ export default function Dashboard() {
       fetchModelStatus(),
       fetchKnowledgeStatus(),
       fetchSecurityStatus(),
-      fetchEventStatus()
+      fetchEventStatus(),
+      fetchDashboardMetrics()
     ]).then((results) => {
       const [
         confirmationsResult,
@@ -239,7 +243,8 @@ export default function Dashboard() {
         modelResult,
         knowledgeResult,
         securityResult,
-        eventResult
+        eventResult,
+        dashboardMetricsResult
       ] =
         results;
 
@@ -270,6 +275,9 @@ export default function Dashboard() {
       if (eventResult.status === 'fulfilled') {
         setEventStatus(eventResult.value);
       }
+      if (dashboardMetricsResult.status === 'fulfilled') {
+        setDashboardMetrics(dashboardMetricsResult.value);
+      }
 
       const businessDataFailed = results.slice(1, 4).some((result) => result.status === 'rejected');
       setBusinessDataMode(businessDataFailed ? 'sample' : 'real');
@@ -279,7 +287,7 @@ export default function Dashboard() {
     });
   }, []);
 
-  const metrics = useMemo(() => {
+  const localMetrics = useMemo(() => {
     const highLeads = leads.filter((item) => item.priority === 'HIGH');
     const riskCustomers = customers.filter((item) => item.riskLevel === 'HIGH');
     const dueTasks = tasks.filter((task) => isOpenTask(task) && isDueSoon(task.dueTime));
@@ -297,12 +305,24 @@ export default function Dashboard() {
     };
   }, [customers, leads, tasks]);
 
+  const displayMetrics = useMemo(() => {
+    const summary = dashboardMetrics?.summary;
+    return {
+      highLeadCount: summary?.highLeadCount ?? localMetrics.highLeads.length,
+      highLeadAmount: Number(summary?.highLeadAmount ?? localMetrics.amount),
+      riskCustomerCount: summary?.riskCustomerCount ?? localMetrics.riskCustomers.length,
+      dueTaskCount: summary?.dueTaskCount ?? localMetrics.dueTasks.length,
+      renewalCustomerCount: summary?.renewalCustomerCount ?? localMetrics.renewalCustomers.length,
+      pendingConfirmationCount: summary?.pendingConfirmationCount ?? pendingConfirmations.length
+    };
+  }, [dashboardMetrics, localMetrics, pendingConfirmations.length]);
+
   const topLeads = useMemo(
     () => [...leads].sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 4),
     [leads]
   );
 
-  const leadTrend = useMemo(() => {
+  const localLeadTrend = useMemo(() => {
     const buckets = new Map<string, { date: string; amount: number; high: number; total: number }>();
     leads.forEach((lead) => {
       const date = String(lead.expectedCloseDate ?? '').slice(5, 10) || '未知';
@@ -317,25 +337,31 @@ export default function Dashboard() {
     return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 7);
   }, [leads]);
 
+  const leadTrend = useMemo(
+    () => (dashboardMetrics?.leadTrend?.length ? dashboardMetrics.leadTrend : localLeadTrend),
+    [dashboardMetrics, localLeadTrend]
+  );
+
   const riskHeatmap = useMemo(() => {
     const riskLevels = ['LOW', 'MEDIUM', 'HIGH'];
     const industries = [...new Set(customers.map((customer) => customer.industry || '其他'))].slice(0, 5);
-    const max = Math.max(
-      1,
-      ...industries.flatMap((industry) =>
-        riskLevels.map(
-          (risk) => customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length
-        )
-      )
+    const localCells = industries.flatMap((industry) =>
+      riskLevels.map((risk) => ({
+        industry,
+        riskLevel: risk,
+        count: customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length
+      }))
     );
-    return { industries, riskLevels, max };
-  }, [customers]);
+    const max = Math.max(1, ...localCells.map((cell) => cell.count));
+    const localRiskHeatmap = { industries, riskLevels, max, cells: localCells };
+    return dashboardMetrics?.riskHeatmap?.cells?.length ? dashboardMetrics.riskHeatmap : localRiskHeatmap;
+  }, [customers, dashboardMetrics]);
 
   const workItems = useMemo(
     () => [
       {
         title: '先处理高优商机',
-        value: metrics.highLeads.length,
+        value: displayMetrics.highLeadCount,
         desc: '主管关注成交窗口，销售优先跟进',
         icon: <ThunderboltOutlined />,
         to: '/leads',
@@ -343,7 +369,7 @@ export default function Dashboard() {
       },
       {
         title: '查看风险客户',
-        value: metrics.riskCustomers.length,
+        value: displayMetrics.riskCustomerCount,
         desc: '价格异议、效果担忧、质检风险优先处理',
         icon: <ExclamationCircleOutlined />,
         to: '/customers',
@@ -351,7 +377,7 @@ export default function Dashboard() {
       },
       {
         title: '确认 CRM 写入',
-        value: pendingConfirmations.length,
+        value: displayMetrics.pendingConfirmationCount,
         desc: 'Agent 已生成但还未落库的写操作',
         icon: <SafetyCertificateOutlined />,
         to: '/agent',
@@ -359,14 +385,14 @@ export default function Dashboard() {
       },
       {
         title: '续费客户池',
-        value: metrics.renewalCustomers.length,
+        value: displayMetrics.renewalCustomerCount,
         desc: '适合用数据复盘和套餐政策推进',
         icon: <UserSwitchOutlined />,
         to: '/customers',
         color: 'green'
       }
     ],
-    [metrics, pendingConfirmations.length]
+    [displayMetrics]
   );
 
   const confirmFromDashboard = async (confirmationId: number) => {
@@ -478,15 +504,15 @@ export default function Dashboard() {
           <div className="hero-kpi-strip">
             <div>
               <span>高优商机</span>
-              <strong>{metrics.highLeads.length}</strong>
+              <strong>{displayMetrics.highLeadCount}</strong>
             </div>
             <div>
               <span>高优金额</span>
-              <strong>{currency(metrics.amount)}</strong>
+              <strong>{currency(displayMetrics.highLeadAmount)}</strong>
             </div>
             <div>
               <span>待确认</span>
-              <strong>{pendingConfirmations.length}</strong>
+              <strong>{displayMetrics.pendingConfirmationCount}</strong>
             </div>
           </div>
           <Space wrap>
@@ -511,15 +537,15 @@ export default function Dashboard() {
           <div className="manager-focus">
             <div>
               <span>高优商机金额</span>
-              <strong>{currency(metrics.amount)}</strong>
+              <strong>{currency(displayMetrics.highLeadAmount)}</strong>
             </div>
             <div>
               <span>风险客户</span>
-              <strong>{metrics.riskCustomers.length} 个</strong>
+              <strong>{displayMetrics.riskCustomerCount} 个</strong>
             </div>
             <div>
               <span>48 小时待办</span>
-              <strong>{metrics.dueTasks.length} 个</strong>
+              <strong>{displayMetrics.dueTaskCount} 个</strong>
             </div>
           </div>
         </div>
@@ -655,15 +681,19 @@ export default function Dashboard() {
                 <div className="risk-heatmap-row" key={industry}>
                   <div className="risk-heatmap-label">{industry}</div>
                   {riskHeatmap.riskLevels.map((risk) => {
+                    const serverCount = riskHeatmap.cells.find(
+                      (cell) => cell.industry === industry && cell.riskLevel === risk
+                    )?.count;
                     const count = customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length;
-                    const intensity = count / riskHeatmap.max;
+                    const heatmapCount = serverCount ?? count;
+                    const intensity = heatmapCount / riskHeatmap.max;
                     return (
                       <div
                         className={`risk-heatmap-cell risk-${risk.toLowerCase()}`}
                         style={{ opacity: 0.28 + intensity * 0.72 }}
                         key={`${industry}-${risk}`}
                       >
-                        {count}
+                        {heatmapCount}
                       </div>
                     );
                   })}

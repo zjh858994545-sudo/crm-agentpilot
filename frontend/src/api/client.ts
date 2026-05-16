@@ -79,6 +79,43 @@ export interface SecurityStatus {
   };
 }
 
+export interface DashboardSummary {
+  highLeadCount: number;
+  highLeadAmount: number;
+  riskCustomerCount: number;
+  dueTaskCount: number;
+  renewalCustomerCount: number;
+  pendingConfirmationCount: number;
+}
+
+export interface DashboardTrendPoint {
+  date: string;
+  amount: number;
+  high: number;
+  total: number;
+}
+
+export interface DashboardRiskCell {
+  industry: string;
+  riskLevel: string;
+  count: number;
+}
+
+export interface DashboardRiskHeatmap {
+  industries: string[];
+  riskLevels: string[];
+  max: number;
+  cells: DashboardRiskCell[];
+}
+
+export interface DashboardMetrics {
+  salesRepId: number;
+  generatedAt: string;
+  summary: DashboardSummary;
+  leadTrend: DashboardTrendPoint[];
+  riskHeatmap: DashboardRiskHeatmap;
+}
+
 export interface OpenAiToolDefinition {
   type: string;
   function: {
@@ -375,6 +412,11 @@ export async function fetchKnowledgeStatus() {
 
 export async function fetchSecurityStatus() {
   const response = await apiClient.get<ApiResponse<SecurityStatus>>('/security/status');
+  return response.data.data;
+}
+
+export async function fetchDashboardMetrics() {
+  const response = await apiClient.get<ApiResponse<DashboardMetrics>>('/dashboard/metrics');
   return response.data.data;
 }
 
