@@ -5,6 +5,7 @@ import {
   DashboardOutlined,
   ExperimentOutlined,
   LoginOutlined,
+  LogoutOutlined,
   MessageOutlined,
   PhoneOutlined,
   SafetyCertificateOutlined,
@@ -13,10 +14,12 @@ import {
   ThunderboltOutlined,
   UserOutlined
 } from '@ant-design/icons';
-import { Badge, Button, Card, Col, Layout, Menu, Row, Select, Space, Tag, Typography } from 'antd';
+import { Alert, Badge, Button, Card, Form, Input, Layout, Menu, Space, Spin, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { fetchCurrentUser, type AuthProfile } from './api/client';
 import AgentChat from './pages/AgentChat/AgentChat';
 import AgentRuns from './pages/AgentRuns/AgentRuns';
 import CallCenter from './pages/CallCenter/CallCenter';
@@ -26,25 +29,11 @@ import Evaluation from './pages/Evaluation/Evaluation';
 import KnowledgeBase from './pages/KnowledgeBase/KnowledgeBase';
 import Leads from './pages/Leads/Leads';
 import SystemAdmin from './pages/SystemAdmin/SystemAdmin';
-import { useState } from 'react';
 
 const { Header, Sider, Content } = Layout;
 const { Paragraph, Text, Title } = Typography;
 
-type WorkspaceRole = 'sales' | 'manager' | 'admin';
-
-type WorkspaceUser = {
-  id: string;
-  userId: number;
-  salesRepId: number;
-  name: string;
-  title: string;
-  role: WorkspaceRole;
-  token: string;
-  defaultPath: string;
-  description: string;
-  color: string;
-};
+type WorkspaceRole = AuthProfile['primaryRole'];
 
 type NavEntry = {
   key: string;
@@ -53,45 +42,6 @@ type NavEntry = {
   group: 'sales' | 'manager' | 'admin';
   visibleFor: WorkspaceRole[];
 };
-
-const workspaceUsers: WorkspaceUser[] = [
-  {
-    id: 'sales-1',
-    userId: 1,
-    salesRepId: 1,
-    name: '林晓峰',
-    title: '销售代表',
-    role: 'sales',
-    token: 'agentpilot-sales-1',
-    defaultPath: '/',
-    description: '处理客户跟进、知识问答、通话摘要和 CRM 写入确认。',
-    color: 'blue'
-  },
-  {
-    id: 'manager',
-    userId: 100,
-    salesRepId: 1,
-    name: '陈明',
-    title: '销售主管',
-    role: 'manager',
-    token: 'agentpilot-manager',
-    defaultPath: '/',
-    description: '查看高优商机、风险客户、趋势指标和团队作业重点。',
-    color: 'purple'
-  },
-  {
-    id: 'admin',
-    userId: 900,
-    salesRepId: 1,
-    name: '系统管理员',
-    title: '系统管理员',
-    role: 'admin',
-    token: 'agentpilot-admin',
-    defaultPath: '/system',
-    description: '管理系统能力、运行审计、质量评估和事件可靠性。',
-    color: 'geekblue'
-  }
-];
 
 const navItems: NavEntry[] = [
   { key: '/', icon: <DashboardOutlined />, label: '今日工作台', group: 'sales', visibleFor: ['sales', 'manager'] },
@@ -109,6 +59,18 @@ const groupLabels: Record<NavEntry['group'], string> = {
   sales: '销售每日作业',
   manager: '销售主管',
   admin: '系统管理'
+};
+
+const roleTitles: Record<WorkspaceRole, string> = {
+  sales: '销售代表',
+  manager: '销售主管',
+  admin: '系统管理员'
+};
+
+const roleColors: Record<WorkspaceRole, string> = {
+  sales: 'blue',
+  manager: 'purple',
+  admin: 'geekblue'
 };
 
 const pageMeta: Record<string, { title: string; subtitle: string; role: string }> = {
@@ -159,22 +121,17 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
   }
 };
 
-function readStoredUser() {
-  try {
-    const stored = JSON.parse(window.localStorage.getItem('agentpilot.currentUser') || '{}') as Pick<WorkspaceUser, 'id'>;
-    return workspaceUsers.find((user) => user.id === stored.id) ?? null;
-  } catch {
-    return null;
-  }
+function persistUser(profile: AuthProfile) {
+  window.localStorage.setItem('agentpilot.currentUser', JSON.stringify(profile));
 }
 
-function persistUser(user: WorkspaceUser) {
-  window.localStorage.setItem('agentpilot.currentUser', JSON.stringify(user));
-  window.localStorage.setItem('agentpilot.apiToken', user.token);
+function clearSession() {
+  window.localStorage.removeItem('agentpilot.currentUser');
+  window.localStorage.removeItem('agentpilot.apiToken');
 }
 
-function visibleNavFor(user: WorkspaceUser) {
-  return navItems.filter((item) => item.visibleFor.includes(user.role));
+function visibleNavFor(user: AuthProfile) {
+  return navItems.filter((item) => item.visibleFor.includes(user.primaryRole));
 }
 
 function resolveSelectedKey(pathname: string) {
@@ -186,7 +143,7 @@ function resolveSelectedKey(pathname: string) {
   );
 }
 
-function buildMenuItems(user: WorkspaceUser): MenuProps['items'] {
+function buildMenuItems(user: AuthProfile): MenuProps['items'] {
   const visibleNav = visibleNavFor(user);
   return (['sales', 'manager', 'admin'] as NavEntry['group'][]).flatMap((group) => {
     const children = visibleNav
@@ -209,73 +166,87 @@ function buildMenuItems(user: WorkspaceUser): MenuProps['items'] {
   });
 }
 
-function LoginPage({ onLogin }: { onLogin: (user: WorkspaceUser) => void }) {
+function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async ({ token }: { token: string }) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      window.localStorage.setItem('agentpilot.apiToken', token.trim());
+      const profile = await fetchCurrentUser();
+      persistUser(profile);
+      onLogin(profile);
+    } catch {
+      clearSession();
+      setError('访问令牌无效或系统暂不可用，请确认令牌后重试。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="login-shell">
-      <div className="login-panel">
+      <div className="login-panel login-panel-narrow">
         <Space direction="vertical" size={8} className="login-heading">
           <Text className="eyebrow">CRM-AgentPilot</Text>
-          <Title level={2}>选择工作身份</Title>
+          <Title level={2}>登录销售作业平台</Title>
           <Paragraph>
-            用销售、主管、系统管理员三个视角进入系统。每个身份都会写入对应权限上下文，
-            前端菜单和后端数据范围一起切换。
+            输入由系统管理员分配的访问令牌。系统会根据令牌识别销售、主管或管理员身份，并自动加载对应菜单和数据范围。
           </Paragraph>
         </Space>
-        <Row gutter={[16, 16]}>
-          {workspaceUsers.map((user) => (
-            <Col xs={24} md={8} key={user.id}>
-              <Card className={`login-role-card role-${user.role}`}>
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                  <Space align="center">
-                    <span className={`role-avatar role-avatar-${user.role}`}>
-                      {user.role === 'admin' ? <SettingOutlined /> : user.role === 'manager' ? <ThunderboltOutlined /> : <UserOutlined />}
-                    </span>
-                    <div>
-                      <Text strong>{user.name}</Text>
-                      <div className="metric-label">{user.title}</div>
-                    </div>
-                  </Space>
-                  <Paragraph className="login-role-desc">{user.description}</Paragraph>
-                  <Button
-                    block
-                    type="primary"
-                    icon={<LoginOutlined />}
-                    data-testid={`login-${user.role}`}
-                    onClick={() => onLogin(user)}
-                  >
-                    进入{user.title}视角
-                  </Button>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+        <Card className="login-role-card login-token-card">
+          <Form layout="vertical" onFinish={submit}>
+            <Form.Item
+              label="访问令牌"
+              name="token"
+              rules={[{ required: true, message: '请输入访问令牌' }]}
+            >
+              <Input.Password
+                size="large"
+                autoFocus
+                data-testid="token-login-input"
+                placeholder="请输入 X-AgentPilot-Token"
+              />
+            </Form.Item>
+            {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+            <Button
+              block
+              size="large"
+              type="primary"
+              htmlType="submit"
+              icon={<LoginOutlined />}
+              loading={submitting}
+              data-testid="token-login-submit"
+            >
+              登录工作台
+            </Button>
+          </Form>
+        </Card>
       </div>
     </div>
   );
 }
 
-function Shell({ user, onUserChange }: { user: WorkspaceUser; onUserChange: (user: WorkspaceUser) => void }) {
+function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
   const selectedKey = resolveSelectedKey(location.pathname);
   const visibleNav = visibleNavFor(user);
   const allowedKeys = new Set(visibleNav.map((item) => item.key));
-  const meta = pageMeta[selectedKey] ?? pageMeta[user.defaultPath] ?? pageMeta['/'];
-  const isAdminUser = user.role === 'admin';
+  const defaultPath = user.primaryRole === 'admin' ? '/system' : '/';
+  const meta = pageMeta[selectedKey] ?? pageMeta[defaultPath] ?? pageMeta['/'];
+  const isAdminUser = user.primaryRole === 'admin';
 
-  const switchUser = (nextUserId: string) => {
-    const nextUser = workspaceUsers.find((item) => item.id === nextUserId);
-    if (!nextUser) {
-      return;
-    }
-    persistUser(nextUser);
-    onUserChange(nextUser);
-    navigate(nextUser.defaultPath, { replace: true });
+  const logout = () => {
+    clearSession();
+    onLogout();
+    navigate('/', { replace: true });
   };
 
   const route = (key: string, element: ReactNode) =>
-    allowedKeys.has(key) ? element : <Navigate to={user.defaultPath} replace />;
+    allowedKeys.has(key) ? element : <Navigate to={defaultPath} replace />;
 
   return (
     <Layout className="app-shell">
@@ -306,18 +277,13 @@ function Shell({ user, onUserChange }: { user: WorkspaceUser; onUserChange: (use
             <Text className="page-subtitle">{meta.subtitle}</Text>
           </Space>
           <Space size={8} wrap className="header-status">
-            <Tag color={user.color} icon={isAdminUser ? <SettingOutlined /> : <UserOutlined />}>
-              {user.title} · {user.name}
+            <Tag color={roleColors[user.primaryRole]} icon={isAdminUser ? <SettingOutlined /> : <UserOutlined />}>
+              {roleTitles[user.primaryRole]} · {user.displayName}
             </Tag>
-            <Select
-              size="middle"
-              className="identity-switcher"
-              data-testid="identity-switcher"
-              value={user.id}
-              options={workspaceUsers.map((item) => ({ label: `${item.title} · ${item.name}`, value: item.id }))}
-              onChange={switchUser}
-            />
             <Badge status="success" text="工作台在线" />
+            <Button icon={<LogoutOutlined />} onClick={logout}>
+              退出
+            </Button>
           </Space>
         </Header>
         <Content className="app-content">
@@ -331,7 +297,7 @@ function Shell({ user, onUserChange }: { user: WorkspaceUser; onUserChange: (use
             <Route path="/system" element={route('/system', <SystemAdmin />)} />
             <Route path="/runs" element={route('/runs', <AgentRuns />)} />
             <Route path="/evaluation" element={route('/evaluation', <Evaluation />)} />
-            <Route path="*" element={<Navigate to={user.defaultPath} replace />} />
+            <Route path="*" element={<Navigate to={defaultPath} replace />} />
           </Routes>
         </Content>
       </Layout>
@@ -340,16 +306,42 @@ function Shell({ user, onUserChange }: { user: WorkspaceUser; onUserChange: (use
 }
 
 export default function App() {
-  const [user, setUser] = useState<WorkspaceUser | null>(() => readStoredUser());
+  const [user, setUser] = useState<AuthProfile | null>(null);
+  const [ready, setReady] = useState(false);
 
-  const login = (nextUser: WorkspaceUser) => {
-    persistUser(nextUser);
-    setUser(nextUser);
-  };
+  useEffect(() => {
+    const token = window.localStorage.getItem('agentpilot.apiToken');
+    if (!token) {
+      clearSession();
+      setReady(true);
+      return;
+    }
+    fetchCurrentUser()
+      .then((profile) => {
+        persistUser(profile);
+        setUser(profile);
+      })
+      .catch(() => {
+        clearSession();
+        setUser(null);
+      })
+      .finally(() => setReady(true));
+  }, []);
+
+  if (!ready) {
+    return (
+      <div className="login-shell">
+        <Space direction="vertical" align="center" size={16} style={{ width: '100%', paddingTop: 160 }}>
+          <Spin size="large" />
+          <Text type="secondary">正在校验登录状态...</Text>
+        </Space>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
-      {user ? <Shell user={user} onUserChange={setUser} /> : <LoginPage onLogin={login} />}
+      {user ? <Shell user={user} onLogout={() => setUser(null)} /> : <LoginPage onLogin={setUser} />}
     </BrowserRouter>
   );
 }

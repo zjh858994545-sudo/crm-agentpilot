@@ -14,6 +14,17 @@ import java.util.Optional;
 public class RbacPrincipalService {
     private final JdbcTemplate jdbcTemplate;
 
+    public record UserProfile(
+            Long userId,
+            String username,
+            String displayName,
+            Long salesRepId,
+            String status,
+            List<String> roles,
+            List<String> permissions
+    ) {
+    }
+
     public RbacPrincipalService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -64,6 +75,60 @@ public class RbacPrincipalService {
 
     public long roleCount() {
         return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agentpilot_role", Long.class);
+    }
+
+    public Optional<UserProfile> findProfileByUserId(Long userId) {
+        if (userId == null) {
+            return Optional.empty();
+        }
+        try {
+            UserProfile profile = jdbcTemplate.queryForObject(
+                    """
+                            SELECT id, username, display_name, sales_rep_id, status
+                            FROM agentpilot_user
+                            WHERE id = ?
+                            """,
+                    (rs, rowNum) -> {
+                        Long id = rs.getLong("id");
+                        List<String> roles = jdbcTemplate.queryForList(
+                                """
+                                        SELECT DISTINCT r.code
+                                        FROM agentpilot_role r
+                                        JOIN agentpilot_user_role ur ON ur.role_id = r.id
+                                        WHERE ur.user_id = ?
+                                        ORDER BY r.code
+                                        """,
+                                String.class,
+                                id
+                        );
+                        List<String> permissions = jdbcTemplate.queryForList(
+                                """
+                                        SELECT DISTINCT p.code
+                                        FROM agentpilot_permission p
+                                        JOIN agentpilot_role_permission rp ON rp.permission_id = p.id
+                                        JOIN agentpilot_user_role ur ON ur.role_id = rp.role_id
+                                        WHERE ur.user_id = ?
+                                        ORDER BY p.code
+                                        """,
+                                String.class,
+                                id
+                        );
+                        return new UserProfile(
+                                id,
+                                rs.getString("username"),
+                                rs.getString("display_name"),
+                                rs.getLong("sales_rep_id"),
+                                rs.getString("status"),
+                                roles,
+                                permissions
+                        );
+                    },
+                    userId
+            );
+            return Optional.ofNullable(profile);
+        } catch (EmptyResultDataAccessException ex) {
+            return Optional.empty();
+        }
     }
 
     private String sha256(String value) {

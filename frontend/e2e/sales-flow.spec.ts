@@ -1,16 +1,29 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function loginAs(page: Page, testId: 'login-sales' | 'login-manager' | 'login-admin') {
+const tokens = {
+  sales: 'agentpilot-sales-1',
+  manager: 'agentpilot-manager',
+  admin: 'agentpilot-admin'
+} as const;
+
+async function loginAs(page: Page, role: keyof typeof tokens) {
   await page.goto('/');
-  await page.getByTestId(testId).click();
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto('/');
+  await page.getByTestId('token-login-input').fill(tokens[role]);
+  await page.getByTestId('token-login-submit').click();
+  await expect(page.getByText('工作台在线')).toBeVisible();
 }
 
 async function clearPendingConfirmations(page: Page) {
-  const response = await page.request.get('/api/agent/confirmations?status=PENDING');
+  const response = await page.request.get('/api/agent/confirmations?status=PENDING', {
+    headers: { 'X-AgentPilot-Token': tokens.sales }
+  });
   const body = await response.json();
   const confirmations = body.data ?? [];
   for (const confirmation of confirmations) {
     await page.request.post(`/api/agent/confirmations/${confirmation.id}/reject`, {
+      headers: { 'X-AgentPilot-Token': tokens.sales },
       data: { userId: 1 }
     });
   }
@@ -18,7 +31,7 @@ async function clearPendingConfirmations(page: Page) {
 
 test.describe('CRM-AgentPilot product workflow', () => {
   test('renders the Agent execution process as a sales workbench', async ({ page }) => {
-    await loginAs(page, 'login-sales');
+    await loginAs(page, 'sales');
     await page.goto('/agent');
 
     await expect(page.getByText('AI 执行过程')).toBeVisible();
@@ -32,7 +45,7 @@ test.describe('CRM-AgentPilot product workflow', () => {
   test('carries URL context into Agent and keeps the sales role scoped', async ({ page }) => {
     const prompt = '帮我分析美家房产，重点看续费风险。';
 
-    await loginAs(page, 'login-sales');
+    await loginAs(page, 'sales');
     await page.goto(`/agent?source=lead&customerId=1001&prompt=${encodeURIComponent(prompt)}`);
 
     await expect(page.getByText(/已带入上游业务上下文/)).toBeVisible();
@@ -43,11 +56,10 @@ test.describe('CRM-AgentPilot product workflow', () => {
   });
 
   test('keeps system pages behind the admin role menu', async ({ page }) => {
-    await loginAs(page, 'login-sales');
+    await loginAs(page, 'sales');
     await expect(page.locator('a[href="/system"]')).toHaveCount(0);
 
-    await page.getByTestId('identity-switcher').click();
-    await page.getByTitle(/系统管理员/).click();
+    await loginAs(page, 'admin');
     await expect(page.locator('a[href="/system"]')).toHaveCount(1);
     await page.locator('a[href="/system"]').click();
     await expect(page).toHaveURL(/\/system/);
@@ -57,7 +69,7 @@ test.describe('CRM-AgentPilot product workflow', () => {
     test.skip(process.env.E2E_FULL_DEMO !== '1', 'Set E2E_FULL_DEMO=1 when a backend is running.');
     test.setTimeout(120_000);
 
-    await loginAs(page, 'login-sales');
+    await loginAs(page, 'sales');
     await clearPendingConfirmations(page);
 
     await page.goto('/customers?customerId=1001');
@@ -80,8 +92,7 @@ test.describe('CRM-AgentPilot product workflow', () => {
     await confirmButton.click();
     await expect(page.locator('.pending-item, .confirmation-panel')).toHaveCount(0, { timeout: 60_000 });
 
-    await page.getByTestId('identity-switcher').click();
-    await page.getByTitle(/系统管理员/).click();
+    await loginAs(page, 'admin');
     await page.goto('/runs');
     await expect(page.getByText(/Agent Run 审计列表/)).toBeVisible();
     await expect(page.getByText(/Run 总数/)).toBeVisible();

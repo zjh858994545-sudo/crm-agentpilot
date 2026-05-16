@@ -66,8 +66,6 @@ export interface KnowledgeVectorRebuildResult {
 export interface SecurityStatus {
   mode: string;
   strict: boolean;
-  demoUserId: number;
-  demoSalesRepId: number;
   permissionCount: number;
   rbacEnabled?: boolean;
   rbacUserCount?: number;
@@ -83,6 +81,16 @@ export interface SecurityStatus {
     modelCapacity: number;
     modelRefillPerMinute: number;
   };
+}
+
+export interface AuthProfile {
+  userId: number;
+  username: string;
+  displayName: string;
+  salesRepId: number;
+  roles: string[];
+  permissions: string[];
+  primaryRole: 'sales' | 'manager' | 'admin';
 }
 
 export interface DashboardSummary {
@@ -415,33 +423,32 @@ export const apiClient = axios.create({
   timeout: 30000
 });
 
-interface StoredDemoUser {
+interface StoredWorkspaceUser {
   userId?: number;
   salesRepId?: number;
-  token?: string;
+  displayName?: string;
+  primaryRole?: AuthProfile['primaryRole'];
 }
 
-function readStoredDemoUser(): StoredDemoUser {
+function readStoredWorkspaceUser(): StoredWorkspaceUser {
   try {
-    return JSON.parse(window.localStorage.getItem('agentpilot.demoUser') || '{}') as StoredDemoUser;
+    return JSON.parse(window.localStorage.getItem('agentpilot.currentUser') || '{}') as StoredWorkspaceUser;
   } catch {
     return {};
   }
 }
 
 function currentUserId() {
-  return readStoredDemoUser().userId ?? 1;
+  return readStoredWorkspaceUser().userId ?? 1;
 }
 
 function currentSalesRepId(fallback?: number) {
-  return fallback ?? readStoredDemoUser().salesRepId ?? 1;
+  return fallback ?? readStoredWorkspaceUser().salesRepId ?? 1;
 }
 
 apiClient.interceptors.request.use((config) => {
-  const storedUser = readStoredDemoUser();
   const token =
     import.meta.env.VITE_AGENTPILOT_API_TOKEN ||
-    storedUser.token ||
     window.localStorage.getItem('agentpilot.apiToken');
   if (token) {
     config.headers.set('X-AgentPilot-Token', token);
@@ -476,6 +483,11 @@ export async function rebuildKnowledgeVectors() {
 
 export async function fetchSecurityStatus() {
   const response = await apiClient.get<ApiResponse<SecurityStatus>>('/security/status');
+  return response.data.data;
+}
+
+export async function fetchCurrentUser() {
+  const response = await apiClient.get<ApiResponse<AuthProfile>>('/auth/me');
   return response.data.data;
 }
 
@@ -538,7 +550,7 @@ export async function importKnowledgeDoc(payload: {
   content: string;
 }) {
   const response = await apiClient.post<ApiResponse<KnowledgeDoc>>('/knowledge/docs', {
-    source: 'manual-demo',
+    source: 'manual-upload',
     ...payload
   });
   return response.data.data;

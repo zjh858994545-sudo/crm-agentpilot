@@ -52,6 +52,11 @@ body {
   margin: 0 auto;
 }
 
+.login-panel-narrow {
+  width: min(560px, 100%);
+  padding-top: 9vh;
+}
+
 .login-heading {
   max-width: 720px;
   margin-bottom: 22px;
@@ -73,6 +78,10 @@ body {
   min-height: 246px;
   border-color: #d8e3f1;
   box-shadow: var(--ap-shadow-md);
+}
+
+.login-token-card {
+  min-height: auto;
 }
 
 .login-role-card::before {

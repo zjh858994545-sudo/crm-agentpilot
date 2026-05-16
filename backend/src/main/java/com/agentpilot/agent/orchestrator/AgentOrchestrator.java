@@ -123,8 +123,11 @@ public class AgentOrchestrator {
         memoryService.append(session.getId(), "user", request.message());
         AgentRun run = createRun(request, session);
 
-        AgentChatResponse response = tryLlmToolCalling(request, session, run)
-                .orElseGet(() -> routeByRules(request, session, run));
+        String ruleIntent = routeIntent(request.message());
+        AgentChatResponse response = requiresDeterministicWriteFlow(ruleIntent)
+                ? routeByRules(request, session, run, ruleIntent)
+                : tryLlmToolCalling(request, session, run)
+                .orElseGet(() -> routeByRules(request, session, run, ruleIntent));
         run.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
         run.setCompletedAt(LocalDateTime.now());
         runService.updateById(run);
@@ -147,13 +150,18 @@ public class AgentOrchestrator {
     }
 
     private AgentChatResponse routeByRules(AgentChatRequest request, AgentSession session, AgentRun run) {
-        String intent = routeIntent(request.message());
+        return routeByRules(request, session, run, routeIntent(request.message()));
+    }
+
+    private AgentChatResponse routeByRules(AgentChatRequest request, AgentSession session, AgentRun run, String intent) {
         run.setIntent(intent);
         runService.updateById(run);
         return switch (intent) {
             case "LEAD_RECOMMENDATION" -> recommendLeads(request, session, run, 5);
             case "CUSTOMER_ANALYSIS" -> analyzeCustomer(request, session, run);
             case "CREATE_TASK" -> proposeTask(request, session, run, Map.of());
+            case "WRITE_CONTACT_LOG" -> proposeContactLog(request, session, run, Map.of());
+            case "UPDATE_LEAD_STAGE" -> proposeLeadStageUpdate(request, session, run, Map.of());
             case "KNOWLEDGE_QA" -> answerKnowledge(request, session, run, request.message(), 5);
             default -> fallback(session, run);
         };
@@ -784,6 +792,12 @@ public class AgentOrchestrator {
         if (message.contains("创建") && message.contains("任务")) {
             return "CREATE_TASK";
         }
+        if ((message.contains("写入") || message.contains("记录")) && message.contains("联系记录")) {
+            return "WRITE_CONTACT_LOG";
+        }
+        if ((message.contains("更新") || message.contains("修改")) && message.contains("商机") && message.contains("阶段")) {
+            return "UPDATE_LEAD_STAGE";
+        }
         if (message.contains("优先") || message.contains("跟进哪些") || message.contains("跟进谁")) {
             return "LEAD_RECOMMENDATION";
         }
@@ -794,6 +808,10 @@ public class AgentOrchestrator {
             return "KNOWLEDGE_QA";
         }
         return "GENERAL";
+    }
+
+    private boolean requiresDeterministicWriteFlow(String intent) {
+        return Set.of("CREATE_TASK", "WRITE_CONTACT_LOG", "UPDATE_LEAD_STAGE").contains(intent);
     }
 
     private Customer resolveCustomer(AgentChatRequest request) {

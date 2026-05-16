@@ -58,4 +58,16 @@ class SecurityStrictModeTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.salesRepId", is(1)));
     }
+
+    @Test
+    void currentUserEndpointReturnsDatabaseBackedProfile() throws Exception {
+        mockMvc.perform(get("/api/auth/me")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.userId", is(100)))
+                .andExpect(jsonPath("$.data.displayName", is("陈明")))
+                .andExpect(jsonPath("$.data.salesRepId", is(1)))
+                .andExpect(jsonPath("$.data.primaryRole", is("manager")));
+    }
 }
