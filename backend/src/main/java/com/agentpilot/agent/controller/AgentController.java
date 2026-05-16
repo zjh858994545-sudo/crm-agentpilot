@@ -5,12 +5,14 @@ import com.agentpilot.agent.entity.AgentToolCall;
 import com.agentpilot.agent.entity.AgentConfirmation;
 import com.agentpilot.agent.orchestrator.AgentOrchestrator;
 import com.agentpilot.agent.service.AgentConfirmationService;
+import com.agentpilot.agent.service.AgentExecutionTraceService;
 import com.agentpilot.agent.service.AgentRunService;
 import com.agentpilot.agent.service.AgentToolCallService;
 import com.agentpilot.agent.tool.AgentToolDefinition;
 import com.agentpilot.agent.tool.ToolRegistry;
 import com.agentpilot.agent.vo.AgentChatRequest;
 import com.agentpilot.agent.vo.AgentChatResponse;
+import com.agentpilot.agent.vo.AgentExecutionTrace;
 import com.agentpilot.agent.vo.ConfirmationDecisionRequest;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.crm.entity.Customer;
@@ -40,6 +42,7 @@ public class AgentController {
     private final AgentConfirmationService confirmationService;
     private final AgentRunService runService;
     private final AgentToolCallService toolCallService;
+    private final AgentExecutionTraceService executionTraceService;
     private final ToolRegistry toolRegistry;
     private final CustomerService customerService;
 
@@ -48,6 +51,7 @@ public class AgentController {
             AgentConfirmationService confirmationService,
             AgentRunService runService,
             AgentToolCallService toolCallService,
+            AgentExecutionTraceService executionTraceService,
             ToolRegistry toolRegistry,
             CustomerService customerService
     ) {
@@ -55,6 +59,7 @@ public class AgentController {
         this.confirmationService = confirmationService;
         this.runService = runService;
         this.toolCallService = toolCallService;
+        this.executionTraceService = executionTraceService;
         this.toolRegistry = toolRegistry;
         this.customerService = customerService;
     }
@@ -148,6 +153,12 @@ public class AgentController {
     public ApiResponse<List<AgentToolCall>> toolCalls(@PathVariable Long runId) {
         requireRunVisible(runId);
         return ApiResponse.ok(toolCallService.listByRunId(runId));
+    }
+
+    @GetMapping("/runs/{runId}/execution")
+    public ApiResponse<AgentExecutionTrace> execution(@PathVariable Long runId) {
+        requireRunVisible(runId);
+        return ApiResponse.ok(executionTraceService.build(runId));
     }
 
     private List<Long> visibleRunIds() {

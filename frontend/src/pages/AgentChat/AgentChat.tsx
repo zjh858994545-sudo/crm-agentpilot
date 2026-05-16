@@ -1,12 +1,14 @@
 import {
+  BranchesOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseOutlined,
+  DatabaseOutlined,
   FileSearchOutlined,
+  LoadingOutlined,
   MessageOutlined,
-  SendOutlined,
   SafetyCertificateOutlined,
-  SearchOutlined,
+  SendOutlined,
   TeamOutlined,
   ToolOutlined,
   ThunderboltOutlined,
@@ -17,29 +19,32 @@ import {
   Avatar,
   Button,
   Card,
-  Descriptions,
   Empty,
   Input,
   List,
   Space,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
   message as antdMessage
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  AgentConfirmation,
   AgentChatResponse,
+  AgentConfirmation,
+  AgentExecutionStep,
+  AgentExecutionTrace,
   confirmAgentAction,
   fetchAgentConfirmations,
+  fetchAgentExecutionTrace,
   rejectAgentAction,
   sendAgentMessage,
   ToolCallView
 } from '../../api/client';
 
-const { Paragraph, Text } = Typography;
+const { Paragraph, Text, Title } = Typography;
 const { TextArea } = Input;
 
 interface ChatMessage {
@@ -76,11 +81,79 @@ const accountHints = [
   '老街火锅：价格异议明显，适合用曝光数据和同行案例推进。'
 ];
 
+const statusMeta: Record<string, { label: string; color: string; className: string }> = {
+  COMPLETED: { label: '已完成', color: 'green', className: 'completed' },
+  RUNNING: { label: '执行中', color: 'blue', className: 'running' },
+  WAITING: { label: '待确认', color: 'orange', className: 'waiting' },
+  FAILED: { label: '失败', color: 'red', className: 'failed' },
+  REJECTED: { label: '已拒绝', color: 'default', className: 'rejected' }
+};
+
+const stageText: Record<string, string> = {
+  WAITING_CONFIRMATION: '等待人工确认',
+  WRITING_CRM: '正在写入 CRM',
+  COMPLETED: '已完成',
+  FAILED: '执行失败'
+};
+
+const payloadLabels: Record<string, string> = {
+  customerId: '客户 ID',
+  leadId: '商机 ID',
+  salesRepId: '销售 ID',
+  title: '标题',
+  content: '内容',
+  dueTime: '跟进时间',
+  stage: '目标阶段',
+  channel: '渠道',
+  summary: '摘要',
+  nextAction: '下一步',
+  idempotencyKey: '幂等键'
+};
+
 function toolColor(tool: ToolCallView) {
-  if (tool.toolType === 'WRITE') {
-    return 'orange';
+  return tool.toolType === 'WRITE' ? 'orange' : 'green';
+}
+
+function parsePayload(value?: string | Record<string, unknown>) {
+  if (!value) {
+    return null;
   }
-  return 'green';
+  if (typeof value !== 'string') {
+    return value;
+  }
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return { raw: value };
+  }
+}
+
+function payloadEntries(value?: string | Record<string, unknown>) {
+  const payload = parsePayload(value);
+  if (!payload) {
+    return [];
+  }
+  return Object.entries(payload)
+    .filter(([, item]) => item !== undefined && item !== null && item !== '')
+    .slice(0, 8)
+    .map(([key, item]) => ({ label: payloadLabels[key] ?? key, value: String(item) }));
+}
+
+function PayloadSummary({ payload }: { payload?: string | Record<string, unknown> }) {
+  const entries = payloadEntries(payload);
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <div className="payload-summary">
+      {entries.map((item) => (
+        <div className="payload-field" key={item.label}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function inferResultTitle(response: AgentChatResponse | null) {
@@ -103,60 +176,6 @@ function inferResultTitle(response: AgentChatResponse | null) {
   return 'Agent 处理结果';
 }
 
-function parsePayload(value?: string | Record<string, unknown>) {
-  if (!value) {
-    return null;
-  }
-  if (typeof value !== 'string') {
-    return value;
-  }
-  try {
-    return JSON.parse(value) as Record<string, unknown>;
-  } catch {
-    return { raw: value };
-  }
-}
-
-function payloadEntries(value?: string | Record<string, unknown>) {
-  const payload = parsePayload(value);
-  if (!payload) {
-    return [];
-  }
-  const labels: Record<string, string> = {
-    customerId: '客户 ID',
-    leadId: '商机 ID',
-    salesRepId: '销售 ID',
-    title: '标题',
-    content: '内容',
-    dueTime: '跟进时间',
-    stage: '目标阶段',
-    channel: '渠道',
-    summary: '摘要',
-    nextAction: '下一步'
-  };
-  return Object.entries(payload)
-    .filter(([, item]) => item !== undefined && item !== null && item !== '')
-    .slice(0, 8)
-    .map(([key, item]) => ({ label: labels[key] ?? key, value: String(item) }));
-}
-
-function PayloadSummary({ payload }: { payload?: string | Record<string, unknown> }) {
-  const entries = payloadEntries(payload);
-  if (entries.length === 0) {
-    return null;
-  }
-  return (
-    <div className="payload-summary">
-      {entries.map((item) => (
-        <div className="payload-field" key={item.label}>
-          <span>{item.label}</span>
-          <strong>{item.value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function resultTone(response: AgentChatResponse | null) {
   if (!response) {
     return 'default';
@@ -164,10 +183,11 @@ function resultTone(response: AgentChatResponse | null) {
   if (response.type === 'confirmation_required') {
     return 'orange';
   }
-  if (inferResultTitle(response).includes('商机')) {
+  const title = inferResultTitle(response);
+  if (title.includes('商机')) {
     return 'red';
   }
-  if (inferResultTitle(response).includes('知识')) {
+  if (title.includes('知识')) {
     return 'blue';
   }
   return 'green';
@@ -175,22 +195,211 @@ function resultTone(response: AgentChatResponse | null) {
 
 function nextActionText(response: AgentChatResponse | null) {
   if (!response) {
-    return '发送一个销售作业问题后，我会在这里沉淀结构化结果。';
+    return '发送一个销售作业问题后，这里会沉淀结构化结果。';
   }
   if (response.type === 'confirmation_required') {
-    return '请核对确认单字段，确认后才会写入 CRM。';
+    return '核对确认单字段，确认后才会写入 CRM；拒绝则不会修改业务数据。';
   }
   const title = inferResultTitle(response);
   if (title.includes('商机')) {
-    return '建议进入客户 360 补齐上下文，再让 Agent 生成跟进任务。';
+    return '进入客户 360 补齐上下文，再让 Agent 生成具体跟进任务。';
   }
   if (title.includes('知识')) {
-    return '建议把命中的 SOP 或政策引用带入客户沟通话术。';
+    return '把命中的 SOP 或政策引用带入客户沟通话术。';
   }
   if (title.includes('客户')) {
-    return '建议基于客户风险和异议生成下一次跟进动作。';
+    return '基于客户风险和异议生成下一次跟进动作。';
   }
-  return '建议继续补充客户或商机上下文，让 Agent 生成更具体动作。';
+  return '继续补充客户或商机上下文，让 Agent 生成更具体动作。';
+}
+
+function formatJson(value?: string) {
+  if (!value) {
+    return '-';
+  }
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+function stepIcon(step: AgentExecutionStep) {
+  if (step.status === 'RUNNING') {
+    return <LoadingOutlined />;
+  }
+  if (step.category === 'REQUEST') {
+    return <MessageOutlined />;
+  }
+  if (step.category === 'ROUTING') {
+    return <BranchesOutlined />;
+  }
+  if (step.category === 'CONFIRMATION') {
+    return <SafetyCertificateOutlined />;
+  }
+  if (step.category === 'OUTPUT') {
+    return <CheckCircleOutlined />;
+  }
+  return step.toolType === 'WRITE' ? <DatabaseOutlined /> : <ToolOutlined />;
+}
+
+function fallbackSteps(isRunning: boolean): AgentExecutionStep[] {
+  return [
+    {
+      key: 'receive',
+      title: '接收销售问题',
+      description: '读取用户输入和业务上下文',
+      status: isRunning ? 'COMPLETED' : 'WAITING',
+      category: 'REQUEST'
+    },
+    {
+      key: 'route',
+      title: '选择执行路径',
+      description: 'LLM Tool Calling 或规则路由兜底',
+      status: isRunning ? 'RUNNING' : 'WAITING',
+      category: 'ROUTING'
+    },
+    {
+      key: 'tool',
+      title: '执行工具',
+      description: '查询 CRM / RAG / 生成确认单',
+      status: 'WAITING',
+      category: 'TOOL'
+    },
+    {
+      key: 'output',
+      title: '输出结果',
+      description: '返回建议或等待人工确认',
+      status: 'WAITING',
+      category: 'OUTPUT'
+    }
+  ];
+}
+
+function ExecutionProcess({
+  trace,
+  loading
+}: {
+  trace: AgentExecutionTrace | null;
+  loading: boolean;
+}) {
+  const steps = trace?.steps?.length ? trace.steps : fallbackSteps(loading);
+  const visibleSteps = steps.slice(0, 6);
+
+  return (
+    <div className={`agent-execution-board ${loading ? 'is-running' : ''}`}>
+      <div className="execution-board-head">
+        <div>
+          <Text strong>Agent 执行过程</Text>
+          <div className="metric-label">
+            {trace
+              ? `${trace.routingMode} · ${stageText[trace.currentStage] ?? trace.currentStage}`
+              : '等待发送问题'}
+          </div>
+        </div>
+        <Tag color={trace?.requiresConfirmation ? 'orange' : loading ? 'blue' : 'green'}>
+          {trace?.requiresConfirmation ? '需要确认' : loading ? '执行中' : '安全可追溯'}
+        </Tag>
+      </div>
+      <div className="execution-path-grid">
+        {visibleSteps.map((step, index) => {
+          const meta = statusMeta[step.status] ?? statusMeta.WAITING;
+          return (
+            <div className={`execution-stage-card ${meta.className}`} key={step.key}>
+              <div className="execution-stage-top">
+                <span className="execution-stage-index">{index + 1}</span>
+                <span className="execution-stage-icon">{stepIcon(step)}</span>
+              </div>
+              <Text strong>{step.title}</Text>
+              <span>{step.description}</span>
+              <Space size={6} wrap>
+                <Tag color={meta.color}>{meta.label}</Tag>
+                {step.toolType && <Tag color={step.toolType === 'WRITE' ? 'orange' : 'green'}>{step.toolType}</Tag>}
+                {step.latencyMs !== undefined && step.latencyMs !== null && <Tag>{step.latencyMs} ms</Tag>}
+              </Space>
+            </div>
+          );
+        })}
+      </div>
+      {trace && (
+        <div className="execution-safety-note">
+          <SafetyCertificateOutlined />
+          <span>{trace.safetyBoundary}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TraceEvidence({ trace }: { trace: AgentExecutionTrace | null }) {
+  if (!trace) {
+    return (
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description="发送问题后显示真实执行轨迹、工具输入输出和确认单状态"
+      />
+    );
+  }
+
+  return (
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <div className="trace-summary-strip">
+        <div>
+          <span>Run</span>
+          <strong>#{trace.run.id}</strong>
+        </div>
+        <div>
+          <span>路径</span>
+          <strong>{trace.routingMode}</strong>
+        </div>
+        <div>
+          <span>工具</span>
+          <strong>{trace.toolCalls.length}</strong>
+        </div>
+        <div>
+          <span>确认单</span>
+          <strong>{trace.confirmations.length}</strong>
+        </div>
+      </div>
+      <Timeline
+        className="trace-timeline"
+        items={trace.steps.map((step) => {
+          const meta = statusMeta[step.status] ?? statusMeta.WAITING;
+          return {
+            dot: stepIcon(step),
+            color: meta.color,
+            children: (
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <Space size={6} wrap>
+                  <Text strong>{step.title}</Text>
+                  <Tag color={meta.color}>{meta.label}</Tag>
+                  {step.toolName && <Tag>{step.toolName}</Tag>}
+                </Space>
+                <Text type="secondary">{step.description}</Text>
+                {(step.inputJson || step.outputJson) && (
+                  <details className="trace-json-details">
+                    <summary>查看工具 JSON</summary>
+                    {step.inputJson && (
+                      <>
+                        <Text strong>Input</Text>
+                        <pre className="json-preview compact">{formatJson(step.inputJson)}</pre>
+                      </>
+                    )}
+                    {step.outputJson && (
+                      <>
+                        <Text strong>Output</Text>
+                        <pre className="json-preview compact">{formatJson(step.outputJson)}</pre>
+                      </>
+                    )}
+                  </details>
+                )}
+              </Space>
+            )
+          };
+        })}
+      />
+    </Space>
+  );
 }
 
 export default function AgentChat() {
@@ -200,14 +409,17 @@ export default function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'agent',
-      content: '我可以帮助销售分析客户、推荐商机、检索销售知识库，也可以在你确认后创建 CRM 跟进任务。'
+      content:
+        '我可以帮你分析客户、推荐商机、检索销售知识库，也可以在你确认后创建 CRM 跟进任务。'
     }
   ]);
   const [toolCalls, setToolCalls] = useState<ToolCallView[]>([]);
   const [pending, setPending] = useState<AgentChatResponse | null>(null);
   const [lastResponse, setLastResponse] = useState<AgentChatResponse | null>(null);
+  const [executionTrace, setExecutionTrace] = useState<AgentExecutionTrace | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<AgentConfirmation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [traceLoading, setTraceLoading] = useState(false);
   const [error, setError] = useState('');
 
   const contextPrompt = searchParams.get('prompt');
@@ -215,12 +427,26 @@ export default function AgentChat() {
   const contextCustomerId = Number(searchParams.get('customerId'));
   const resolvedCustomerId = Number.isFinite(contextCustomerId) && contextCustomerId > 0 ? contextCustomerId : undefined;
 
+  const resultTitle = useMemo(() => inferResultTitle(lastResponse), [lastResponse]);
+
   const refreshConfirmations = async () => {
     try {
       const items = await fetchAgentConfirmations('PENDING');
       setPendingConfirmations(items);
     } catch {
       setPendingConfirmations([]);
+    }
+  };
+
+  const loadExecutionTrace = async (runId: number) => {
+    setTraceLoading(true);
+    try {
+      const trace = await fetchAgentExecutionTrace(runId);
+      setExecutionTrace(trace);
+    } catch {
+      setExecutionTrace(null);
+    } finally {
+      setTraceLoading(false);
     }
   };
 
@@ -234,8 +460,6 @@ export default function AgentChat() {
     refreshConfirmations();
   }, []);
 
-  const resultTitle = useMemo(() => inferResultTitle(lastResponse), [lastResponse]);
-
   const submit = async (text?: string) => {
     const userText = (text ?? input).trim();
     if (!userText) {
@@ -245,6 +469,7 @@ export default function AgentChat() {
     setInput('');
     setLoading(true);
     setError('');
+    setExecutionTrace(null);
     try {
       const response = await sendAgentMessage(userText, {
         sessionId,
@@ -255,7 +480,7 @@ export default function AgentChat() {
       setPending(response.type === 'confirmation_required' ? response : null);
       setLastResponse(response);
       setMessages((items) => [...items, { role: 'agent', content: response.answer }]);
-      refreshConfirmations();
+      await Promise.all([refreshConfirmations(), loadExecutionTrace(response.runId)]);
     } catch {
       setError('后端未连接，无法发送 Agent 请求。请确认 Spring Boot 服务已经启动。');
     } finally {
@@ -270,11 +495,12 @@ export default function AgentChat() {
     setLoading(true);
     setError('');
     try {
+      const runId = pending.runId;
       await confirmAgentAction(pending.confirmationId);
       antdMessage.success('已确认，CRM 写操作已执行');
       setMessages((items) => [...items, { role: 'agent', content: '已确认并完成 CRM 写入。' }]);
       setPending(null);
-      refreshConfirmations();
+      await Promise.all([refreshConfirmations(), loadExecutionTrace(runId)]);
     } catch {
       setError('确认失败，请检查后端服务。');
     } finally {
@@ -289,11 +515,12 @@ export default function AgentChat() {
     setLoading(true);
     setError('');
     try {
+      const runId = pending.runId;
       await rejectAgentAction(pending.confirmationId);
       antdMessage.info('已拒绝，本次写操作未执行');
       setMessages((items) => [...items, { role: 'agent', content: '已取消写入，CRM 数据没有变化。' }]);
       setPending(null);
-      refreshConfirmations();
+      await Promise.all([refreshConfirmations(), loadExecutionTrace(runId)]);
     } catch {
       setError('拒绝确认失败，请检查后端服务。');
     } finally {
@@ -301,16 +528,16 @@ export default function AgentChat() {
     }
   };
 
-  const confirmFromCenter = async (confirmationId: number) => {
+  const confirmFromCenter = async (confirmation: AgentConfirmation) => {
     setLoading(true);
     setError('');
     try {
-      await confirmAgentAction(confirmationId);
+      await confirmAgentAction(confirmation.id);
       antdMessage.success('已确认，CRM 写操作已执行');
-      if (pending?.confirmationId === confirmationId) {
+      if (pending?.confirmationId === confirmation.id) {
         setPending(null);
       }
-      refreshConfirmations();
+      await Promise.all([refreshConfirmations(), loadExecutionTrace(confirmation.runId)]);
     } catch {
       setError('确认失败，请检查后端服务。');
     } finally {
@@ -318,16 +545,16 @@ export default function AgentChat() {
     }
   };
 
-  const rejectFromCenter = async (confirmationId: number) => {
+  const rejectFromCenter = async (confirmation: AgentConfirmation) => {
     setLoading(true);
     setError('');
     try {
-      await rejectAgentAction(confirmationId);
+      await rejectAgentAction(confirmation.id);
       antdMessage.info('已拒绝，本次写操作未执行');
-      if (pending?.confirmationId === confirmationId) {
+      if (pending?.confirmationId === confirmation.id) {
         setPending(null);
       }
-      refreshConfirmations();
+      await Promise.all([refreshConfirmations(), loadExecutionTrace(confirmation.runId)]);
     } catch {
       setError('拒绝确认失败，请检查后端服务。');
     } finally {
@@ -340,17 +567,32 @@ export default function AgentChat() {
       <div className="workflow-hero">
         <div>
           <Text className="eyebrow">Agent Action Center</Text>
-          <Typography.Title level={4}>把客户判断变成可确认的 CRM 动作</Typography.Title>
+          <Title level={4}>把客户判断变成可确认的 CRM 动作</Title>
           <Paragraph className="overview-copy">
-            先从商机或客户页带着上下文进入，再让 Agent 分析客户、检索知识、生成任务建议；凡是写 CRM 的动作都必须人工确认。
+            从客户或商机页面带着上下文进入，让 Agent 分析客户、检索知识、生成任务建议；凡是写 CRM 的动作都会先进入人工确认。
           </Paragraph>
         </div>
         <div className="workflow-stepper">
-          <Link to="/customers" className="mini-flow-node"><TeamOutlined />客户</Link>
-          <Link to="/leads" className="mini-flow-node"><ThunderboltOutlined />商机</Link>
-          <span className="mini-flow-node active"><MessageOutlined />Agent</span>
-          <span className="mini-flow-node"><SafetyCertificateOutlined />确认</span>
-          <Link to="/runs" className="mini-flow-node muted"><ToolOutlined />审计</Link>
+          <Link to="/customers" className="mini-flow-node">
+            <TeamOutlined />
+            客户
+          </Link>
+          <Link to="/leads" className="mini-flow-node">
+            <ThunderboltOutlined />
+            商机
+          </Link>
+          <span className="mini-flow-node active">
+            <MessageOutlined />
+            Agent
+          </span>
+          <span className="mini-flow-node">
+            <SafetyCertificateOutlined />
+            确认
+          </span>
+          <Link to="/runs" className="mini-flow-node muted">
+            <ToolOutlined />
+            审计
+          </Link>
         </div>
       </div>
 
@@ -368,12 +610,7 @@ export default function AgentChat() {
           <Card title="作业模板" className="command-card">
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               {scenarioPrompts.map((item) => (
-                <Button
-                  key={item.title}
-                  block
-                  className="scenario-button"
-                  onClick={() => setInput(item.prompt)}
-                >
+                <Button key={item.title} block className="scenario-button" onClick={() => setInput(item.prompt)}>
                   <Space>
                     <Tag color="blue">{item.category}</Tag>
                     {item.title}
@@ -409,8 +646,8 @@ export default function AgentChat() {
           <Card title="安全边界" className="command-card">
             <Timeline
               items={[
-                { dot: <SearchOutlined />, children: '读工具：客户、商机、知识库直接查询。' },
-                { dot: <ClockCircleOutlined />, children: '写工具：先生成确认单，不直接落库。' },
+                { dot: <ToolOutlined />, children: '读工具：客户、商机、知识库直接查询事实。' },
+                { dot: <ClockCircleOutlined />, children: '写工具：只生成确认单，不直接落库。' },
                 { dot: <CheckCircleOutlined />, children: '确认后：写入 CRM，并进入运行审计。' }
               ]}
             />
@@ -422,8 +659,16 @@ export default function AgentChat() {
           title="Agent 对话"
           extra={
             <Space>
-              <Link to="/customers"><Button size="small" icon={<TeamOutlined />}>客户</Button></Link>
-              <Link to="/leads"><Button size="small" icon={<ThunderboltOutlined />}>商机</Button></Link>
+              <Link to="/customers">
+                <Button size="small" icon={<TeamOutlined />}>
+                  客户
+                </Button>
+              </Link>
+              <Link to="/leads">
+                <Button size="small" icon={<ThunderboltOutlined />}>
+                  商机
+                </Button>
+              </Link>
             </Space>
           }
         >
@@ -439,41 +684,24 @@ export default function AgentChat() {
             </div>
             <div>
               <span>工具调用</span>
-              <strong>{toolCalls.length}</strong>
+              <strong>{executionTrace?.toolCalls.length ?? toolCalls.length}</strong>
             </div>
             <div>
               <span>待确认</span>
               <strong>{pendingConfirmations.length}</strong>
             </div>
           </div>
-          <div className={`agent-execution-rail ${loading ? 'is-running' : ''}`}>
-            {[
-              ['理解意图', '读取用户问题'],
-              ['选择工具', '匹配 Tool Schema'],
-              ['执行工具', '查询 CRM / RAG'],
-              ['输出结果', pending ? '等待确认' : '生成答复']
-            ].map(([title, desc], index) => (
-              <div className="execution-step" key={title}>
-                <span className="execution-dot">{index + 1}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <small>{desc}</small>
-                </div>
-              </div>
-            ))}
-          </div>
+
+          <ExecutionProcess trace={executionTrace} loading={loading || traceLoading} />
+
           <div className="chat-window">
             {messages.map((item, index) => (
               <div className={`message-row ${item.role}`} key={`${item.role}-${index}`}>
-                {item.role === 'agent' && (
-                  <Avatar size={28} icon={<MessageOutlined />} className="message-avatar agent" />
-                )}
+                {item.role === 'agent' && <Avatar size={28} icon={<MessageOutlined />} className="message-avatar agent" />}
                 <div className={`message ${item.role}`}>
                   <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{item.content}</Paragraph>
                 </div>
-                {item.role === 'user' && (
-                  <Avatar size={28} icon={<UserOutlined />} className="message-avatar user" />
-                )}
+                {item.role === 'user' && <Avatar size={28} icon={<UserOutlined />} className="message-avatar user" />}
               </div>
             ))}
           </div>
@@ -523,8 +751,8 @@ export default function AgentChat() {
                   <strong>{lastResponse.sessionId}</strong>
                 </div>
                 <div className="result-fact">
-                  <span>工具调用</span>
-                  <strong>{lastResponse.toolCalls.length}</strong>
+                  <span>执行路径</span>
+                  <strong>{executionTrace?.routingMode ?? '生成中'}</strong>
                 </div>
                 <div className="result-fact">
                   <span>写入保护</span>
@@ -568,7 +796,7 @@ export default function AgentChat() {
           </div>
         </Card>
 
-        <Card className="command-card agent-inspector" title="本轮证据与确认中心">
+        <Card className="command-card agent-inspector" title="执行证据与确认中心">
           <div className="pending-center">
             <Space style={{ width: '100%', justifyContent: 'space-between' }}>
               <Text strong>待确认写入</Text>
@@ -583,14 +811,18 @@ export default function AgentChat() {
                     <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
                       <div>
                         <Text strong>{item.actionSummary}</Text>
-                        <div className="metric-label">{item.actionType} · Run #{item.runId}</div>
+                        <div className="metric-label">
+                          {item.actionType} · Run #{item.runId}
+                        </div>
                       </div>
                       <Tag color="orange">{item.status}</Tag>
                     </Space>
                     <PayloadSummary payload={item.payloadJson} />
                     <Space>
-                      <Button size="small" loading={loading} onClick={() => rejectFromCenter(item.id)}>拒绝</Button>
-                      <Button size="small" type="primary" loading={loading} onClick={() => confirmFromCenter(item.id)}>
+                      <Button size="small" loading={loading} onClick={() => rejectFromCenter(item)}>
+                        拒绝
+                      </Button>
+                      <Button size="small" type="primary" loading={loading} onClick={() => confirmFromCenter(item)}>
                         确认
                       </Button>
                     </Space>
@@ -602,34 +834,14 @@ export default function AgentChat() {
 
           <div className="inspector-divider" />
 
-          {toolCalls.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="发送问题后显示工具调用、确认单和审计入口" />
-          ) : (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              {toolCalls.map((tool) => (
-                <div className="tool-call-item" key={tool.id}>
-                  <Space>
-                    <ToolOutlined />
-                    <Text strong>{tool.toolName}</Text>
-                  </Space>
-                  <Space size={6} wrap>
-                    <Tag color={toolColor(tool)}>{tool.toolType}</Tag>
-                    <Tag>{tool.status}</Tag>
-                    {tool.requiresConfirmation && <Tag color="orange">confirmation</Tag>}
-                  </Space>
-                </div>
-              ))}
-            </Space>
-          )}
-          <Descriptions column={1} size="small" bordered className="inspector-meta">
-            <Descriptions.Item label="Session">{sessionId ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="确认单">{pending?.confirmationId ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="主流程">工具路由 + 规则兜底</Descriptions.Item>
-          </Descriptions>
+          <TraceEvidence trace={executionTrace} />
+
           <Link to="/runs">
-            <Button block icon={<FileSearchOutlined />} style={{ marginTop: 12 }}>
-              查看运行审计
-            </Button>
+            <Tooltip title="进入系统管理视角查看所有 Agent Run、Tool Call 和 JSON 输入输出">
+              <Button block icon={<FileSearchOutlined />} style={{ marginTop: 12 }}>
+                查看运行审计
+              </Button>
+            </Tooltip>
           </Link>
         </Card>
       </div>

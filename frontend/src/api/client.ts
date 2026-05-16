@@ -321,6 +321,33 @@ export interface AgentToolCall {
   completedAt?: string;
 }
 
+export interface AgentExecutionStep {
+  key: string;
+  title: string;
+  description: string;
+  status: string;
+  category: string;
+  toolName?: string;
+  toolType?: string;
+  latencyMs?: number;
+  confirmationId?: number;
+  confirmationStatus?: string;
+  occurredAt?: string;
+  inputJson?: string;
+  outputJson?: string;
+}
+
+export interface AgentExecutionTrace {
+  run: AgentRun;
+  toolCalls: AgentToolCall[];
+  confirmations: AgentConfirmation[];
+  steps: AgentExecutionStep[];
+  routingMode: string;
+  currentStage: string;
+  safetyBoundary: string;
+  requiresConfirmation: boolean;
+}
+
 export interface AgentConfirmation {
   id: number;
   runId: number;
@@ -574,6 +601,11 @@ export async function fetchAgentRuns() {
 
 export async function fetchAgentRunToolCalls(runId: number) {
   const response = await apiClient.get<ApiResponse<AgentToolCall[]>>(`/agent/runs/${runId}/tool-calls`);
+  return response.data.data;
+}
+
+export async function fetchAgentExecutionTrace(runId: number) {
+  const response = await apiClient.get<ApiResponse<AgentExecutionTrace>>(`/agent/runs/${runId}/execution`);
   return response.data.data;
 }
 

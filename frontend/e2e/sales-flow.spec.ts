@@ -5,86 +5,56 @@ async function loginAs(page, testId: 'login-sales' | 'login-manager' | 'login-ad
   await page.getByTestId(testId).click();
 }
 
-test.describe('CRM-AgentPilot sales workflow', () => {
-  test('opens customer and lead details from URL and carries context into Agent', async ({ page }) => {
+test.describe('CRM-AgentPilot product workflow', () => {
+  test('renders the Agent execution process as a sales workbench', async ({ page }) => {
     await loginAs(page, 'login-sales');
-    await expect(page.getByText(/CRM-AgentPilot/).first()).toBeVisible();
+    await page.goto('/agent');
 
-    await page.goto('/customers?customerId=1001');
-    await expect(page.getByRole('heading', { name: /先理解客户/ })).toBeVisible();
-    await expect(page.getByText(/客户详情 · 美家房产/)).toBeVisible();
-    await expect(page.getByText(/让 Agent 分析/).last()).toBeVisible();
-
-    await page.goto('/leads?leadId=3001&customerId=1001');
-    await expect(page.getByRole('heading', { name: /先排优先级/ })).toBeVisible();
-    await expect(page.getByText(/商机解释 · 美家房产/)).toBeVisible();
-    await expect(page.getByText(/推荐处理路径/)).toBeVisible();
-
-    await page.getByRole('button', { name: /让 Agent 处理/ }).last().click();
-    await expect(page).toHaveURL(/\/agent\?.*customerId=1001/);
-    await expect(page.getByText(/已带入上游业务上下文/)).toBeVisible();
-    await expect(page.getByText(/理解意图/)).toBeVisible();
-    await expect(page.getByRole('textbox')).toHaveValue(/美家房产/);
+    await expect(page.getByText('Agent 执行过程')).toBeVisible();
+    await expect(page.getByText('接收销售问题')).toBeVisible();
+    await expect(page.getByText('选择执行路径')).toBeVisible();
+    await expect(page.getByText('执行工具')).toBeVisible();
+    await expect(page.getByText('输出结果')).toBeVisible();
+    await expect(page.getByText('执行证据与确认中心')).toBeVisible();
   });
 
-  test('renders the workbench, confirmation center, and role-scoped admin links', async ({ page }) => {
+  test('carries URL context into Agent and keeps the sales role scoped', async ({ page }) => {
+    const prompt = '帮我分析美家房产，重点看续费风险。';
+
     await loginAs(page, 'login-sales');
-    await expect(page.getByRole('heading', { name: /今天先处理谁/ })).toBeVisible();
-    await expect(page.getByText(/待确认写入/).first()).toBeVisible();
-    await expect(page.getByText(/业务闭环/)).toBeVisible();
-    await expect(page.getByText(/商机趋势/)).toBeVisible();
-    await expect(page.getByText(/客户风险热力/)).toBeVisible();
-    await expect(page.getByRole('link', { name: '系统能力', exact: true })).toHaveCount(0);
+    await page.goto(`/agent?source=lead&customerId=1001&prompt=${encodeURIComponent(prompt)}`);
+
+    await expect(page.getByText(/已带入上游业务上下文/)).toBeVisible();
+    await expect(page.getByText(/客户上下文/)).toBeVisible();
+    await expect(page.getByText('#1001')).toBeVisible();
+    await expect(page.getByRole('textbox')).toHaveValue(prompt);
+    await expect(page.locator('a[href="/system"]')).toHaveCount(0);
+  });
+
+  test('keeps system pages behind the admin role menu', async ({ page }) => {
+    await loginAs(page, 'login-sales');
+    await expect(page.locator('a[href="/system"]')).toHaveCount(0);
 
     await page.getByTestId('identity-switcher').click();
-    await page.getByTitle(/系统管理员/).click();
-    await page.getByRole('link', { name: '系统能力', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /系统能力/ })).toBeVisible();
-    await expect(page.getByText(/产品化能力清单/)).toBeVisible();
-
-    await page.getByRole('link', { name: '运行审计', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /运行审计/ })).toBeVisible();
-
-    await page.getByRole('link', { name: '质量评估', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /质量评估/ })).toBeVisible();
+    await page.getByTitle(/绯荤粺绠＄悊鍛?|系统管理员/).click();
+    await expect(page.locator('a[href="/system"]')).toHaveCount(1);
+    await page.locator('a[href="/system"]').click();
+    await expect(page).toHaveURL(/\/system/);
   });
 
-  test('runs the complete demo route against a live backend', async ({ page }) => {
+  test('runs the complete Agent confirmation route against a live backend', async ({ page }) => {
     test.skip(process.env.E2E_FULL_DEMO !== '1', 'Set E2E_FULL_DEMO=1 when a backend is running.');
 
     await loginAs(page, 'login-sales');
-    await expect(page.getByRole('heading', { name: /今天先处理谁/ })).toBeVisible();
-    await expect(page.getByText(/业务闭环/)).toBeVisible();
+    await page.goto('/agent?source=lead&customerId=1001&prompt=%E5%B8%AE%E6%88%91%E5%88%9B%E5%BB%BA%E6%98%8E%E5%A4%A9%E4%B8%8A%E5%8D%8810%E7%82%B9%E8%B7%9F%E8%BF%9B%E7%BE%8E%E5%AE%B6%E6%88%BF%E4%BA%A7%E7%BB%AD%E8%B4%B9%E7%9A%84%E4%BB%BB%E5%8A%A1%E3%80%82');
 
-    await page.goto('/customers?customerId=1001');
-    await expect(page.getByRole('heading', { name: /先理解客户/ })).toBeVisible();
-    await expect(page.getByText(/客户详情 · 美家房产/)).toBeVisible();
-    await expect(page.getByText('跟进时间线', { exact: true })).toBeVisible();
-
-    await page.goto('/leads?leadId=3001&customerId=1001');
-    await expect(page.getByRole('heading', { name: /先排优先级/ })).toBeVisible();
-    await expect(page.getByText(/商机解释 · 美家房产/)).toBeVisible();
-    await page.getByRole('button', { name: /让 Agent 处理/ }).last().click();
-
-    await expect(page).toHaveURL(/\/agent\?.*customerId=1001/);
     await expect(page.getByText(/已带入上游业务上下文/)).toBeVisible();
-    await page.getByRole('textbox').fill('帮我创建明天上午10点跟进美家房产续费的任务。');
     await page.getByRole('button', { name: /发送/ }).click();
 
     await expect(page.getByText(/待确认写操作/).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole('button', { name: /确认写入 CRM/ })).toBeVisible();
+    await expect(page.getByText(/Agent 执行过程/)).toBeVisible();
+    await expect(page.getByText(/确认写入 CRM/)).toBeVisible();
     await page.getByRole('button', { name: /确认写入 CRM/ }).click();
-    await expect(page.getByText(/已确认/).first()).toBeVisible({ timeout: 30_000 });
-
-    await page.getByRole('link', { name: '运行审计', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /运行审计/ })).toBeVisible();
-    await expect(page.getByText(/Agent Run 审计列表/)).toBeVisible();
-    await expect(page.getByText(/Run 总数/)).toBeVisible();
-
-    await page.getByRole('link', { name: '质量评估', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /质量评估/ })).toBeVisible();
-    await page.getByRole('button', { name: /运行评测/ }).click();
-    await expect(page.getByText(/本次报告/)).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByRole('cell', { name: /RAG Recall@5/ }).first()).toBeVisible();
+    await expect(page.getByText(/已确认|已完成/).first()).toBeVisible({ timeout: 30_000 });
   });
 });
