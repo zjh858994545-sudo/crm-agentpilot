@@ -132,6 +132,44 @@ export interface SecurityUser {
   permissions: string[];
 }
 
+export interface RetentionCategoryStatus {
+  key: string;
+  name: string;
+  retentionDays: number;
+  cutoffAt: string;
+  eligibleRows: number;
+  protectedRows: number;
+  protectionRule: string;
+}
+
+export interface RetentionStatus {
+  enabled: boolean;
+  scheduledCleanupEnabled: boolean;
+  cleanupCron: string;
+  maxDeleteRowsPerRun: number;
+  checkedAt: string;
+  totalEligibleRows: number;
+  categories: RetentionCategoryStatus[];
+}
+
+export interface RetentionCategoryResult {
+  key: string;
+  name: string;
+  retentionDays: number;
+  cutoffAt: string;
+  eligibleRows: number;
+  deletedRows: number;
+  protectedRows: number;
+}
+
+export interface RetentionCleanupResult {
+  dryRun: boolean;
+  executedAt: string;
+  totalEligibleRows: number;
+  totalDeletedRows: number;
+  categories: RetentionCategoryResult[];
+}
+
 export interface DashboardSummary {
   highLeadCount: number;
   highLeadAmount: number;
@@ -537,6 +575,16 @@ export async function fetchSecurityStatus() {
 
 export async function fetchSecurityUsers() {
   const response = await apiClient.get<ApiResponse<SecurityUser[]>>('/security/users');
+  return response.data.data;
+}
+
+export async function fetchRetentionStatus() {
+  const response = await apiClient.get<ApiResponse<RetentionStatus>>('/operations/retention');
+  return response.data.data;
+}
+
+export async function runRetentionCleanup(dryRun = true) {
+  const response = await apiClient.post<ApiResponse<RetentionCleanupResult>>('/operations/retention/run', { dryRun });
   return response.data.data;
 }
 

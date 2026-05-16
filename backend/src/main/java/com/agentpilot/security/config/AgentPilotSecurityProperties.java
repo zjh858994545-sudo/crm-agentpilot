@@ -22,7 +22,9 @@ public class AgentPilotSecurityProperties {
             "product:read",
             "evaluation:run",
             "events:read",
-            "events:write"
+            "events:write",
+            "ops:read",
+            "ops:write"
     ));
 
     public boolean strict() {

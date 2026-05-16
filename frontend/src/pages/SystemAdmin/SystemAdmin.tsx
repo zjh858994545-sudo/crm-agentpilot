@@ -1,6 +1,7 @@
 import {
   ApiOutlined,
   AuditOutlined,
+  ClearOutlined,
   ClusterOutlined,
   DatabaseOutlined,
   LockOutlined,
@@ -8,7 +9,7 @@ import {
   SafetyCertificateOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Statistic, Table, Tag, Timeline, Typography, message as antdMessage } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Empty, Popconfirm, Row, Space, Statistic, Table, Tag, Timeline, Typography, message as antdMessage } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import {
   EventStatus,
@@ -16,6 +17,7 @@ import {
   ModelStatus,
   OpenAiToolDefinition,
   OutboxEvent,
+  RetentionStatus,
   SecurityStatus,
   SecurityUser,
   fetchDeadLetters,
@@ -23,9 +25,11 @@ import {
   fetchKnowledgeStatus,
   fetchModelStatus,
   fetchOpenAiTools,
+  fetchRetentionStatus,
   fetchSecurityStatus,
   fetchSecurityUsers,
   rebuildKnowledgeVectors,
+  runRetentionCleanup,
   retryDeadLetter
 } from '../../api/client';
 
@@ -73,6 +77,7 @@ export default function SystemAdmin() {
   const [tools, setTools] = useState<OpenAiToolDefinition[]>([]);
   const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
   const [deadLetters, setDeadLetters] = useState<OutboxEvent[]>([]);
+  const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -86,7 +91,8 @@ export default function SystemAdmin() {
       fetchModelStatus(),
       fetchOpenAiTools(),
       fetchSecurityUsers(),
-      fetchDeadLetters()
+      fetchDeadLetters(),
+      fetchRetentionStatus()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -95,6 +101,7 @@ export default function SystemAdmin() {
     if (results[4].status === 'fulfilled') setTools(results[4].value);
     if (results[5].status === 'fulfilled') setSecurityUsers(results[5].value);
     if (results[6].status === 'fulfilled') setDeadLetters(results[6].value);
+    if (results[7].status === 'fulfilled') setRetentionStatus(results[7].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分系统状态读取失败，请确认后端已经启动并且当前 token 具备系统管理权限。');
     }
@@ -135,6 +142,24 @@ export default function SystemAdmin() {
     }
   };
 
+  const runRetention = async (dryRun: boolean) => {
+    setLoading(true);
+    try {
+      const result = await runRetentionCleanup(dryRun);
+      if (dryRun) {
+        antdMessage.info(`保留策略预演完成，当前可清理 ${result.totalEligibleRows} 行数据。`);
+      } else {
+        antdMessage.success(`历史数据清理完成，已删除 ${result.totalDeletedRows} 行。`);
+      }
+      await load();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '请检查保留策略开关、权限和后端日志。';
+      antdMessage.error(`数据生命周期操作失败：${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const writeToolCount = useMemo(
     () => tools.filter((tool) => ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(tool.function.name)).length,
     [tools]
@@ -144,6 +169,7 @@ export default function SystemAdmin() {
     ? Math.round(((knowledgeStatus.vectorizedChunkCount ?? 0) / knowledgeStatus.chunkCount) * 100)
     : 0;
   const deadLetterCount = eventStatus?.outboxDeadLetters ?? 0;
+  const retentionEligibleRows = retentionStatus?.totalEligibleRows ?? 0;
 
   const riskItems: RiskItem[] = [
     ...(securityStatus?.strictWithoutToken
@@ -170,6 +196,15 @@ export default function SystemAdmin() {
             title: '存在死信事件',
             detail: 'Outbox 有事件超过最大重试次数，需要管理员检查下游或人工重试。',
             color: 'red'
+          }
+        ]
+      : []),
+    ...(retentionStatus && !retentionStatus.enabled && retentionEligibleRows > 0
+      ? [
+          {
+            title: '历史数据达到清理阈值',
+            detail: `当前有 ${retentionEligibleRows} 行日志/审计数据超过保留周期。建议先预演，再在备份完成后开启清理。`,
+            color: 'orange'
           }
         ]
       : []),
@@ -227,6 +262,12 @@ export default function SystemAdmin() {
       value: modelStatus?.configured ? '真实模型' : '规则模式',
       color: modelStatus?.configured ? 'green' : 'orange',
       detail: modelStatus?.configured ? `${modelStatus.vendor ?? modelStatus.provider} · ${modelStatus.model}` : '可回退规则路由'
+    },
+    {
+      title: '数据生命周期',
+      value: retentionStatus?.enabled ? '已启用' : '预演模式',
+      color: retentionStatus?.enabled ? 'green' : retentionEligibleRows > 0 ? 'orange' : 'blue',
+      detail: `${retentionEligibleRows} 行可清理，单次上限 ${retentionStatus?.maxDeleteRowsPerRun ?? '-'}`
     }
   ];
 
@@ -278,6 +319,14 @@ export default function SystemAdmin() {
       owner: 'Knowledge Service',
       why: '用真实 embedding 和向量库做知识检索，回答带引用，低置信拒答。',
       operatingLine: 'RAG 不是让模型凭空答，而是先检索销售 SOP 和政策，再基于引用回答。'
+    },
+    {
+      key: 'retention',
+      name: '数据保留策略',
+      status: retentionStatus?.enabled ? 'ACTIVE' : 'DRY_RUN',
+      owner: 'Operations Retention',
+      why: '审计、检索和事件日志会持续增长，需要可预估、可回滚意识的清理机制。',
+      operatingLine: '默认只做 dry-run 预演；真正删除需要开启保留策略，并且不超过单次删除上限。'
     }
   ];
 
@@ -457,6 +506,58 @@ export default function SystemAdmin() {
         />
       </Card>
 
+      <Card
+        className="command-card"
+        title="数据生命周期治理"
+        extra={
+          <Space>
+            <Button icon={<AuditOutlined />} loading={loading} onClick={() => runRetention(true)}>
+              预演清理影响
+            </Button>
+            <Popconfirm
+              title="确认执行历史数据清理？"
+              description="请确保已经完成数据库备份。系统只清理超过保留周期且不处于待处理状态的数据。"
+              okText="确认清理"
+              cancelText="取消"
+              onConfirm={() => runRetention(false)}
+            >
+              <Button danger icon={<ClearOutlined />} loading={loading} disabled={!retentionStatus?.enabled || retentionEligibleRows <= 0}>
+                执行清理
+              </Button>
+            </Popconfirm>
+          </Space>
+        }
+      >
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} md={8}>
+            <Statistic title="超过保留周期" value={retentionEligibleRows} suffix="行" />
+            <Text type="secondary">dry-run 会先统计，不会删除数据</Text>
+          </Col>
+          <Col xs={24} md={8}>
+            <Statistic title="单次清理上限" value={retentionStatus?.maxDeleteRowsPerRun ?? 0} suffix="行" />
+            <Text type="secondary">避免一次事务锁住过多历史数据</Text>
+          </Col>
+          <Col xs={24} md={8}>
+            <Statistic title="自动清理" value={retentionStatus?.scheduledCleanupEnabled ? '已开启' : '未开启'} />
+            <Text type="secondary">{retentionStatus?.cleanupCron ?? '未配置'}</Text>
+          </Col>
+        </Row>
+        <Table
+          rowKey="key"
+          loading={loading}
+          pagination={false}
+          dataSource={retentionStatus?.categories ?? []}
+          columns={[
+            { title: '数据类别', dataIndex: 'name', width: 180 },
+            { title: '保留周期', dataIndex: 'retentionDays', width: 110, render: (value) => `${value} 天` },
+            { title: '截止时间', dataIndex: 'cutoffAt', width: 180, render: (value) => formatTime(value) },
+            { title: '可清理', dataIndex: 'eligibleRows', width: 100, render: (value) => <Tag color={value > 0 ? 'orange' : 'green'}>{value}</Tag> },
+            { title: '受保护', dataIndex: 'protectedRows', width: 100, render: (value) => <Tag>{value}</Tag> },
+            { title: '保护规则', dataIndex: 'protectionRule', render: (value) => <Text type="secondary">{value}</Text> }
+          ]}
+        />
+      </Card>
+
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>
           <Card className="command-card" title="生产运行能力">
@@ -566,6 +667,17 @@ export default function SystemAdmin() {
                   <Text strong>这些能力怎么和业务连起来？</Text>
                   <Text type="secondary">
                     RBAC 限制销售只能看自己的客户，限流保护模型和数据库，Outbox 保证 CRM 写入后的事件可重试可恢复。
+                  </Text>
+                </Space>
+              )
+            },
+            {
+              dot: <ClearOutlined />,
+              children: (
+                <Space direction="vertical" size={2}>
+                  <Text strong>为什么要做数据保留策略？</Text>
+                  <Text type="secondary">
+                    Agent 运行、工具调用、知识检索和 Outbox 会持续写日志。保留策略先预估影响，再按周期清理已结束数据，防止数据库无限增长。
                   </Text>
                 </Space>
               )

@@ -102,6 +102,7 @@ npm run build
 - Token 审计：RBAC token 最近认证时间和来源 IP，默认按用户 + IP 节流写入，避免高频请求持续写库。
 - 限流状态：Agent、模型诊断、普通 API 的限流策略。
 - Outbox 状态：待分发、分发中、失败和已发布事件数量。
+- 数据生命周期：Agent 审计、检索日志、已发布 Outbox 事件的保留周期、可清理行数和受保护行数。
 - 审计状态：Agent run、tool call、confirmation 和 trace 信息。
 - Actuator 指标：`/actuator/health` 用于探活，`/actuator/metrics` 和 `/actuator/prometheus` 需要认证后访问，可接 Prometheus/Grafana。
 
@@ -112,6 +113,7 @@ npm run build
 - 模型调用是否进入 mock fallback。
 - 向量分块是否未完成 backfill。
 - 同一用户或同一 IP 是否触发高频限流。
+- 历史审计表是否超过保留周期，清理前是否已完成数据库备份。
 
 ## 6. Outbox 事件说明
 
@@ -149,7 +151,36 @@ Agent run 和 tool call 是审计事件，使用同一张 outbox 表做 at-least
 - 联系记录、通话摘要和质检结果属于业务敏感数据，需要保留审计。
 - 多租户场景需要在 salesRepId 之外引入 tenantId。
 
-## 9. 故障处理
+## 9. 数据生命周期
+
+系统提供保留策略中心，避免审计、检索和事件日志无限增长。
+
+可配置项：
+
+```text
+AGENTPILOT_RETENTION_ENABLED=false
+AGENTPILOT_RETENTION_SCHEDULED_CLEANUP_ENABLED=false
+AGENTPILOT_RETENTION_CLEANUP_CRON=0 30 3 * * *
+AGENTPILOT_RETENTION_AGENT_AUDIT_DAYS=180
+AGENTPILOT_RETENTION_RETRIEVAL_LOG_DAYS=90
+AGENTPILOT_RETENTION_OUTBOX_PUBLISHED_DAYS=30
+AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN=10000
+```
+
+清理规则：
+
+- Agent 运行审计：只清理已完成或失败的历史 run、tool call、confirmation；存在 `PENDING` 或 `PROCESSING` 确认单的 run 会被保护。
+- 知识检索日志：只清理 `crm_retrieval_log` 历史查询日志，不删除知识库文档和分块。
+- Outbox：只清理已发布的 `PUBLISHED` 事件；`PENDING`、`FAILED`、`DISPATCHING`、`DEAD_LETTER` 会被保护。
+
+上线建议：
+
+- 默认保持 `AGENTPILOT_RETENTION_ENABLED=false`，先在系统管理页运行 dry-run 预演。
+- 确认数据库备份和恢复流程可用后，再开启真实清理。
+- 如果 dry-run 结果超过 `AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN`，先分批或提高上限，不要在高峰期一次性清理大批数据。
+- 定时清理只在 `AGENTPILOT_RETENTION_ENABLED=true` 且 `AGENTPILOT_RETENTION_SCHEDULED_CLEANUP_ENABLED=true` 时执行。
+
+## 10. 故障处理
 
 模型调用失败：
 
@@ -176,7 +207,13 @@ Outbox 堆积：
 - 检查 `AGENTPILOT_SEED_USERS_ENABLED`。
 - 使用 `/api/auth/me` 验证 token 映射出的 userId、salesRepId、roles 和 permissions。
 
-## 10. 后续商业化路线
+数据清理异常：
+
+- 先在系统管理页执行 dry-run，确认可清理行数和受保护行数。
+- 如果后端返回超过单次清理上限，先备份数据库，再调整 `AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN`。
+- 如果清理被禁用，确认 `AGENTPILOT_RETENTION_ENABLED=true`。
+
+## 11. 后续商业化路线
 
 已经具备的产品化能力：
 
@@ -198,4 +235,4 @@ Outbox 堆积：
 - Prometheus/OpenTelemetry 指标与告警。
 - 更大规模真实评测集与失败样例库。
 - 联系记录写入幂等和 confirmation 乐观锁。
-- 生产级数据备份、恢复和保留策略。
+- 生产级数据备份和恢复演练。
