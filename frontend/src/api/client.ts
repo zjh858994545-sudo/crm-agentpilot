@@ -8,6 +8,13 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
+export interface PageResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface HealthView {
   status: string;
   app: string;
@@ -652,6 +659,16 @@ export async function fetchAgentConfirmations(status = 'PENDING') {
 
 export async function fetchAgentRuns() {
   const response = await apiClient.get<ApiResponse<AgentRun[]>>('/agent/runs');
+  return response.data.data;
+}
+
+export async function fetchAgentRunPage(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  keyword?: string;
+} = {}) {
+  const response = await apiClient.get<ApiResponse<PageResponse<AgentRun>>>('/agent/runs/page', { params });
   return response.data.data;
 }
 

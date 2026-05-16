@@ -12,6 +12,7 @@ import {
   Descriptions,
   Drawer,
   Empty,
+  Input,
   Progress,
   Segmented,
   Space,
@@ -27,7 +28,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AgentRun,
   AgentToolCall,
-  fetchAgentRuns,
+  fetchAgentRunPage,
   fetchAgentRunToolCalls,
   sendAgentMessage
 } from '../../api/client';
@@ -72,13 +73,12 @@ export default function AgentRuns() {
   const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
   const [toolCalls, setToolCalls] = useState<AgentToolCall[]>([]);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(8);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const filteredRuns = useMemo(
-    () => runs.filter((run) => statusFilter === 'ALL' || run.status === statusFilter),
-    [runs, statusFilter]
-  );
 
   const metrics = useMemo(() => {
     const success = runs.filter((run) => run.status === 'SUCCESS').length;
@@ -86,15 +86,23 @@ export default function AgentRuns() {
     const avgLatency = runs.length
       ? runs.reduce((sum, run) => sum + Number(run.latencyMs || 0), 0) / runs.length
       : 0;
-    return { total: runs.length, success, needConfirm, avgLatency };
-  }, [runs]);
+    return { total, success, needConfirm, avgLatency };
+  }, [runs, total]);
 
-  const loadRuns = async () => {
+  const loadRuns = async (nextPage = page, nextPageSize = pageSize, nextStatus = statusFilter, nextKeyword = keyword) => {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchAgentRuns();
-      setRuns(data);
+      const data = await fetchAgentRunPage({
+        page: nextPage,
+        pageSize: nextPageSize,
+        status: nextStatus,
+        keyword: nextKeyword.trim()
+      });
+      setRuns(data.items);
+      setTotal(data.total);
+      setPage(data.page);
+      setPageSize(data.pageSize);
     } catch {
       setError('读取 Agent 运行记录失败，请确认后端服务已经启动。');
     } finally {
@@ -126,7 +134,7 @@ export default function AgentRuns() {
     setError('');
     try {
       await sendAgentMessage('今天我应该优先跟进哪些客户？请给出推荐理由和下一步动作。');
-      await loadRuns();
+      await loadRuns(1);
       message.success('已生成一条运行记录');
     } catch {
       setError('生成运行记录失败，请确认后端服务已经启动。');
@@ -143,12 +151,24 @@ export default function AgentRuns() {
         <Button icon={<ThunderboltOutlined />} loading={loading} onClick={createSampleRun}>
           生成运行记录
         </Button>
-        <Button icon={<ReloadOutlined />} loading={loading} onClick={loadRuns}>
+        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadRuns()}>
           刷新
         </Button>
+        <Input.Search
+          allowClear
+          value={keyword}
+          placeholder="搜索用户输入、输出或意图"
+          style={{ width: 280 }}
+          onChange={(event) => setKeyword(event.target.value)}
+          onSearch={(value) => loadRuns(1, pageSize, statusFilter, value)}
+        />
         <Segmented
           value={statusFilter}
-          onChange={(value) => setStatusFilter(String(value))}
+          onChange={(value) => {
+            const nextStatus = String(value);
+            setStatusFilter(nextStatus);
+            loadRuns(1, pageSize, nextStatus, keyword);
+          }}
           options={[
             { label: '全部', value: 'ALL' },
             { label: '成功', value: 'SUCCESS' },
@@ -160,20 +180,20 @@ export default function AgentRuns() {
 
       <div className="audit-metrics">
         <Card className="metric-card">
-          <Statistic title="Run 总数" value={metrics.total} prefix={<DeploymentUnitOutlined />} />
-          <Text className="metric-label">Agent 对话运行记录</Text>
+          <Statistic title="匹配记录" value={metrics.total} prefix={<DeploymentUnitOutlined />} />
+          <Text className="metric-label">按当前筛选条件统计</Text>
         </Card>
         <Card className="metric-card">
-          <Statistic title="成功运行" value={metrics.success} />
-          <Text className="metric-label">状态 SUCCESS</Text>
+          <Statistic title="本页成功" value={metrics.success} />
+          <Text className="metric-label">当前页 SUCCESS</Text>
         </Card>
         <Card className="metric-card">
-          <Statistic title="待确认" value={metrics.needConfirm} />
-          <Text className="metric-label">写操作 confirmation</Text>
+          <Statistic title="本页待确认" value={metrics.needConfirm} />
+          <Text className="metric-label">当前页写操作</Text>
         </Card>
         <Card className="metric-card">
-          <Statistic title="平均耗时" value={Math.round(metrics.avgLatency)} suffix="ms" prefix={<ClockCircleOutlined />} />
-          <Text className="metric-label">Run latency</Text>
+          <Statistic title="本页平均耗时" value={Math.round(metrics.avgLatency)} suffix="ms" prefix={<ClockCircleOutlined />} />
+          <Text className="metric-label">当前页 Run latency</Text>
         </Card>
       </div>
 
@@ -181,8 +201,15 @@ export default function AgentRuns() {
         <Table
           rowKey="id"
           loading={loading}
-          dataSource={filteredRuns}
-          pagination={{ pageSize: 8 }}
+          dataSource={runs}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            showTotal: (value) => `共 ${value} 条`,
+            onChange: (nextPage, nextPageSize) => loadRuns(nextPage, nextPageSize, statusFilter, keyword)
+          }}
           onRow={(record) => ({ onClick: () => openRun(record) })}
           rowClassName="clickable-table-row"
           columns={[

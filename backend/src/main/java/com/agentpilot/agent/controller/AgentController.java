@@ -15,6 +15,7 @@ import com.agentpilot.agent.vo.AgentChatResponse;
 import com.agentpilot.agent.vo.AgentExecutionTrace;
 import com.agentpilot.agent.vo.ConfirmationDecisionRequest;
 import com.agentpilot.common.response.ApiResponse;
+import com.agentpilot.common.response.PageResponse;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.security.CurrentUser;
@@ -149,6 +150,24 @@ public class AgentController {
                 .orderByDesc(AgentRun::getId)));
     }
 
+    @GetMapping("/runs/page")
+    public ApiResponse<PageResponse<AgentRun>> runPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "") String keyword
+    ) {
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.max(1, Math.min(pageSize, 100));
+        long offset = (long) (safePage - 1) * safePageSize;
+        LambdaQueryWrapper<AgentRun> countWrapper = runQuery(status, keyword);
+        long total = runService.count(countWrapper);
+        List<AgentRun> items = runService.list(runQuery(status, keyword)
+                .orderByDesc(AgentRun::getId)
+                .last("limit " + safePageSize + " offset " + offset));
+        return ApiResponse.ok(new PageResponse<>(items, total, safePage, safePageSize));
+    }
+
     @GetMapping("/runs/{runId}/tool-calls")
     public ApiResponse<List<AgentToolCall>> toolCalls(@PathVariable Long runId) {
         requireRunVisible(runId);
@@ -169,6 +188,25 @@ public class AgentController {
                 .stream()
                 .map(AgentRun::getId)
                 .toList();
+    }
+
+    private LambdaQueryWrapper<AgentRun> runQuery(String status, String keyword) {
+        LambdaQueryWrapper<AgentRun> wrapper = new LambdaQueryWrapper<AgentRun>()
+                .eq(AgentRun::getUserId, CurrentUser.userId())
+                .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId());
+        if (status != null && !"ALL".equalsIgnoreCase(status)) {
+            wrapper.eq(AgentRun::getStatus, status.toUpperCase());
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String value = keyword.trim();
+            wrapper.and(item -> item
+                    .like(AgentRun::getUserInput, value)
+                    .or()
+                    .like(AgentRun::getAgentOutput, value)
+                    .or()
+                    .like(AgentRun::getIntent, value));
+        }
+        return wrapper;
     }
 
     private void requireRunVisible(Long runId) {
