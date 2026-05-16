@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,9 +30,11 @@ class HealthControllerTest {
 
     @Test
     void healthReturnsApplicationStatus() throws Exception {
-        mockMvc.perform(get("/api/health"))
+        mockMvc.perform(get("/api/health").header("X-Trace-Id", "test-trace-001"))
                 .andExpect(status().isOk())
+                .andExpect(header().string("X-Trace-Id", "test-trace-001"))
                 .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.traceId", is("test-trace-001")))
                 .andExpect(jsonPath("$.data.status", is("UP")))
                 .andExpect(jsonPath("$.data.app", is("CRM-AgentPilot")))
                 .andExpect(jsonPath("$.data.modelProvider", is("mock")));

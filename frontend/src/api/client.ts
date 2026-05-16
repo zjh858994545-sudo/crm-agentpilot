@@ -6,6 +6,7 @@ export interface ApiResponse<T> {
   message: string;
   data: T;
   timestamp: string;
+  traceId?: string;
 }
 
 export interface PageResponse<T> {

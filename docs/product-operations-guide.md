@@ -107,6 +107,7 @@ npm run build
 - 数据生命周期：Agent 审计、检索日志、已发布 Outbox 事件的保留周期、可清理行数和受保护行数。
 - 审计状态：Agent run、tool call、confirmation 和 trace 信息。
 - Actuator 指标：`/actuator/health` 用于探活，`/actuator/metrics` 和 `/actuator/prometheus` 需要认证后访问，可接 Prometheus/Grafana。
+- Trace 排障：所有 API 响应头和统一 JSON 响应体都会返回 `X-Trace-Id` / `traceId`，前端截图可以直接对应后端日志。
 
 业务级 Prometheus 指标：
 
