@@ -44,7 +44,7 @@ agentpilot:
   app:
     name: CRM-AgentPilot
     version: 0.1.0
-    phase: demo-ready
+    phase: ${AGENTPILOT_APP_PHASE:ready}
     model-provider: ${AGENT_MODEL_PROVIDER:mock}
   model:
     provider: ${AGENT_MODEL_PROVIDER:mock}
@@ -73,6 +73,7 @@ agentpilot:
     demo-sales-rep-id: ${AGENTPILOT_DEMO_SALES_REP_ID:1}
   rate-limit:
     enabled: ${AGENTPILOT_RATE_LIMIT_ENABLED:true}
+    backend: ${AGENTPILOT_RATE_LIMIT_BACKEND:auto}
     default-capacity: ${AGENTPILOT_RATE_LIMIT_DEFAULT_CAPACITY:300}
     default-refill-per-minute: ${AGENTPILOT_RATE_LIMIT_DEFAULT_REFILL_PER_MINUTE:300}
     agent-capacity: ${AGENTPILOT_RATE_LIMIT_AGENT_CAPACITY:60}

@@ -7,6 +7,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
@@ -17,21 +19,32 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class ApiRateLimitFilter extends OncePerRequestFilter {
     private static final long ONE_MINUTE_NANOS = Duration.ofMinutes(1).toNanos();
     private static final long STALE_BUCKET_NANOS = Duration.ofMinutes(30).toNanos();
+    private static final long REDIS_RETRY_NANOS = Duration.ofSeconds(30).toNanos();
 
     private final ApiRateLimitProperties properties;
     private final ObjectMapper objectMapper;
+    private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
     private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+    private volatile long lastRedisFailureNanos = 0L;
 
-    public ApiRateLimitFilter(ApiRateLimitProperties properties, ObjectMapper objectMapper) {
+    public ApiRateLimitFilter(
+            ApiRateLimitProperties properties,
+            ObjectMapper objectMapper,
+            ObjectProvider<StringRedisTemplate> redisTemplateProvider
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.redisTemplateProvider = redisTemplateProvider;
     }
 
     @Override
@@ -47,12 +60,49 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
 
         LimitRule rule = ruleFor(request.getRequestURI());
         String key = rule.name() + ":" + callerKey(request);
-        TokenBucket bucket = buckets.computeIfAbsent(key, ignored -> new TokenBucket(rule.capacity(), rule.refillPerMinute()));
-        if (!bucket.tryConsume()) {
+        if (!tryConsume(rule, key)) {
             writeRateLimited(response, rule.name());
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    private boolean tryConsume(LimitRule rule, String key) {
+        Optional<Boolean> redisDecision = tryConsumeRedis(rule, key);
+        if (redisDecision.isPresent()) {
+            return redisDecision.get();
+        }
+        TokenBucket bucket = buckets.computeIfAbsent(key, ignored -> new TokenBucket(rule.capacity(), rule.refillPerMinute()));
+        return bucket.tryConsume();
+    }
+
+    private Optional<Boolean> tryConsumeRedis(LimitRule rule, String key) {
+        if ("memory".equalsIgnoreCase(properties.getBackend())) {
+            return Optional.empty();
+        }
+        long nowNanos = System.nanoTime();
+        if (!"redis".equalsIgnoreCase(properties.getBackend()) && nowNanos - lastRedisFailureNanos < REDIS_RETRY_NANOS) {
+            return Optional.empty();
+        }
+        try {
+            StringRedisTemplate redisTemplate = redisTemplateProvider.getIfAvailable();
+            if (redisTemplate == null) {
+                return Optional.empty();
+            }
+            long currentMinute = Instant.now().getEpochSecond() / 60;
+            String redisKey = "agentpilot:rate-limit:" + key + ":" + currentMinute;
+            Long count = redisTemplate.opsForValue().increment(redisKey);
+            if (count != null && count == 1L) {
+                redisTemplate.expire(redisKey, 70, TimeUnit.SECONDS);
+            }
+            return Optional.of(count == null || count <= rule.capacity());
+        } catch (RuntimeException ex) {
+            lastRedisFailureNanos = nowNanos;
+            if ("redis".equalsIgnoreCase(properties.getBackend())) {
+                throw ex;
+            }
+            return Optional.empty();
+        }
     }
 
     private boolean shouldSkip(HttpServletRequest request) {

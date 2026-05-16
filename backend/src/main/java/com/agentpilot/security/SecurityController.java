@@ -49,6 +49,7 @@ public class SecurityController {
         body.put("strictWithoutToken", properties.strict() && !tokenConfigured && rbacUserCount == 0);
         body.put("rateLimit", Map.of(
                 "enabled", rateLimitProperties.isEnabled(),
+                "backend", rateLimitProperties.getBackend(),
                 "defaultCapacity", rateLimitProperties.getDefaultCapacity(),
                 "defaultRefillPerMinute", rateLimitProperties.getDefaultRefillPerMinute(),
                 "agentCapacity", rateLimitProperties.getAgentCapacity(),

@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "agentpilot.rate-limit")
 public class ApiRateLimitProperties {
     private boolean enabled = true;
+    private String backend = "auto";
     private int defaultCapacity = 300;
     private int defaultRefillPerMinute = 300;
     private int agentCapacity = 60;
@@ -18,6 +19,14 @@ public class ApiRateLimitProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public String getBackend() {
+        return backend;
+    }
+
+    public void setBackend(String backend) {
+        this.backend = backend;
     }
 
     public int getDefaultCapacity() {

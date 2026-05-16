@@ -74,6 +74,7 @@ export interface SecurityStatus {
   strictWithoutToken: boolean;
   rateLimit?: {
     enabled: boolean;
+    backend?: string;
     defaultCapacity: number;
     defaultRefillPerMinute: number;
     agentCapacity: number;

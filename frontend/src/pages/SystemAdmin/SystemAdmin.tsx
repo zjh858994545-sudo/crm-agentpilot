@@ -158,7 +158,7 @@ export default function SystemAdmin() {
       value: securityStatus?.rateLimit?.enabled ? '限流生效' : '未开启',
       color: securityStatus?.rateLimit?.enabled ? 'green' : 'orange',
       detail: securityStatus?.rateLimit?.enabled
-        ? `AI 助手 ${securityStatus.rateLimit.agentCapacity}/min，模型 ${securityStatus.rateLimit.modelCapacity}/min`
+        ? `${securityStatus.rateLimit.backend ?? 'auto'} · AI 助手 ${securityStatus.rateLimit.agentCapacity}/min，模型 ${securityStatus.rateLimit.modelCapacity}/min`
         : '生产环境建议开启'
     },
     {
@@ -186,9 +186,9 @@ export default function SystemAdmin() {
       key: 'rate-limit',
       name: '接口限流',
       status: securityStatus?.rateLimit?.enabled ? 'ACTIVE' : 'DISABLED',
-      owner: 'Spring Security Filter',
+      owner: `Spring Security Filter · ${securityStatus?.rateLimit?.backend ?? 'auto'}`,
       why: '防止 Agent Chat 和模型接口被刷爆，控制模型调用费用和数据库压力。',
-      operatingLine: '普通 API、Agent Chat、Model Chat 分成不同 token bucket，超限返回 429。'
+      operatingLine: '优先使用 Redis 做分布式限流；Redis 不可用时回退本机 token bucket，超限返回 429。'
     },
     {
       key: 'rbac',
@@ -362,6 +362,9 @@ export default function SystemAdmin() {
                 </Descriptions.Item>
                 <Descriptions.Item label="Agent Chat">
                   {securityStatus?.rateLimit?.agentCapacity ?? '-'} / min
+                </Descriptions.Item>
+                <Descriptions.Item label="限流后端">
+                  {securityStatus?.rateLimit?.backend ?? '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Model Chat">
                   {securityStatus?.rateLimit?.modelCapacity ?? '-'} / min

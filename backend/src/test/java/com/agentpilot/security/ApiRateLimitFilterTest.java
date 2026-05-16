@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
+        "agentpilot.rate-limit.backend=memory",
         "agentpilot.rate-limit.default-capacity=2",
         "agentpilot.rate-limit.default-refill-per-minute=1"
 })
