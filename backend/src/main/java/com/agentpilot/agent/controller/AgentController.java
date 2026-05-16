@@ -132,6 +132,24 @@ public class AgentController {
         return ApiResponse.ok(confirmationService.list(wrapper));
     }
 
+    @GetMapping("/confirmations/page")
+    @PreAuthorize("hasAuthority('crm:write')")
+    public ApiResponse<PageResponse<AgentConfirmation>> confirmationPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "PENDING") String status,
+            @RequestParam(defaultValue = "") String keyword
+    ) {
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.max(1, Math.min(pageSize, 100));
+        long offset = (long) (safePage - 1) * safePageSize;
+        long total = confirmationService.count(confirmationQuery(status, keyword));
+        List<AgentConfirmation> items = confirmationService.list(confirmationQuery(status, keyword)
+                .orderByDesc(AgentConfirmation::getId)
+                .last("limit " + safePageSize + " offset " + offset));
+        return ApiResponse.ok(new PageResponse<>(items, total, safePage, safePageSize));
+    }
+
     @GetMapping("/tools")
     public ApiResponse<List<AgentToolDefinition>> tools() {
         return ApiResponse.ok(toolRegistry.list());
@@ -188,6 +206,27 @@ public class AgentController {
                 .stream()
                 .map(AgentRun::getId)
                 .toList();
+    }
+
+    private LambdaQueryWrapper<AgentConfirmation> confirmationQuery(String status, String keyword) {
+        Long userId = CurrentUser.userId();
+        Long salesRepId = CurrentUser.salesRepId();
+        String visibleRunSql = "select id from crm_agent_run where user_id = " + userId + " and sales_rep_id = " + salesRepId;
+        LambdaQueryWrapper<AgentConfirmation> wrapper = new LambdaQueryWrapper<AgentConfirmation>()
+                .inSql(AgentConfirmation::getRunId, visibleRunSql);
+        if (status != null && !"ALL".equalsIgnoreCase(status)) {
+            wrapper.eq(AgentConfirmation::getStatus, status.toUpperCase());
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String value = keyword.trim();
+            wrapper.and(item -> item
+                    .like(AgentConfirmation::getActionSummary, value)
+                    .or()
+                    .like(AgentConfirmation::getActionType, value)
+                    .or()
+                    .like(AgentConfirmation::getPayloadJson, value));
+        }
+        return wrapper;
     }
 
     private LambdaQueryWrapper<AgentRun> runQuery(String status, String keyword) {

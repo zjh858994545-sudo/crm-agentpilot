@@ -16,11 +16,11 @@ async function loginAs(page: Page, role: keyof typeof tokens) {
 }
 
 async function clearPendingConfirmations(page: Page) {
-  const response = await page.request.get('/api/agent/confirmations?status=PENDING', {
+  const response = await page.request.get('/api/agent/confirmations/page?status=PENDING&page=1&pageSize=100', {
     headers: { 'X-AgentPilot-Token': tokens.sales }
   });
   const body = await response.json();
-  const confirmations = body.data ?? [];
+  const confirmations = body.data?.items ?? [];
   for (const confirmation of confirmations) {
     await page.request.post(`/api/agent/confirmations/${confirmation.id}/reject`, {
       headers: { 'X-AgentPilot-Token': tokens.sales },
@@ -95,6 +95,6 @@ test.describe('CRM-AgentPilot product workflow', () => {
     await loginAs(page, 'admin');
     await page.goto('/runs');
     await expect(page.getByText(/Agent Run 审计列表/)).toBeVisible();
-    await expect(page.getByText(/Run 总数/)).toBeVisible();
+    await expect(page.getByText(/匹配记录/)).toBeVisible();
   });
 });

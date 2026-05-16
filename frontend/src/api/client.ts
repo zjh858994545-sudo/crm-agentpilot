@@ -657,6 +657,16 @@ export async function fetchAgentConfirmations(status = 'PENDING') {
   return response.data.data;
 }
 
+export async function fetchAgentConfirmationPage(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  keyword?: string;
+} = {}) {
+  const response = await apiClient.get<ApiResponse<PageResponse<AgentConfirmation>>>('/agent/confirmations/page', { params });
+  return response.data.data;
+}
+
 export async function fetchAgentRuns() {
   const response = await apiClient.get<ApiResponse<AgentRun[]>>('/agent/runs');
   return response.data.data;

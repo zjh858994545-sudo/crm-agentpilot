@@ -141,6 +141,25 @@ class AgentOrchestratorTest {
         mockMvc.perform(get("/api/agent/confirmations").param("status", "ALL"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
+
+        mockMvc.perform(get("/api/agent/runs/page")
+                        .param("page", "1")
+                        .param("pageSize", "5")
+                        .param("status", "ALL")
+                        .param("keyword", "美家"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.items[0].userId", is(1)))
+                .andExpect(jsonPath("$.data.items[0].salesRepId", is(1)));
+
+        mockMvc.perform(get("/api/agent/confirmations/page")
+                        .param("page", "1")
+                        .param("pageSize", "5")
+                        .param("status", "ALL")
+                        .param("keyword", "美家"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.items.length()", greaterThanOrEqualTo(1)));
     }
 
     @Test

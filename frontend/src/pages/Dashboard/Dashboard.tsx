@@ -37,7 +37,7 @@ import {
   Customer,
   DashboardMetrics,
   EventStatus,
-  fetchAgentConfirmations,
+  fetchAgentConfirmationPage,
   fetchCustomers,
   fetchDashboardMetrics,
   fetchEventStatus,
@@ -126,7 +126,8 @@ export default function Dashboard() {
 
   const refreshConfirmations = async () => {
     try {
-      setPendingConfirmations(await fetchAgentConfirmations('PENDING'));
+      const data = await fetchAgentConfirmationPage({ status: 'PENDING', page: 1, pageSize: 4 });
+      setPendingConfirmations(data.items);
     } catch {
       setPendingConfirmations([]);
     }
@@ -134,7 +135,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.allSettled([
-      fetchAgentConfirmations('PENDING'),
+      fetchAgentConfirmationPage({ status: 'PENDING', page: 1, pageSize: 4 }),
       fetchCustomers(),
       fetchLeadRecommendations(20),
       fetchTasks(),
@@ -160,7 +161,7 @@ export default function Dashboard() {
         results;
 
       if (confirmationsResult.status === 'fulfilled') {
-        setPendingConfirmations(confirmationsResult.value);
+        setPendingConfirmations(confirmationsResult.value.items);
       }
       if (customersResult.status === 'fulfilled') {
         setCustomers(customersResult.value);

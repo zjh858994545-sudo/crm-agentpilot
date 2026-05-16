@@ -37,7 +37,7 @@ import {
   AgentExecutionStep,
   AgentExecutionTrace,
   confirmAgentAction,
-  fetchAgentConfirmations,
+  fetchAgentConfirmationPage,
   fetchAgentExecutionTrace,
   rejectAgentAction,
   sendAgentMessage,
@@ -431,6 +431,7 @@ export default function AgentChat() {
   const [lastResponse, setLastResponse] = useState<AgentChatResponse | null>(null);
   const [executionTrace, setExecutionTrace] = useState<AgentExecutionTrace | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<AgentConfirmation[]>([]);
+  const [pendingConfirmationTotal, setPendingConfirmationTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [traceLoading, setTraceLoading] = useState(false);
   const [error, setError] = useState('');
@@ -444,10 +445,12 @@ export default function AgentChat() {
 
   const refreshConfirmations = async () => {
     try {
-      const items = await fetchAgentConfirmations('PENDING');
-      setPendingConfirmations(items);
+      const data = await fetchAgentConfirmationPage({ status: 'PENDING', page: 1, pageSize: 4 });
+      setPendingConfirmations(data.items);
+      setPendingConfirmationTotal(data.total);
     } catch {
       setPendingConfirmations([]);
+      setPendingConfirmationTotal(0);
     }
   };
 
@@ -701,7 +704,7 @@ export default function AgentChat() {
             </div>
             <div>
               <span>待确认</span>
-              <strong>{pendingConfirmations.length}</strong>
+              <strong>{pendingConfirmationTotal}</strong>
             </div>
           </div>
 
@@ -813,13 +816,13 @@ export default function AgentChat() {
           <div className="pending-center">
             <Space style={{ width: '100%', justifyContent: 'space-between' }}>
               <Text strong>待确认写入</Text>
-              <Tag color={pendingConfirmations.length ? 'orange' : 'green'}>{pendingConfirmations.length}</Tag>
+              <Tag color={pendingConfirmationTotal ? 'orange' : 'green'}>{pendingConfirmationTotal}</Tag>
             </Space>
-            {pendingConfirmations.length === 0 ? (
+            {pendingConfirmationTotal === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待确认写操作" />
             ) : (
               <Space direction="vertical" size={10} style={{ width: '100%' }}>
-                {pendingConfirmations.slice(0, 4).map((item) => (
+                {pendingConfirmations.map((item) => (
                   <div className="pending-item" key={item.id}>
                     <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
                       <div>
