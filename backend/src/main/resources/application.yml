@@ -72,6 +72,7 @@ agentpilot:
     demo-user-id: ${AGENTPILOT_DEMO_USER_ID:1}
     demo-sales-rep-id: ${AGENTPILOT_DEMO_SALES_REP_ID:1}
     seed-users-enabled: ${AGENTPILOT_SEED_USERS_ENABLED:true}
+    token-audit-min-interval-seconds: ${AGENTPILOT_TOKEN_AUDIT_MIN_INTERVAL_SECONDS:60}
   rate-limit:
     enabled: ${AGENTPILOT_RATE_LIMIT_ENABLED:true}
     backend: ${AGENTPILOT_RATE_LIMIT_BACKEND:auto}

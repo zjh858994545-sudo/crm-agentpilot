@@ -12,6 +12,7 @@ public class AgentPilotSecurityProperties {
     private Long demoUserId = 1L;
     private Long demoSalesRepId = 1L;
     private boolean seedUsersEnabled = true;
+    private long tokenAuditMinIntervalSeconds = 60L;
     private List<String> permissions = new ArrayList<>(List.of(
             "agent:use",
             "crm:read",
@@ -66,6 +67,14 @@ public class AgentPilotSecurityProperties {
 
     public void setSeedUsersEnabled(boolean seedUsersEnabled) {
         this.seedUsersEnabled = seedUsersEnabled;
+    }
+
+    public long getTokenAuditMinIntervalSeconds() {
+        return tokenAuditMinIntervalSeconds;
+    }
+
+    public void setTokenAuditMinIntervalSeconds(long tokenAuditMinIntervalSeconds) {
+        this.tokenAuditMinIntervalSeconds = tokenAuditMinIntervalSeconds;
     }
 
     public List<String> getPermissions() {

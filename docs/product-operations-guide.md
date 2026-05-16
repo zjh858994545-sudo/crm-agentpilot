@@ -99,6 +99,7 @@ npm run build
 - 模型状态：LLM 是否配置、当前模型、模型模式。
 - 知识库状态：文档数、分块数、向量化分块数、pgvector 是否可用。
 - 安全状态：strict/permissive、RBAC token、种子账号开关。
+- Token 审计：RBAC token 最近认证时间和来源 IP，默认按用户 + IP 节流写入，避免高频请求持续写库。
 - 限流状态：Agent、模型诊断、普通 API 的限流策略。
 - Outbox 状态：待分发、分发中、失败和已发布事件数量。
 - 审计状态：Agent run、tool call、confirmation 和 trace 信息。

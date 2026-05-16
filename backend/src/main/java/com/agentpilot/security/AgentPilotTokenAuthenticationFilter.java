@@ -18,11 +18,14 @@ import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
     private final AgentPilotSecurityProperties properties;
     private final ObjectMapper objectMapper;
     private final RbacPrincipalService rbacPrincipalService;
+    private final ConcurrentMap<String, Long> tokenAuditTimestamps = new ConcurrentHashMap<>();
 
     public AgentPilotTokenAuthenticationFilter(
             AgentPilotSecurityProperties properties,
@@ -53,7 +56,10 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
         if (rbacPrincipal.isPresent()) {
             AgentPilotPrincipal principal = rbacPrincipal.get();
             authenticate(principal);
-            rbacPrincipalService.recordTokenUse(principal.userId(), clientIp(request));
+            String clientIp = clientIp(request);
+            if (shouldRecordTokenUse(principal.userId(), clientIp, System.currentTimeMillis())) {
+                rbacPrincipalService.recordTokenUse(principal.userId(), clientIp);
+            }
             filterChain.doFilter(request, response);
             return;
         }
@@ -77,6 +83,25 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
             return realIp.trim();
         }
         return request.getRemoteAddr();
+    }
+
+    boolean shouldRecordTokenUse(Long userId, String clientIp, long nowMs) {
+        if (userId == null) {
+            return false;
+        }
+        long intervalMs = Math.max(0L, properties.getTokenAuditMinIntervalSeconds()) * 1000L;
+        if (intervalMs == 0L) {
+            return true;
+        }
+        String key = userId + ":" + (clientIp == null ? "" : clientIp);
+        Long previous = tokenAuditTimestamps.putIfAbsent(key, nowMs);
+        if (previous == null) {
+            return true;
+        }
+        if (nowMs - previous < intervalMs) {
+            return false;
+        }
+        return tokenAuditTimestamps.replace(key, previous, nowMs);
     }
 
     private String resolveToken(HttpServletRequest request) {
