@@ -180,6 +180,13 @@ function isDueSoon(value?: string) {
   return Number.isFinite(due) && due <= Date.now() + 2 * 86400000;
 }
 
+function trendDateLabel(value?: string) {
+  if (!value || value === 'unknown') {
+    return '未知';
+  }
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(5, 10) : value;
+}
+
 function statusTag(value?: string) {
   const normalized = value ?? 'unknown';
   const color =
@@ -325,7 +332,7 @@ export default function Dashboard() {
   const localLeadTrend = useMemo(() => {
     const buckets = new Map<string, { date: string; amount: number; high: number; total: number }>();
     leads.forEach((lead) => {
-      const date = String(lead.expectedCloseDate ?? '').slice(5, 10) || '未知';
+      const date = String(lead.expectedCloseDate ?? '') || 'unknown';
       const item = buckets.get(date) ?? { date, amount: 0, high: 0, total: 0 };
       item.amount += Number(lead.estimatedAmount || 0);
       item.total += 1;
@@ -437,7 +444,7 @@ export default function Dashboard() {
       legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: '#65758b' } },
       xAxis: {
         type: 'category',
-        data: leadTrend.map((item) => item.date),
+        data: leadTrend.map((item) => trendDateLabel(item.date)),
         axisLine: { lineStyle: { color: '#dbe4ef' } },
         axisTick: { show: false },
         axisLabel: { color: '#65758b' }

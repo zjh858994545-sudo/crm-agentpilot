@@ -1,9 +1,5 @@
 package com.agentpilot.dashboard.service;
 
-import com.agentpilot.agent.entity.AgentConfirmation;
-import com.agentpilot.agent.entity.AgentRun;
-import com.agentpilot.agent.service.AgentConfirmationService;
-import com.agentpilot.agent.service.AgentRunService;
 import com.agentpilot.crm.entity.CrmTask;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.CrmTaskService;
@@ -16,6 +12,7 @@ import com.agentpilot.dashboard.vo.DashboardTrendPoint;
 import com.agentpilot.scoring.service.LeadScoringService;
 import com.agentpilot.scoring.vo.LeadRecommendation;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -34,28 +31,37 @@ import java.util.stream.Collectors;
 
 @Service
 public class DashboardMetricsService {
-    private static final DateTimeFormatter TREND_DATE_FORMATTER = DateTimeFormatter.ofPattern("MM-dd");
+    private static final DateTimeFormatter TREND_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final Set<String> OPEN_TASK_STATUSES = Set.of("TODO", "PENDING", "OPEN");
     private static final List<String> RISK_LEVELS = List.of("LOW", "MEDIUM", "HIGH");
+    private static final String PENDING_CONFIRMATION_COUNT_SQL = """
+            SELECT COUNT(*)
+            FROM crm_agent_confirmation confirmation
+            WHERE confirmation.status = 'PENDING'
+              AND EXISTS (
+                  SELECT 1
+                  FROM crm_agent_run agent_run
+                  WHERE agent_run.id = confirmation.run_id
+                    AND agent_run.sales_rep_id = ?
+                    AND agent_run.user_id = ?
+              )
+            """;
 
     private final LeadScoringService leadScoringService;
     private final CustomerService customerService;
     private final CrmTaskService taskService;
-    private final AgentRunService runService;
-    private final AgentConfirmationService confirmationService;
+    private final JdbcTemplate jdbcTemplate;
 
     public DashboardMetricsService(
             LeadScoringService leadScoringService,
             CustomerService customerService,
             CrmTaskService taskService,
-            AgentRunService runService,
-            AgentConfirmationService confirmationService
+            JdbcTemplate jdbcTemplate
     ) {
         this.leadScoringService = leadScoringService;
         this.customerService = customerService;
         this.taskService = taskService;
-        this.runService = runService;
-        this.confirmationService = confirmationService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public DashboardMetrics metrics(Long salesRepId, Long userId) {
@@ -135,20 +141,21 @@ public class DashboardMetricsService {
     }
 
     private DashboardRiskHeatmap riskHeatmap(List<Customer> customers) {
-        List<String> industries = customers.stream()
-                .map(customer -> blankToOther(customer.getIndustry()))
-                .distinct()
-                .limit(5)
-                .toList();
-        if (industries.isEmpty()) {
-            industries = List.of("Other");
-        }
-
         Map<String, Map<String, Long>> counts = customers.stream()
                 .collect(Collectors.groupingBy(
                         customer -> blankToOther(customer.getIndustry()),
                         Collectors.groupingBy(customer -> normalizeRiskLevel(customer.getRiskLevel()), Collectors.counting())
                 ));
+        List<String> industries = counts.entrySet().stream()
+                .sorted(Comparator.comparingLong((Map.Entry<String, Map<String, Long>> entry) -> industryTotal(entry.getValue()))
+                        .reversed()
+                        .thenComparing(Map.Entry::getKey))
+                .map(Map.Entry::getKey)
+                .limit(5)
+                .toList();
+        if (industries.isEmpty()) {
+            industries = List.of("Other");
+        }
 
         List<DashboardRiskCell> cells = new ArrayList<>();
         int max = 1;
@@ -165,19 +172,12 @@ public class DashboardMetricsService {
     }
 
     private int pendingConfirmationCount(Long salesRepId, Long userId) {
-        List<Long> runIds = runService.list(new LambdaQueryWrapper<AgentRun>()
-                        .eq(AgentRun::getSalesRepId, salesRepId)
-                        .eq(AgentRun::getUserId, userId)
-                        .select(AgentRun::getId))
-                .stream()
-                .map(AgentRun::getId)
-                .toList();
-        if (runIds.isEmpty()) {
-            return 0;
-        }
-        return (int) confirmationService.count(new LambdaQueryWrapper<AgentConfirmation>()
-                .in(AgentConfirmation::getRunId, runIds)
-                .eq(AgentConfirmation::getStatus, "PENDING"));
+        Long count = jdbcTemplate.queryForObject(PENDING_CONFIRMATION_COUNT_SQL, Long.class, salesRepId, userId);
+        return count == null ? 0 : count.intValue();
+    }
+
+    private long industryTotal(Map<String, Long> riskCounts) {
+        return riskCounts.values().stream().mapToLong(Long::longValue).sum();
     }
 
     private boolean isOpenDueSoon(CrmTask task) {

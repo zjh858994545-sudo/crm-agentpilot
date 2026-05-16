@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -87,6 +88,7 @@ class CrmCoreControllerTest {
                 .andExpect(jsonPath("$.data.summary.highLeadCount", greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.data.summary.highLeadAmount").exists())
                 .andExpect(jsonPath("$.data.leadTrend", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.data.leadTrend[0].date", matchesPattern("\\d{4}-\\d{2}-\\d{2}|unknown")))
                 .andExpect(jsonPath("$.data.riskHeatmap.industries", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.data.riskHeatmap.cells", hasSize(greaterThanOrEqualTo(1))));
     }
