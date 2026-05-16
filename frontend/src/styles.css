@@ -325,6 +325,13 @@ body {
   color: #64748b;
 }
 
+.workspace-error-card {
+  max-width: 680px;
+  margin: 80px auto;
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
 .ant-card {
   overflow: hidden;
   border-color: #dde5f0;

@@ -16,8 +16,8 @@ import {
 } from '@ant-design/icons';
 import { Alert, Badge, Button, Card, Form, Input, Layout, Menu, Space, Spin, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
-import type { ReactNode } from 'react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
+import { Component, lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { fetchCurrentUser, type AuthProfile } from './api/client';
 
@@ -73,6 +73,46 @@ const roleColors: Record<WorkspaceRole, string> = {
   manager: 'purple',
   admin: 'geekblue'
 };
+
+type WorkspaceErrorBoundaryProps = {
+  children: ReactNode;
+};
+
+type WorkspaceErrorBoundaryState = {
+  hasError: boolean;
+};
+
+class WorkspaceErrorBoundary extends Component<WorkspaceErrorBoundaryProps, WorkspaceErrorBoundaryState> {
+  state: WorkspaceErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): WorkspaceErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Workspace page crashed', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card className="workspace-error-card">
+          <Space direction="vertical" size={12}>
+            <Tag color="red">页面异常</Tag>
+            <Title level={4}>当前工作区加载失败</Title>
+            <Paragraph type="secondary">
+              页面组件出现异常，但登录状态和后端服务仍保留。可以刷新页面重新进入，或切换到其他菜单继续处理业务。
+            </Paragraph>
+            <Button type="primary" onClick={() => window.location.reload()}>
+              刷新页面
+            </Button>
+          </Space>
+        </Card>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const pageMeta: Record<string, { title: string; subtitle: string; role: string }> = {
   '/': {
@@ -288,20 +328,22 @@ function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) 
           </Space>
         </Header>
         <Content className="app-content">
-          <Suspense fallback={<PageLoading />}>
-            <Routes>
-              <Route path="/" element={route('/', <Dashboard />)} />
-              <Route path="/agent" element={route('/agent', <AgentChat />)} />
-              <Route path="/customers" element={route('/customers', <Customers />)} />
-              <Route path="/leads" element={route('/leads', <Leads />)} />
-              <Route path="/knowledge" element={route('/knowledge', <KnowledgeBase />)} />
-              <Route path="/callcenter" element={route('/callcenter', <CallCenter />)} />
-              <Route path="/system" element={route('/system', <SystemAdmin />)} />
-              <Route path="/runs" element={route('/runs', <AgentRuns />)} />
-              <Route path="/evaluation" element={route('/evaluation', <Evaluation />)} />
-              <Route path="*" element={<Navigate to={defaultPath} replace />} />
-            </Routes>
-          </Suspense>
+          <WorkspaceErrorBoundary>
+            <Suspense fallback={<PageLoading />}>
+              <Routes>
+                <Route path="/" element={route('/', <Dashboard />)} />
+                <Route path="/agent" element={route('/agent', <AgentChat />)} />
+                <Route path="/customers" element={route('/customers', <Customers />)} />
+                <Route path="/leads" element={route('/leads', <Leads />)} />
+                <Route path="/knowledge" element={route('/knowledge', <KnowledgeBase />)} />
+                <Route path="/callcenter" element={route('/callcenter', <CallCenter />)} />
+                <Route path="/system" element={route('/system', <SystemAdmin />)} />
+                <Route path="/runs" element={route('/runs', <AgentRuns />)} />
+                <Route path="/evaluation" element={route('/evaluation', <Evaluation />)} />
+                <Route path="*" element={<Navigate to={defaultPath} replace />} />
+              </Routes>
+            </Suspense>
+          </WorkspaceErrorBoundary>
         </Content>
       </Layout>
     </Layout>
