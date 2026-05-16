@@ -60,10 +60,20 @@ function scorePercent(score: number) {
 
 function currentWorkspaceRole() {
   try {
-    const stored = JSON.parse(
-      window.localStorage.getItem('agentpilot.currentUser') || window.localStorage.getItem('agentpilot.demoUser') || '{}'
-    ) as { role?: string };
-    return stored.role;
+    const stored = JSON.parse(window.localStorage.getItem('agentpilot.currentUser') || '{}') as {
+      primaryRole?: string;
+      roles?: string[];
+    };
+    if (stored.primaryRole) {
+      return stored.primaryRole;
+    }
+    if (stored.roles?.includes('system_admin')) {
+      return 'admin';
+    }
+    if (stored.roles?.includes('sales_manager')) {
+      return 'manager';
+    }
+    return stored.roles?.[0];
   } catch {
     return undefined;
   }
