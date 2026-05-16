@@ -428,6 +428,24 @@ export default function AgentChat() {
           }
         >
           {error && <Alert type="warning" showIcon message={error} style={{ marginBottom: 12 }} />}
+          <div className="agent-session-strip">
+            <div>
+              <span>Session</span>
+              <strong>{sessionId ?? 'new'}</strong>
+            </div>
+            <div>
+              <span>客户上下文</span>
+              <strong>{resolvedCustomerId ? `#${resolvedCustomerId}` : '未指定'}</strong>
+            </div>
+            <div>
+              <span>工具调用</span>
+              <strong>{toolCalls.length}</strong>
+            </div>
+            <div>
+              <span>待确认</span>
+              <strong>{pendingConfirmations.length}</strong>
+            </div>
+          </div>
           <div className="chat-window">
             {messages.map((item, index) => (
               <div className={`message-row ${item.role}`} key={`${item.role}-${index}`}>

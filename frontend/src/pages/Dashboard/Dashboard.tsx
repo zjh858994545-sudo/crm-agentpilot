@@ -375,6 +375,20 @@ export default function Dashboard() {
             首页只服务销售和销售主管：把高优商机、风险客户、待办跟进和 Agent 写入确认放在同一个业务入口里。
             技术审计、评测和系统状态已经收进系统管理区。
           </Paragraph>
+          <div className="hero-kpi-strip">
+            <div>
+              <span>高优商机</span>
+              <strong>{metrics.highLeads.length}</strong>
+            </div>
+            <div>
+              <span>高优金额</span>
+              <strong>{currency(metrics.amount)}</strong>
+            </div>
+            <div>
+              <span>待确认</span>
+              <strong>{pendingConfirmations.length}</strong>
+            </div>
+          </div>
           <Space wrap>
             <Link to="/leads">
               <Button type="primary" icon={<ThunderboltOutlined />}>查看今日优先级</Button>
@@ -415,7 +429,7 @@ export default function Dashboard() {
         {workItems.map((item) => (
           <Col xs={24} md={12} xl={6} key={item.title}>
             <Link to={item.to} className="work-metric-link">
-              <Card className="metric-card work-metric-card">
+              <Card className={`metric-card work-metric-card metric-${item.color}`}>
                 <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
                   <Statistic title={item.title} value={item.value} />
                   <span className={`work-metric-icon ${item.color}`}>{item.icon}</span>
