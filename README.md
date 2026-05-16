@@ -53,7 +53,14 @@ React Workbench
   -> Kafka
 ```
 
-## 一键启动
+## 文档入口
+
+- [产品运维手册](docs/product-operations-guide.md)：部署、权限、限流、Outbox、RAG、监控和上线前验收。
+- [学习版讲解稿](docs/project-learning-guide.md)：帮助开发者理解业务主线、页面职责和后端模块。
+- [架构说明](docs/architecture.md)：系统边界、Agent 安全边界和核心工程选择。
+- [数据库设计](docs/database.md)：CRM、RAG、Agent、RBAC 和 Outbox 表设计。
+
+## 本地/私有化启动
 
 本地完整运行首选全栈脚本：
 
@@ -250,27 +257,30 @@ npm run build
 .\scripts\run-eval.ps1
 ```
 
-## 当前完成状态
+## 产品化完成度
 
-- CRM、商机推荐、RAG、Agent、确认流、呼叫中心、评测后端已实现
-- 前端所有核心页面已接真实 API
-- 后端测试通过
-- 前端生产构建通过
-- Docker Desktop 已恢复到 F 盘，Docker Compose 已验证：PostgreSQL/pgvector、Redis、Kafka 均可 healthy 启动
-- 后端已在 Docker Postgres/Redis 环境下跑通完整 API 验收链路
-- 已加入 OpenAI-compatible 模型适配、Swagger UI、Actuator 基础端点、`X-Trace-Id` 请求追踪
-- 已加入 Spring Security API Token 权限层：strict 模式下所有业务 API 需要 `X-AgentPilot-Token`，并通过数据库 RBAC 映射 userId、salesRepId、角色和权限
-- 已接入阿里百炼真实 embedding：默认 `text-embedding-v4`、1024 维，写入 PostgreSQL `crm_knowledge_chunk.embedding_vector vector(1024)`，并通过 HNSW 索引和 `pgvector-hybrid` 检索路径跑通
-- 已加入 outbox 事件表 `agent_outbox_event`：确认后的 CRM task 事件与业务写入共享事务；Agent run / tool call 审计事件统一落库并按 at-least-once 语义重试分发；默认 log-only，设置 `AGENT_EVENTS_KAFKA_ENABLED=true` 后发布到 Kafka
-- Tool Registry 已 schema 化，并通过 `GET /api/agent/tools/openai` 暴露 OpenAI-compatible tools JSON Schema；主 Agent 会优先让 LLM 选择工具，失败或超时再回退规则路由
-- 已加入接口限流：优先使用 Redis 做分布式固定窗口限流，Redis 不可用时自动回退本机 token bucket，保护 Agent Chat、Model Chat 和普通 API
-- 前端已改为 token 登录，登录后通过 `/api/auth/me` 读取当前用户画像，不再在页面暴露内置身份 token
+已具备的上线基础能力：
 
-## 已知限制
+- 核心销售作业流：客户、商机推荐、RAG、Agent、确认流、呼叫中心、运行审计和评测。
+- 前端工作台：销售、主管、系统管理员三类角色菜单和业务页面。
+- 安全边界：Spring Security API Token、数据库 RBAC、salesRepId 数据隔离、strict/permissive 模式切换。
+- AI 能力：OpenAI-compatible 模型适配、LLM Tool Calling、规则路由 fallback、Tool Registry JSON Schema。
+- RAG 能力：阿里百炼 `text-embedding-v4`、1024 维 pgvector、HNSW 索引、关键词 + 向量混合检索、引用和拒答。
+- 可靠性能力：Outbox 事件表、CAS 分发锁、at-least-once 重试、Redis 优先限流、本地 fallback。
+- 可观测能力：`X-Trace-Id`、Agent run、tool call、confirmation、retrieval log、系统管理运行中心。
+- 质量门禁：JUnit 后端测试、前端生产构建、Playwright 完整业务链路测试。
 
-- 主 Agent 已接入 LLM Tool Calling 主流程。为了保证写 CRM 的安全边界，创建任务、写联系记录、更新商机阶段等写操作会优先进入确定性工具确认流，避免模型用自然语言“口头确认”绕过真实 confirmation。
-- RAG 已使用 PostgreSQL pgvector 存储和相似度检索；配置 `AGENT_EMBEDDING_PROVIDER=openai-compatible` 后走阿里百炼 `text-embedding-v4` 真实 embedding。本地/测试仍可回退 deterministic mock，保证用例稳定。
-- 事件层已实现应用级 outbox。CRM 写操作事件在确认事务内落库，强调事务-事件一致；Agent run / tool call 是审计型事件，走 at-least-once 落库重试，不声明 exactly-once。生产大规模场景可以继续演进为 outbox + CDC/Debezium。
-- 当前鉴权是 API Token + 数据库 RBAC，适合内网业务工具和服务端集成；完整商业化上线仍建议接入企业 SSO/JWT、刷新 token、登录审计和租户级隔离。
-- Tool Schema 已能暴露给 OpenAI-compatible function calling，当前已覆盖客户分析、商机推荐、知识检索、产品查询、创建任务、写联系记录、更新商机阶段等主工具；生产化仍需要补更严格的参数校验、权限边界和多轮消歧。
-- JSONL 评测集当前用于验证评测框架和回归链路，商业化上线需要接入真实业务样本、失败样例沉淀和持续评测看板。
+上线前必须收紧的配置：
+
+- 设置 `AGENTPILOT_SECURITY_MODE=strict`。
+- 设置 `AGENTPILOT_SEED_USERS_ENABLED=false` 并创建真实 RBAC 用户。
+- 配置真实模型和 embedding key，避免生产环境使用 mock provider。
+- 配置 Kafka 或明确保留 log-only 模式的业务影响。
+- 完成业务数据备份、日志脱敏、告警和运维值班策略。
+
+## 已知边界
+
+- 主 Agent 已接入 LLM Tool Calling 主流程。为了保证写 CRM 的安全边界，创建任务、写联系记录、更新商机阶段等写操作仍必须进入 confirmation。
+- Outbox 对 CRM 写事件强调事务-事件一致；Agent run / tool call 是审计事件，按 at-least-once 分发，消费方需要按 `eventId` 幂等。
+- API Token + 数据库 RBAC 适合内网业务工具和服务端集成；更完整的商业化上线建议接入企业 SSO/JWT、刷新 token、登录审计和 tenantId 多租户隔离。
+- JSONL 评测集当前用于回归验证；真实上线需要持续沉淀真实失败样例、扩充评测集和建立告警阈值。

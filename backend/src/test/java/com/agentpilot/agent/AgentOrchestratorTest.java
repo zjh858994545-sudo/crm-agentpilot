@@ -1,6 +1,8 @@
 package com.agentpilot.agent;
 
 import com.agentpilot.agent.tool.ToolRegistry;
+import com.agentpilot.crm.entity.ContactLog;
+import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.events.entity.OutboxEvent;
 import com.agentpilot.events.service.OutboxEventService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -36,6 +38,9 @@ class AgentOrchestratorTest {
 
     @Autowired
     private ToolRegistry toolRegistry;
+
+    @Autowired
+    private ContactLogService contactLogService;
 
     @Autowired
     private OutboxEventService outboxEventService;
@@ -122,6 +127,43 @@ class AgentOrchestratorTest {
 
         assertThat(outboxEventService.count(new LambdaQueryWrapper<OutboxEvent>()
                 .eq(OutboxEvent::getEventType, "crm_task.created"))).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void contactLogWriteIsConfirmedAndIdempotent() throws Exception {
+        MvcResult chatResult = mockMvc.perform(post("/api/agent/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1,\"salesRepId\":1,\"message\":\"帮我写入美家房产的联系记录，客户认可续费方案，明天继续确认预算\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.type", is("confirmation_required")))
+                .andExpect(jsonPath("$.data.toolCalls[0].toolName", is("writeContactLog")))
+                .andExpect(jsonPath("$.data.toolCalls[0].requiresConfirmation", is(true)))
+                .andReturn();
+
+        JsonNode root = objectMapper.readTree(chatResult.getResponse().getContentAsString());
+        long confirmationId = root.at("/data/confirmationId").asLong();
+        String idempotencyKey = root.at("/data/payload/idempotencyKey").asText();
+
+        mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
+                .andExpect(jsonPath("$.data.result.idempotencyKey", is(idempotencyKey)));
+
+        long countAfterFirstConfirm = contactLogService.count(new LambdaQueryWrapper<ContactLog>()
+                .eq(ContactLog::getIdempotencyKey, idempotencyKey));
+        assertThat(countAfterFirstConfirm).isEqualTo(1);
+
+        mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
+
+        long countAfterSecondConfirm = contactLogService.count(new LambdaQueryWrapper<ContactLog>()
+                .eq(ContactLog::getIdempotencyKey, idempotencyKey));
+        assertThat(countAfterSecondConfirm).isEqualTo(1);
     }
 
     @Test
