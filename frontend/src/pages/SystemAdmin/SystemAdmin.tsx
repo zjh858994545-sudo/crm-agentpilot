@@ -25,6 +25,7 @@ import {
   fetchOpenAiTools,
   fetchSecurityStatus,
   fetchSecurityUsers,
+  rebuildKnowledgeVectors,
   retryDeadLetter
 } from '../../api/client';
 
@@ -109,6 +110,19 @@ export default function SystemAdmin() {
       await load();
     } catch {
       antdMessage.error('重试事件失败，请检查后端服务或权限。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rebuildVectors = async () => {
+    setLoading(true);
+    try {
+      const result = await rebuildKnowledgeVectors();
+      antdMessage.success(`知识索引已重建，更新 ${result.updatedChunks} 个片段`);
+      await load();
+    } catch {
+      antdMessage.error('重建知识索引失败，请检查模型、Embedding 和 pgvector 状态。');
     } finally {
       setLoading(false);
     }
@@ -268,9 +282,14 @@ export default function SystemAdmin() {
         className="command-card"
         title="系统运行中枢"
         extra={
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>
-            刷新运行状态
-          </Button>
+          <Space>
+            <Button icon={<DatabaseOutlined />} loading={loading} onClick={rebuildVectors}>
+              重建知识索引
+            </Button>
+            <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>
+              刷新运行状态
+            </Button>
+          </Space>
         }
       >
         <Row gutter={[16, 16]} align="middle">
