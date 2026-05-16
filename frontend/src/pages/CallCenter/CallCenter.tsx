@@ -36,7 +36,7 @@ import {
 const { Paragraph, Text } = Typography;
 const { TextArea } = Input;
 
-const demoText =
+const defaultTranscript =
   '客户说套餐有点贵，担心续费后没有效果。销售表示可以帮客户争取优惠，并说明会在明天上午提供上月曝光数据和同行案例，但不会承诺一定成交。';
 
 function riskColor(value?: string) {
@@ -63,7 +63,7 @@ export default function CallCenter() {
   const [customerId, setCustomerId] = useState(1001);
   const [salesRepId, setSalesRepId] = useState(1);
   const [leadId, setLeadId] = useState(3001);
-  const [text, setText] = useState(demoText);
+  const [text, setText] = useState(defaultTranscript);
   const [summary, setSummary] = useState<CallSummaryResponse | null>(null);
   const [quality, setQuality] = useState<QualityCheckResponse | null>(null);
   const [confirmation, setConfirmation] = useState<ContactLogConfirmationResponse | null>(null);

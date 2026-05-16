@@ -161,9 +161,7 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
 
 function readStoredUser() {
   try {
-    const stored = JSON.parse(
-      window.localStorage.getItem('agentpilot.currentUser') || window.localStorage.getItem('agentpilot.demoUser') || '{}'
-    ) as Pick<WorkspaceUser, 'id'>;
+    const stored = JSON.parse(window.localStorage.getItem('agentpilot.currentUser') || '{}') as Pick<WorkspaceUser, 'id'>;
     return workspaceUsers.find((user) => user.id === stored.id) ?? null;
   } catch {
     return null;

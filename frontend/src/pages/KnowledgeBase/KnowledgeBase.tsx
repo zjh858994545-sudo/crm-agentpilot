@@ -44,7 +44,7 @@ import {
 const { Paragraph, Text, Title } = Typography;
 const { TextArea } = Input;
 
-const demoDoc = `客户提出“套餐太贵、续费没有效果”时，销售需要先复述客户顾虑，再用上月曝光量、咨询量、同行案例说明投入产出。
+const defaultImportDraft = `客户提出“套餐太贵、续费没有效果”时，销售需要先复述客户顾虑，再用上月曝光量、咨询量、同行案例说明投入产出。
 禁止承诺一定成交、保证排名或保证收益。可以承诺提供数据复盘、优化门店页、调整投放关键词和约定下次复盘时间。`;
 
 const docTypeOptions = [
@@ -58,9 +58,11 @@ function scorePercent(score: number) {
   return `${Math.round(score * 100)}%`;
 }
 
-function currentDemoRole() {
+function currentWorkspaceRole() {
   try {
-    const stored = JSON.parse(window.localStorage.getItem('agentpilot.demoUser') || '{}') as { role?: string };
+    const stored = JSON.parse(
+      window.localStorage.getItem('agentpilot.currentUser') || window.localStorage.getItem('agentpilot.demoUser') || '{}'
+    ) as { role?: string };
     return stored.role;
   } catch {
     return undefined;
@@ -79,12 +81,12 @@ export default function KnowledgeBase() {
   const [answer, setAnswer] = useState<KnowledgeAnswer | null>(null);
   const [importTitle, setImportTitle] = useState('价格异议补充话术');
   const [importType, setImportType] = useState('OBJECTION_HANDLING');
-  const [importContent, setImportContent] = useState(demoDoc);
+  const [importContent, setImportContent] = useState(defaultImportDraft);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const selectedDoc = useMemo(() => docs.find((item) => item.id === selectedDocId), [docs, selectedDocId]);
-  const canManageKnowledge = currentDemoRole() === 'admin';
+  const canManageKnowledge = currentWorkspaceRole() === 'admin';
   const vectorPercent = knowledgeStatus?.chunkCount
     ? Math.round((knowledgeStatus.vectorizedChunkCount / knowledgeStatus.chunkCount) * 100)
     : 0;

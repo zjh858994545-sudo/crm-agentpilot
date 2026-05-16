@@ -38,49 +38,6 @@ import {
 
 const { Paragraph, Text } = Typography;
 
-const fallbackData: Customer[] = [
-  {
-    id: 1001,
-    name: '美家房产',
-    industry: '房产',
-    city: '北京',
-    contactName: '王经理',
-    contactMobile: '13910001001',
-    lifecycleStage: '续费期',
-    valueLevel: 'A',
-    riskLevel: 'MEDIUM',
-    packageExpireAt: '2026-05-31T00:00:00',
-    tags: '续费,价格敏感,ROI关注',
-    remark: 'A 类客户，适合用曝光和咨询数据推进续费。'
-  },
-  {
-    id: 1002,
-    name: '快招人力',
-    industry: '招聘',
-    city: '天津',
-    contactName: '赵总',
-    contactMobile: '13910001002',
-    lifecycleStage: '高意向',
-    valueLevel: 'A',
-    riskLevel: 'LOW',
-    packageExpireAt: '2026-06-10T00:00:00',
-    tags: '招聘旺季,升级套餐'
-  },
-  {
-    id: 1003,
-    name: '老街火锅',
-    industry: '餐饮',
-    city: '石家庄',
-    contactName: '刘店长',
-    contactMobile: '13910001003',
-    lifecycleStage: '异议处理',
-    valueLevel: 'B',
-    riskLevel: 'HIGH',
-    packageExpireAt: '2026-05-24T00:00:00',
-    tags: '价格异议,效果担忧'
-  }
-];
-
 const riskColor: Record<string, string> = {
   LOW: 'green',
   MEDIUM: 'orange',
@@ -135,12 +92,12 @@ function leadUrlForCustomer(customer: Customer) {
 
 export default function Customers() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [data, setData] = useState<Customer[]>(fallbackData);
+  const [data, setData] = useState<Customer[]>([]);
   const [keyword, setKeyword] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [contactLogs, setContactLogs] = useState<ContactLog[]>([]);
   const [loading, setLoading] = useState(false);
-  const [dataMode, setDataMode] = useState<'real' | 'sample'>('sample');
+  const [dataMode, setDataMode] = useState<'connected' | 'unavailable'>('unavailable');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -148,11 +105,12 @@ export default function Customers() {
     fetchCustomers()
       .then((items) => {
         setData(items);
-        setDataMode('real');
+        setDataMode('connected');
       })
       .catch(() => {
-        setDataMode('sample');
-        setError('后端未连接，当前显示离线样例客户。');
+        setData([]);
+        setDataMode('unavailable');
+        setError('CRM 服务暂不可用，客户列表未加载。请稍后重试或联系系统管理员。');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -228,8 +186,8 @@ export default function Customers() {
           <Paragraph className="overview-copy">
             客户 360 是销售作业流的上下文入口：先看价值、风险、标签和历史跟进，再把客户带到 AI 助手或商机优先级里继续处理。
           </Paragraph>
-          <Tag color={dataMode === 'real' ? 'green' : 'orange'}>
-            {dataMode === 'real' ? '真实 CRM 数据' : '离线样例数据'}
+          <Tag color={dataMode === 'connected' ? 'green' : 'orange'}>
+            {dataMode === 'connected' ? 'CRM 已连接' : 'CRM 未连接'}
           </Tag>
         </div>
         <div className="workflow-stepper">
@@ -285,6 +243,9 @@ export default function Customers() {
           rowKey="id"
           loading={loading}
           dataSource={filteredData}
+          locale={{
+            emptyText: error ? '客户数据暂不可用' : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无客户数据" />
+          }}
           pagination={{ pageSize: 8 }}
           onRow={(record) => ({ onClick: () => openCustomer(record) })}
           rowClassName="clickable-table-row"

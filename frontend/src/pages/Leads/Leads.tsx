@@ -15,6 +15,7 @@ import {
   Col,
   Descriptions,
   Drawer,
+  Empty,
   Progress,
   Row,
   Segmented,
@@ -35,45 +36,6 @@ import {
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
-
-const fallbackData: LeadRecommendation[] = [
-  {
-    leadId: 3001,
-    customerId: 1001,
-    customerName: '美家房产',
-    industry: '房产',
-    estimatedAmount: 8999,
-    expectedCloseDate: '2026-05-20',
-    score: 86.5,
-    priority: 'HIGH',
-    reasons: ['套餐即将到期', 'A 类客户', '最近 10 天未联系'],
-    suggestedAction: '优先电话跟进，准备 ROI 和曝光数据复盘。'
-  },
-  {
-    leadId: 3002,
-    customerId: 1002,
-    customerName: '快招人力',
-    industry: '招聘',
-    estimatedAmount: 6999,
-    expectedCloseDate: '2026-05-22',
-    score: 81,
-    priority: 'HIGH',
-    reasons: ['招聘旺季', '高意向线索', '预计成交金额较高'],
-    suggestedAction: '输出套餐对比和招聘效果案例。'
-  },
-  {
-    leadId: 3003,
-    customerId: 1003,
-    customerName: '老街火锅',
-    industry: '餐饮',
-    estimatedAmount: 4999,
-    expectedCloseDate: '2026-05-18',
-    score: 73.5,
-    priority: 'MEDIUM',
-    reasons: ['存在价格异议', '续费风险较高'],
-    suggestedAction: '处理价格异议，约定复盘时间。'
-  }
-];
 
 const priorityColor: Record<string, string> = {
   HIGH: 'red',
@@ -113,13 +75,13 @@ function agentUrlForLead(lead: LeadRecommendation) {
 
 export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [recommendations, setRecommendations] = useState<LeadRecommendation[]>(fallbackData);
+  const [recommendations, setRecommendations] = useState<LeadRecommendation[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [industryFilter, setIndustryFilter] = useState<string>('ALL');
   const [selected, setSelected] = useState<LeadRecommendation | null>(null);
   const [loading, setLoading] = useState(false);
-  const [dataMode, setDataMode] = useState<'real' | 'sample'>('sample');
+  const [dataMode, setDataMode] = useState<'connected' | 'unavailable'>('unavailable');
   const [error, setError] = useState('');
   const urlLeadId = Number(searchParams.get('leadId'));
   const urlCustomerId = Number(searchParams.get('customerId'));
@@ -132,11 +94,13 @@ export default function Leads() {
       .then(([nextRecommendations, nextLeads]) => {
         setRecommendations(nextRecommendations);
         setLeads(nextLeads);
-        setDataMode('real');
+        setDataMode('connected');
       })
       .catch(() => {
-        setDataMode('sample');
-        setError('后端未连接，当前显示离线样例商机。');
+        setRecommendations([]);
+        setLeads([]);
+        setDataMode('unavailable');
+        setError('商机服务暂不可用，优先级看板未加载。请稍后重试或联系系统管理员。');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -211,8 +175,8 @@ export default function Leads() {
           <Paragraph className="overview-copy">
             商机页面面向销售主管和一线销售：用评分解释确定今天先跟谁，再进入客户 360 补上下文，最后交给 AI 助手生成跟进任务或话术。
           </Paragraph>
-          <Tag color={dataMode === 'real' ? 'green' : 'orange'}>
-            {dataMode === 'real' ? '真实商机数据' : '离线样例数据'}
+          <Tag color={dataMode === 'connected' ? 'green' : 'orange'}>
+            {dataMode === 'connected' ? '商机服务已连接' : '商机服务未连接'}
           </Tag>
         </div>
         <div className="workflow-stepper">
@@ -278,38 +242,42 @@ export default function Leads() {
           </Space>
         }
       >
-        <div className="lead-board">
-          {['HIGH', 'MEDIUM', 'LOW'].map((priority) => {
-            const items = filtered.filter((item) => item.priority === priority);
-            return (
-              <div className="lead-column" key={priority}>
-                <div className="lead-column-head">
-                  <Space>
-                    <Tag color={priorityColor[priority]}>{priority}</Tag>
-                    <Text strong>{items.length} 个</Text>
+        {filtered.length === 0 && !loading ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error ? '商机数据暂不可用' : '暂无符合条件的商机'} />
+        ) : (
+          <div className="lead-board">
+            {['HIGH', 'MEDIUM', 'LOW'].map((priority) => {
+              const items = filtered.filter((item) => item.priority === priority);
+              return (
+                <div className="lead-column" key={priority}>
+                  <div className="lead-column-head">
+                    <Space>
+                      <Tag color={priorityColor[priority]}>{priority}</Tag>
+                      <Text strong>{items.length} 个</Text>
+                    </Space>
+                  </div>
+                  <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                    {items.map((item) => (
+                      <button className="lead-card-button" key={item.leadId} onClick={() => openLead(item)}>
+                        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                            <Text strong>{item.customerName}</Text>
+                            <Tag>{item.industry}</Tag>
+                          </Space>
+                          <Progress percent={Math.round(item.score)} size="small" strokeColor={priority === 'HIGH' ? '#ef4444' : '#2563eb'} />
+                          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                            <Text type="secondary">{currency(item.estimatedAmount)}</Text>
+                            <Text type="secondary">剩余 {daysUntil(item.expectedCloseDate)}</Text>
+                          </Space>
+                        </Space>
+                      </button>
+                    ))}
                   </Space>
                 </div>
-                <Space direction="vertical" size={10} style={{ width: '100%' }}>
-                  {items.map((item) => (
-                    <button className="lead-card-button" key={item.leadId} onClick={() => openLead(item)}>
-                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                          <Text strong>{item.customerName}</Text>
-                          <Tag>{item.industry}</Tag>
-                        </Space>
-                        <Progress percent={Math.round(item.score)} size="small" strokeColor={priority === 'HIGH' ? '#ef4444' : '#2563eb'} />
-                        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                          <Text type="secondary">{currency(item.estimatedAmount)}</Text>
-                          <Text type="secondary">剩余 {daysUntil(item.expectedCloseDate)}</Text>
-                        </Space>
-                      </Space>
-                    </button>
-                  ))}
-                </Space>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       <Card className="command-card" title="评分解释明细">
@@ -317,6 +285,9 @@ export default function Leads() {
           rowKey="leadId"
           loading={loading}
           dataSource={filtered}
+          locale={{
+            emptyText: error ? '商机数据暂不可用' : '暂无符合条件的商机'
+          }}
           pagination={{ pageSize: 8 }}
           onRow={(record) => ({ onClick: () => openLead(record) })}
           rowClassName="clickable-table-row"

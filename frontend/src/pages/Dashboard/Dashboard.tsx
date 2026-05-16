@@ -59,102 +59,6 @@ const { Paragraph, Text, Title } = Typography;
 
 echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
-const fallbackCustomers: Customer[] = [
-  {
-    id: 1001,
-    name: '美家房产',
-    industry: '房产',
-    city: '北京',
-    valueLevel: 'A',
-    riskLevel: 'MEDIUM',
-    lifecycleStage: '续费期',
-    packageExpireAt: '2026-05-31T00:00:00',
-    tags: '续费,价格敏感,ROI关注'
-  },
-  {
-    id: 1002,
-    name: '快招人力',
-    industry: '招聘',
-    city: '天津',
-    valueLevel: 'A',
-    riskLevel: 'LOW',
-    lifecycleStage: '高意向',
-    tags: '招聘旺季,升级套餐'
-  },
-  {
-    id: 1003,
-    name: '老街火锅',
-    industry: '餐饮',
-    city: '石家庄',
-    valueLevel: 'B',
-    riskLevel: 'HIGH',
-    lifecycleStage: '异议处理',
-    tags: '价格异议,效果担忧'
-  }
-];
-
-const fallbackLeads: LeadRecommendation[] = [
-  {
-    leadId: 3001,
-    customerId: 1001,
-    customerName: '美家房产',
-    industry: '房产',
-    estimatedAmount: 8999,
-    expectedCloseDate: '2026-05-20',
-    score: 86.5,
-    priority: 'HIGH',
-    reasons: ['套餐即将到期', 'A 类客户', '最近 10 天未联系'],
-    suggestedAction: '优先电话跟进，准备 ROI 和曝光数据复盘。'
-  },
-  {
-    leadId: 3002,
-    customerId: 1002,
-    customerName: '快招人力',
-    industry: '招聘',
-    estimatedAmount: 6999,
-    expectedCloseDate: '2026-05-22',
-    score: 81,
-    priority: 'HIGH',
-    reasons: ['招聘旺季', '高意向线索'],
-    suggestedAction: '输出套餐对比和招聘效果案例。'
-  },
-  {
-    leadId: 3003,
-    customerId: 1003,
-    customerName: '老街火锅',
-    industry: '餐饮',
-    estimatedAmount: 4999,
-    expectedCloseDate: '2026-05-18',
-    score: 73.5,
-    priority: 'MEDIUM',
-    reasons: ['存在价格异议', '续费风险较高'],
-    suggestedAction: '处理价格异议，约定复盘时间。'
-  }
-];
-
-const fallbackTasks: CrmTask[] = [
-  {
-    id: 1,
-    customerId: 1001,
-    salesRepId: 1,
-    title: '复盘曝光数据并推进续费',
-    content: '准备最近 30 天曝光和咨询数据，处理价格异议。',
-    dueTime: '2026-05-16T10:00:00',
-    status: 'TODO',
-    source: 'agent'
-  },
-  {
-    id: 2,
-    customerId: 1003,
-    salesRepId: 1,
-    title: '回访价格异议客户',
-    content: '确认客户预算区间，给出轻量套餐方案。',
-    dueTime: '2026-05-16T15:30:00',
-    status: 'TODO',
-    source: 'manual'
-  }
-];
-
 const priorityColor: Record<string, string> = {
   HIGH: 'red',
   MEDIUM: 'orange',
@@ -192,7 +96,7 @@ function statusTag(value?: string) {
   const color =
     normalized.includes('pgvector') || normalized === 'UP' || normalized === 'ready'
       ? 'green'
-      : normalized.includes('fallback') || normalized.includes('mock')
+      : normalized.includes('local') || normalized.includes('mock')
         ? 'orange'
         : 'blue';
   return <Tag color={color}>{normalized}</Tag>;
@@ -206,9 +110,9 @@ function agentUrlForLead(lead: LeadRecommendation) {
 
 export default function Dashboard() {
   const trendChartRef = useRef<HTMLDivElement | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>(fallbackCustomers);
-  const [leads, setLeads] = useState<LeadRecommendation[]>(fallbackLeads);
-  const [tasks, setTasks] = useState<CrmTask[]>(fallbackTasks);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [leads, setLeads] = useState<LeadRecommendation[]>([]);
+  const [tasks, setTasks] = useState<CrmTask[]>([]);
   const [health, setHealth] = useState<HealthView | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
@@ -217,7 +121,7 @@ export default function Dashboard() {
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<AgentConfirmation[]>([]);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
-  const [businessDataMode, setBusinessDataMode] = useState<'real' | 'sample'>('sample');
+  const [businessDataMode, setBusinessDataMode] = useState<'connected' | 'unavailable'>('unavailable');
   const [error, setError] = useState('');
 
   const refreshConfirmations = async () => {
@@ -287,9 +191,9 @@ export default function Dashboard() {
       }
 
       const businessDataFailed = results.slice(1, 4).some((result) => result.status === 'rejected');
-      setBusinessDataMode(businessDataFailed ? 'sample' : 'real');
+      setBusinessDataMode(businessDataFailed ? 'unavailable' : 'connected');
       if (businessDataFailed) {
-        setError('后端业务数据暂不可用，当前显示离线样例。');
+        setError('后端业务数据暂不可用，今日工作台未加载完整客户、商机和任务。');
       }
     });
   }, []);
@@ -537,8 +441,8 @@ export default function Dashboard() {
         <div className="business-hero-panel">
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Text strong>主管关注</Text>
-            <Tag color={businessDataMode === 'real' ? 'green' : 'orange'}>
-              {businessDataMode === 'real' ? '真实数据' : '离线样例'}
+            <Tag color={businessDataMode === 'connected' ? 'green' : 'orange'}>
+              {businessDataMode === 'connected' ? '业务数据已连接' : '业务数据未连接'}
             </Tag>
           </Space>
           <div className="manager-focus">
