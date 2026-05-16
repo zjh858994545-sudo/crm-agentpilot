@@ -9,6 +9,22 @@
 .\scripts\smoke-demo.ps1 -RunDemo
 ```
 
+面试前先确认模型和向量状态。脚本启动后读取实际后端地址：
+
+```powershell
+$backendUrl = (Get-Content ".demo-logs\backend.url" -Raw).Trim()
+Invoke-RestMethod "$backendUrl/api/model/status"
+Invoke-RestMethod "$backendUrl/api/knowledge/status"
+```
+
+重点看：
+
+- `data.configured = True` 且 `data.mode = llm-enabled`：说明 Agent 主流程可走真实 LLM Tool Calling；否则会走规则 fallback。
+- `data.embedding.configured = True` 且 `dimension = 1024`：说明 embedding 使用真实 1024 维模型。
+- `knowledge.status` 里的 `vectorStoreMode = pgvector-hybrid` 且 `vectorizedChunkCount > 0`：说明 pgvector 路径有真实向量可检索。
+
+如果先用 mock 启动过，再切换到真实 embedding，需要重启后端。`KnowledgeChunkService` 会在启动时自动 backfill `embedding_vector IS NULL` 的知识分块，不需要手工删除数据。
+
 如果本机 `8080` 或 `5173` 被占用，启动脚本会自动切换到空闲端口。以控制台打印的 Frontend 地址为准，`smoke-demo.ps1` 会自动读取实际 Backend 地址。
 
 停止演示进程：
@@ -218,4 +234,4 @@ POST /api/knowledge/search
 
 > 知识库在 PostgreSQL 下会走 pgvector，检索结果里的 `retriever=pgvector-hybrid` 可以作为证据。当前配置下 embedding 是阿里百炼 `text-embedding-v4`，`/api/model/embedding` 会返回 `vectorLength=1024`；测试 profile 仍保留 deterministic mock，保证 CI 稳定。
 
-> Tool Registry 已经把每个工具的参数 schema 写成 JSON Schema，并能通过 `/api/agent/tools/openai` 转成 OpenAI-compatible tools 数组。主 Agent 还没有全意图交给 LLM function calling，但协议层已经准备好了。
+> Tool Registry 已经把每个工具的参数 schema 写成 JSON Schema，并能通过 `/api/agent/tools/openai` 转成 OpenAI-compatible tools 数组。主 Agent 优先调用真实 LLM Tool Calling；如果模型未配置、超时或返回非法工具，则自动回退规则路由，保证现场演示稳定。

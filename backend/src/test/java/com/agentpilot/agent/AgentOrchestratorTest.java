@@ -94,6 +94,12 @@ class AgentOrchestratorTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
 
+        mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
+
         assertThat(outboxEventService.count(new LambdaQueryWrapper<OutboxEvent>()
                 .eq(OutboxEvent::getEventType, "crm_task.created"))).isGreaterThanOrEqualTo(1);
     }

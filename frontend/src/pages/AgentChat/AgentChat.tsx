@@ -580,7 +580,7 @@ export default function AgentChat() {
           <Descriptions column={1} size="small" bordered className="inspector-meta">
             <Descriptions.Item label="Session">{sessionId ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="确认单">{pending?.confirmationId ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="主流程">LLM Tool Calling</Descriptions.Item>
+            <Descriptions.Item label="主流程">工具路由 + 规则兜底</Descriptions.Item>
           </Descriptions>
           <Link to="/runs">
             <Button block icon={<FileSearchOutlined />} style={{ marginTop: 12 }}>

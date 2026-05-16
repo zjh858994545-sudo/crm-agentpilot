@@ -33,3 +33,6 @@ frontend/vite.config.d.ts
 # Evaluation outputs
 eval/reports/*.tmp
 eval/reports/report-*.md
+
+# Local external review artifacts
+CRM-AgentPilot-代码审查报告.md

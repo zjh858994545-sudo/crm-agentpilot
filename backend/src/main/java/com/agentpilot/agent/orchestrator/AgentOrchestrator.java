@@ -168,6 +168,14 @@ public class AgentOrchestrator {
         if (!Objects.equals(confirmation.getStatus(), "PENDING")) {
             return Map.of("status", confirmation.getStatus(), "confirmationId", confirmationId);
         }
+        if (!confirmationService.claimPendingForConfirm(confirmationId, userId)) {
+            AgentConfirmation latest = confirmationService.getById(confirmationId);
+            return Map.of(
+                    "status", latest == null ? "NOT_FOUND" : latest.getStatus(),
+                    "confirmationId", confirmationId
+            );
+        }
+        confirmation = confirmationService.getById(confirmationId);
 
         Object result = executeConfirmedAction(confirmation);
         if (result instanceof CrmTask task) {
@@ -195,10 +203,16 @@ public class AgentOrchestrator {
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
         }
-        confirmation.setStatus("REJECTED");
-        confirmation.setConfirmedBy(userId);
-        confirmation.setConfirmedAt(LocalDateTime.now());
-        confirmationService.updateById(confirmation);
+        if (!Objects.equals(confirmation.getStatus(), "PENDING")) {
+            return Map.of("status", confirmation.getStatus(), "confirmationId", confirmationId);
+        }
+        if (!confirmationService.rejectPending(confirmationId, userId)) {
+            AgentConfirmation latest = confirmationService.getById(confirmationId);
+            return Map.of(
+                    "status", latest == null ? "NOT_FOUND" : latest.getStatus(),
+                    "confirmationId", confirmationId
+            );
+        }
         return Map.of("status", "REJECTED", "confirmationId", confirmationId);
     }
 
