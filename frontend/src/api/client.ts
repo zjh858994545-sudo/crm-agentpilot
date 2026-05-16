@@ -557,6 +557,15 @@ export async function fetchCustomers() {
   return response.data.data;
 }
 
+export async function fetchCustomerPage(params: {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+} = {}) {
+  const response = await apiClient.get<ApiResponse<PageResponse<Customer>>>('/customers/page', { params });
+  return response.data.data;
+}
+
 export async function fetchCustomerDetail(customerId: number) {
   const response = await apiClient.get<ApiResponse<Customer>>(`/customers/${customerId}`);
   return response.data.data;

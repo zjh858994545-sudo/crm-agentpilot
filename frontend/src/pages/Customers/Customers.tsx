@@ -33,7 +33,7 @@ import {
   Customer,
   fetchCustomerContactLogs,
   fetchCustomerDetail,
-  fetchCustomers
+  fetchCustomerPage
 } from '../../api/client';
 
 const { Paragraph, Text } = Typography;
@@ -94,48 +94,52 @@ export default function Customers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<Customer[]>([]);
   const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(8);
+  const [total, setTotal] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [contactLogs, setContactLogs] = useState<ContactLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataMode, setDataMode] = useState<'connected' | 'unavailable'>('unavailable');
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const loadCustomers = async (nextPage = page, nextPageSize = pageSize, nextKeyword = keyword) => {
     setLoading(true);
-    fetchCustomers()
-      .then((items) => {
-        setData(items);
-        setDataMode('connected');
-      })
-      .catch(() => {
-        setData([]);
-        setDataMode('unavailable');
-        setError('CRM 服务暂不可用，客户列表未加载。请稍后重试或联系系统管理员。');
-      })
-      .finally(() => setLoading(false));
+    setError('');
+    try {
+      const result = await fetchCustomerPage({
+        page: nextPage,
+        pageSize: nextPageSize,
+        keyword: nextKeyword.trim()
+      });
+      setData(result.items);
+      setTotal(result.total);
+      setPage(result.page);
+      setPageSize(result.pageSize);
+      setDataMode('connected');
+    } catch {
+      setData([]);
+      setTotal(0);
+      setDataMode('unavailable');
+      setError('CRM 服务暂不可用，客户列表未加载。请稍后重试或联系系统管理员。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomers();
   }, []);
 
   const urlCustomerId = Number(searchParams.get('customerId'));
   const resolvedUrlCustomerId = Number.isFinite(urlCustomerId) && urlCustomerId > 0 ? urlCustomerId : undefined;
 
-  const filteredData = useMemo(() => {
-    const term = keyword.trim().toLowerCase();
-    if (!term) {
-      return data;
-    }
-    return data.filter((item) =>
-      [item.name, item.industry, item.city, item.tags, item.contactName]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-    );
-  }, [data, keyword]);
-
   const metrics = useMemo(() => {
     const highRisk = data.filter((item) => item.riskLevel === 'HIGH').length;
     const aLevel = data.filter((item) => item.valueLevel === 'A').length;
     const renewal = data.filter((item) => splitTags(item.tags).some((tag) => tag.includes('续费'))).length;
-    return { total: data.length, highRisk, aLevel, renewal };
-  }, [data]);
+    return { total, highRisk, aLevel, renewal };
+  }, [data, total]);
 
   const openCustomer = async (customer: Customer, syncUrl = true) => {
     if (syncUrl) {
@@ -157,6 +161,21 @@ export default function Customers() {
     }
   };
 
+  const openCustomerById = async (customerId: number) => {
+    setContactLogs([]);
+    try {
+      const [detail, logs] = await Promise.all([
+        fetchCustomerDetail(customerId),
+        fetchCustomerContactLogs(customerId)
+      ]);
+      setSelectedCustomer(detail);
+      setContactLogs(logs);
+    } catch {
+      setSelectedCustomer(null);
+      setContactLogs([]);
+    }
+  };
+
   useEffect(() => {
     if (!resolvedUrlCustomerId || selectedCustomer?.id === resolvedUrlCustomerId) {
       return;
@@ -164,6 +183,8 @@ export default function Customers() {
     const target = data.find((item) => item.id === resolvedUrlCustomerId);
     if (target) {
       openCustomer(target, false);
+    } else {
+      openCustomerById(resolvedUrlCustomerId);
     }
   }, [data, resolvedUrlCustomerId, selectedCustomer?.id]);
 
@@ -202,25 +223,25 @@ export default function Customers() {
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
             <Statistic title="客户总数" value={metrics.total} />
-            <Text className="metric-label">CRM 客户池</Text>
+            <Text className="metric-label">当前筛选匹配客户</Text>
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
             <Statistic title="A 类客户" value={metrics.aLevel} />
-            <Text className="metric-label">高价值优先跟进</Text>
+            <Text className="metric-label">当前页高价值客户</Text>
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
             <Statistic title="高风险客户" value={metrics.highRisk} />
-            <Text className="metric-label">需要质检或异议处理</Text>
+            <Text className="metric-label">当前页风险客户</Text>
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
           <Card className="metric-card">
             <Statistic title="续费相关" value={metrics.renewal} />
-            <Text className="metric-label">标签中包含续费诉求</Text>
+            <Text className="metric-label">当前页续费诉求</Text>
           </Card>
         </Col>
       </Row>
@@ -229,12 +250,13 @@ export default function Customers() {
         className="command-card"
         title="客户 360 列表"
         extra={
-          <Input
+          <Input.Search
             allowClear
             prefix={<SearchOutlined />}
             placeholder="搜索客户、行业、城市、标签"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
+            onSearch={(value) => loadCustomers(1, pageSize, value)}
             style={{ width: 280 }}
           />
         }
@@ -242,11 +264,18 @@ export default function Customers() {
         <Table
           rowKey="id"
           loading={loading}
-          dataSource={filteredData}
+          dataSource={data}
           locale={{
             emptyText: error ? '客户数据暂不可用' : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无客户数据" />
           }}
-          pagination={{ pageSize: 8 }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            showTotal: (value) => `共 ${value} 个客户`,
+            onChange: (nextPage, nextPageSize) => loadCustomers(nextPage, nextPageSize, keyword)
+          }}
           onRow={(record) => ({ onClick: () => openCustomer(record) })}
           rowClassName="clickable-table-row"
           columns={[

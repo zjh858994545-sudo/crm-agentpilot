@@ -1,6 +1,7 @@
 package com.agentpilot.crm.controller;
 
 import com.agentpilot.common.response.ApiResponse;
+import com.agentpilot.common.response.PageResponse;
 import com.agentpilot.crm.entity.ContactLog;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.ContactLogService;
@@ -39,6 +40,28 @@ public class CustomerController {
         return ApiResponse.ok(customerService.list(wrapper).stream().map(CustomerView::from).toList());
     }
 
+    @GetMapping("/page")
+    public ApiResponse<PageResponse<CustomerView>> page(
+            @RequestParam(required = false) Long salesRepId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "") String keyword
+    ) {
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.max(1, Math.min(pageSize, 100));
+        long offset = (long) (safePage - 1) * safePageSize;
+        Long scopedSalesRepId = scopedSalesRepId(salesRepId);
+        LambdaQueryWrapper<Customer> countWrapper = customerQuery(scopedSalesRepId, keyword);
+        long total = customerService.count(countWrapper);
+        List<CustomerView> items = customerService.list(customerQuery(scopedSalesRepId, keyword)
+                        .orderByAsc(Customer::getId)
+                        .last("limit " + safePageSize + " offset " + offset))
+                .stream()
+                .map(CustomerView::from)
+                .toList();
+        return ApiResponse.ok(new PageResponse<>(items, total, safePage, safePageSize));
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<CustomerView> detail(@PathVariable Long id) {
         Customer customer = customerService.getById(id);
@@ -58,6 +81,25 @@ public class CustomerController {
             throw new AccessDeniedException("salesRepId is outside current data scope");
         }
         return currentSalesRepId;
+    }
+
+    private LambdaQueryWrapper<Customer> customerQuery(Long salesRepId, String keyword) {
+        LambdaQueryWrapper<Customer> wrapper = new LambdaQueryWrapper<Customer>()
+                .eq(Customer::getOwnerSalesRepId, salesRepId);
+        if (keyword != null && !keyword.isBlank()) {
+            String value = keyword.trim();
+            wrapper.and(item -> item
+                    .like(Customer::getName, value)
+                    .or()
+                    .like(Customer::getIndustry, value)
+                    .or()
+                    .like(Customer::getCity, value)
+                    .or()
+                    .like(Customer::getTags, value)
+                    .or()
+                    .like(Customer::getContactName, value));
+        }
+        return wrapper;
     }
 
     private void requireCustomerVisible(Customer customer) {

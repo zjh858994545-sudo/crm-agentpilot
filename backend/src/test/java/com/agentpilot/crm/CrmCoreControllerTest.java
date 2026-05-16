@@ -42,6 +42,18 @@ class CrmCoreControllerTest {
 
         mockMvc.perform(get("/api/customers").param("salesRepId", "2"))
                 .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/customers/page")
+                        .param("page", "1")
+                        .param("pageSize", "2")
+                        .param("keyword", "美家"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.items", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.data.items[0].ownerSalesRepId", is(1)));
+
+        mockMvc.perform(get("/api/customers/page").param("salesRepId", "2"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
