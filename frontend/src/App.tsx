@@ -31,15 +31,15 @@ import { useState } from 'react';
 const { Header, Sider, Content } = Layout;
 const { Paragraph, Text, Title } = Typography;
 
-type DemoRole = 'sales' | 'manager' | 'admin';
+type WorkspaceRole = 'sales' | 'manager' | 'admin';
 
-type DemoUser = {
+type WorkspaceUser = {
   id: string;
   userId: number;
   salesRepId: number;
   name: string;
   title: string;
-  role: DemoRole;
+  role: WorkspaceRole;
   token: string;
   defaultPath: string;
   description: string;
@@ -51,10 +51,10 @@ type NavEntry = {
   icon: ReactNode;
   label: string;
   group: 'sales' | 'manager' | 'admin';
-  visibleFor: DemoRole[];
+  visibleFor: WorkspaceRole[];
 };
 
-const demoUsers: DemoUser[] = [
+const workspaceUsers: WorkspaceUser[] = [
   {
     id: 'sales-1',
     userId: 1,
@@ -161,19 +161,21 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
 
 function readStoredUser() {
   try {
-    const stored = JSON.parse(window.localStorage.getItem('agentpilot.demoUser') || '{}') as Pick<DemoUser, 'id'>;
-    return demoUsers.find((user) => user.id === stored.id) ?? null;
+    const stored = JSON.parse(
+      window.localStorage.getItem('agentpilot.currentUser') || window.localStorage.getItem('agentpilot.demoUser') || '{}'
+    ) as Pick<WorkspaceUser, 'id'>;
+    return workspaceUsers.find((user) => user.id === stored.id) ?? null;
   } catch {
     return null;
   }
 }
 
-function persistUser(user: DemoUser) {
-  window.localStorage.setItem('agentpilot.demoUser', JSON.stringify(user));
+function persistUser(user: WorkspaceUser) {
+  window.localStorage.setItem('agentpilot.currentUser', JSON.stringify(user));
   window.localStorage.setItem('agentpilot.apiToken', user.token);
 }
 
-function visibleNavFor(user: DemoUser) {
+function visibleNavFor(user: WorkspaceUser) {
   return navItems.filter((item) => item.visibleFor.includes(user.role));
 }
 
@@ -186,7 +188,7 @@ function resolveSelectedKey(pathname: string) {
   );
 }
 
-function buildMenuItems(user: DemoUser): MenuProps['items'] {
+function buildMenuItems(user: WorkspaceUser): MenuProps['items'] {
   const visibleNav = visibleNavFor(user);
   return (['sales', 'manager', 'admin'] as NavEntry['group'][]).flatMap((group) => {
     const children = visibleNav
@@ -209,20 +211,20 @@ function buildMenuItems(user: DemoUser): MenuProps['items'] {
   });
 }
 
-function LoginPage({ onLogin }: { onLogin: (user: DemoUser) => void }) {
+function LoginPage({ onLogin }: { onLogin: (user: WorkspaceUser) => void }) {
   return (
     <div className="login-shell">
       <div className="login-panel">
         <Space direction="vertical" size={8} className="login-heading">
           <Text className="eyebrow">CRM-AgentPilot</Text>
-          <Title level={2}>选择演示身份</Title>
+          <Title level={2}>选择工作身份</Title>
           <Paragraph>
-            用销售、主管、系统管理员三个视角进入系统。每个身份都会写入对应演示权限，
+            用销售、主管、系统管理员三个视角进入系统。每个身份都会写入对应权限上下文，
             前端菜单和后端数据范围一起切换。
           </Paragraph>
         </Space>
         <Row gutter={[16, 16]}>
-          {demoUsers.map((user) => (
+          {workspaceUsers.map((user) => (
             <Col xs={24} md={8} key={user.id}>
               <Card className={`login-role-card role-${user.role}`}>
                 <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -255,7 +257,7 @@ function LoginPage({ onLogin }: { onLogin: (user: DemoUser) => void }) {
   );
 }
 
-function Shell({ user, onUserChange }: { user: DemoUser; onUserChange: (user: DemoUser) => void }) {
+function Shell({ user, onUserChange }: { user: WorkspaceUser; onUserChange: (user: WorkspaceUser) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
   const selectedKey = resolveSelectedKey(location.pathname);
@@ -265,7 +267,7 @@ function Shell({ user, onUserChange }: { user: DemoUser; onUserChange: (user: De
   const isAdminUser = user.role === 'admin';
 
   const switchUser = (nextUserId: string) => {
-    const nextUser = demoUsers.find((item) => item.id === nextUserId);
+    const nextUser = workspaceUsers.find((item) => item.id === nextUserId);
     if (!nextUser) {
       return;
     }
@@ -314,7 +316,7 @@ function Shell({ user, onUserChange }: { user: DemoUser; onUserChange: (user: De
               className="identity-switcher"
               data-testid="identity-switcher"
               value={user.id}
-              options={demoUsers.map((item) => ({ label: `${item.title} · ${item.name}`, value: item.id }))}
+              options={workspaceUsers.map((item) => ({ label: `${item.title} · ${item.name}`, value: item.id }))}
               onChange={switchUser}
             />
             <Badge status="success" text="工作台在线" />
@@ -340,9 +342,9 @@ function Shell({ user, onUserChange }: { user: DemoUser; onUserChange: (user: De
 }
 
 export default function App() {
-  const [user, setUser] = useState<DemoUser | null>(() => readStoredUser());
+  const [user, setUser] = useState<WorkspaceUser | null>(() => readStoredUser());
 
-  const login = (nextUser: DemoUser) => {
+  const login = (nextUser: WorkspaceUser) => {
     persistUser(nextUser);
     setUser(nextUser);
   };

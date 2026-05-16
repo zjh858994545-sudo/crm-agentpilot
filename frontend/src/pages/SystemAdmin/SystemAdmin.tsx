@@ -31,7 +31,7 @@ type CapabilityRow = {
   status: string;
   owner: string;
   why: string;
-  interviewLine: string;
+  operatingLine: string;
 };
 
 type RiskItem = {
@@ -136,8 +136,8 @@ export default function SystemAdmin() {
     ...(modelStatus && !modelStatus.configured
       ? [
           {
-            title: '模型处于演示模式',
-            detail: 'AI 助手会回退确定性演示逻辑，真实演示前请确认百炼 API key 已生效。',
+            title: '模型处于规则模式',
+            detail: 'AI 助手会使用确定性规则流，接入模型服务后可启用真实工具选择。',
             color: 'blue'
           }
         ]
@@ -147,11 +147,11 @@ export default function SystemAdmin() {
   const opsCards = [
     {
       title: '访问控制',
-      value: securityStatus?.rbacEnabled ? 'RBAC 已接入' : '演示兜底',
+      value: securityStatus?.rbacEnabled ? 'RBAC 已接入' : '本地身份',
       color: securityStatus?.rbacEnabled ? 'green' : 'orange',
       detail: securityStatus?.rbacEnabled
         ? `${securityStatus.rbacUserCount ?? 0} 个用户 / ${securityStatus.rbacRoleCount ?? 0} 个角色`
-        : '当前使用 demo 用户，适合本地演示'
+        : '使用本地身份上下文，适合单机部署'
     },
     {
       title: '调用保护',
@@ -175,7 +175,7 @@ export default function SystemAdmin() {
     },
     {
       title: '模型接入',
-      value: modelStatus?.configured ? '真实模型' : '演示模式',
+      value: modelStatus?.configured ? '真实模型' : '规则模式',
       color: modelStatus?.configured ? 'green' : 'orange',
       detail: modelStatus?.configured ? `${modelStatus.vendor ?? modelStatus.provider} · ${modelStatus.model}` : '可回退规则路由'
     }
@@ -188,15 +188,15 @@ export default function SystemAdmin() {
       status: securityStatus?.rateLimit?.enabled ? 'ACTIVE' : 'DISABLED',
       owner: 'Spring Security Filter',
       why: '防止 Agent Chat 和模型接口被刷爆，控制模型调用费用和数据库压力。',
-      interviewLine: '我把普通 API、Agent Chat、Model Chat 分成不同 token bucket，超限返回 429。'
+      operatingLine: '普通 API、Agent Chat、Model Chat 分成不同 token bucket，超限返回 429。'
     },
     {
       key: 'rbac',
       name: 'RBAC Token',
-      status: securityStatus?.rbacEnabled ? 'ACTIVE' : 'DEMO_FALLBACK',
+      status: securityStatus?.rbacEnabled ? 'ACTIVE' : 'LOCAL_PROFILE',
       owner: 'agentpilot_user / role / permission',
       why: '让不同销售拿到不同 salesRepId 和权限集，避免 A 销售看到 B 销售客户。',
-      interviewLine: '真实 token 只存 SHA-256，登录后从数据库加载 userId、salesRepId 和权限。'
+      operatingLine: '真实 token 只存 SHA-256，登录后从数据库加载 userId、salesRepId 和权限。'
     },
     {
       key: 'outbox-lock',
@@ -204,7 +204,7 @@ export default function SystemAdmin() {
       status: eventStatus ? 'READY' : 'UNKNOWN',
       owner: 'agent_outbox_event',
       why: '避免 afterCommit 和定时任务同时发送同一事件，降低重复分发风险。',
-      interviewLine: '分发前先把事件 CAS 抢占到 DISPATCHING，只有抢到锁的 worker 能发。'
+      operatingLine: '分发前先把事件 CAS 抢占到 DISPATCHING，只有抢到锁的 worker 能发。'
     },
     {
       key: 'dead-letter',
@@ -212,7 +212,7 @@ export default function SystemAdmin() {
       status: (eventStatus?.outboxDeadLetters ?? 0) > 0 ? 'HAS_DEAD' : 'READY',
       owner: '事件后台任务',
       why: 'Kafka 或下游故障时，失败事件不会悄悄丢掉，超过重试次数进入死信。',
-      interviewLine: '当前是 at-least-once，失败满 5 次进入 DEAD_LETTER，可以人工重试。'
+      operatingLine: '当前是 at-least-once，失败满 5 次进入 DEAD_LETTER，可以人工重试。'
     },
     {
       key: 'tool-schema',
@@ -220,7 +220,7 @@ export default function SystemAdmin() {
       status: `${tools.length} tools`,
       owner: 'Tool Registry',
       why: '让模型只能从后端允许的工具中选择，写工具统一进入 confirmation。',
-      interviewLine: `工具 schema 由后端暴露，当前 ${writeToolCount} 个写工具需要人工确认。`
+      operatingLine: `工具 schema 由后端暴露，当前 ${writeToolCount} 个写工具需要人工确认。`
     },
     {
       key: 'vector-store',
@@ -228,7 +228,7 @@ export default function SystemAdmin() {
       status: knowledgeStatus?.vectorStoreMode ?? 'unknown',
       owner: 'Knowledge Service',
       why: '用真实 embedding 和向量库做知识检索，回答带引用，低置信拒答。',
-      interviewLine: 'RAG 不是让模型凭空答，而是先检索销售 SOP 和政策，再基于引用回答。'
+      operatingLine: 'RAG 不是让模型凭空答，而是先检索销售 SOP 和政策，再基于引用回答。'
     }
   ];
 
@@ -251,14 +251,14 @@ export default function SystemAdmin() {
               把“能不能上线”拆成可观察、可解释、可恢复的运行指标
             </Title>
             <Paragraph style={{ marginBottom: 12 }}>
-              系统管理页只面向管理员和架构讲解，集中展示访问控制、接口限流、事件分发、知识索引和模型接入状态。
+              系统管理页面向管理员、运维和产品负责人，集中展示访问控制、接口限流、事件分发、知识索引和模型接入状态。
               销售首页不展示这些技术细节，后台这里负责证明系统安全边界和运行韧性。
             </Paragraph>
             <Space wrap>
               {statusTag(securityStatus?.mode ?? 'security-loading')}
               {statusTag(eventStatus?.mode ?? 'events-loading')}
               {statusTag(knowledgeStatus?.vectorStoreMode ?? 'knowledge-loading')}
-              {modelStatus?.configured ? <Tag color="green">真实模型已接入</Tag> : <Tag color="orange">模型演示模式</Tag>}
+              {modelStatus?.configured ? <Tag color="green">真实模型已接入</Tag> : <Tag color="orange">模型规则模式</Tag>}
             </Space>
           </Col>
           <Col xs={24} lg={10}>
@@ -277,7 +277,7 @@ export default function SystemAdmin() {
                   ))}
                 </Space>
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前无阻塞项，可进入演示链路" style={{ margin: '12px 0 0' }} />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前无阻塞项，可进入业务链路" style={{ margin: '12px 0 0' }} />
               )}
             </div>
           </Col>
@@ -327,7 +327,7 @@ export default function SystemAdmin() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>
-          <Card className="command-card" title="生产化能力证明">
+          <Card className="command-card" title="生产运行能力">
             <Table
               rowKey="key"
               loading={loading}
@@ -339,8 +339,8 @@ export default function SystemAdmin() {
                 { title: '落点', dataIndex: 'owner', width: 220 },
                 { title: '为什么要做', dataIndex: 'why' },
                 {
-                  title: '面试讲法',
-                  dataIndex: 'interviewLine',
+                  title: '运行说明',
+                  dataIndex: 'operatingLine',
                   render: (value) => <Text type="secondary">{value}</Text>
                 }
               ]}
@@ -354,7 +354,7 @@ export default function SystemAdmin() {
                 <Descriptions.Item label="权限模式">
                   <Space>
                     {securityStatus?.strict ? <Tag color="green">strict</Tag> : <Tag color="orange">permissive</Tag>}
-                    {securityStatus?.rbacEnabled ? <Tag color="blue">RBAC</Tag> : <Tag>demo fallback</Tag>}
+                    {securityStatus?.rbacEnabled ? <Tag color="blue">RBAC</Tag> : <Tag>local profile</Tag>}
                   </Space>
                 </Descriptions.Item>
                 <Descriptions.Item label="角色 / 用户">
@@ -385,7 +385,7 @@ export default function SystemAdmin() {
         </Col>
       </Row>
 
-      <Card className="command-card" title="架构讲解提纲">
+      <Card className="command-card" title="运行治理说明">
         <Timeline
           items={[
             {
@@ -414,9 +414,9 @@ export default function SystemAdmin() {
               dot: <LockOutlined />,
               children: (
                 <Space direction="vertical" size={2}>
-                  <Text strong>RBAC token 和 demo token 有什么区别？</Text>
+                  <Text strong>RBAC token 和本地身份有什么区别？</Text>
                   <Text type="secondary">
-                    demo token 是本地演示兜底；RBAC token 来自数据库，token 只存 SHA-256，认证后加载真实用户、销售归属和权限集合。
+                    本地身份用于单机环境快速进入系统；RBAC token 来自数据库，token 只存 SHA-256，认证后加载真实用户、销售归属和权限集合。
                   </Text>
                 </Space>
               )

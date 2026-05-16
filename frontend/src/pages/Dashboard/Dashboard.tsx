@@ -771,7 +771,7 @@ export default function Dashboard() {
             <Descriptions column={1} size="small">
               <Descriptions.Item label="服务状态">{statusTag(health?.status ?? 'LOCAL')}</Descriptions.Item>
               <Descriptions.Item label="AI 助手">
-                {modelStatus?.configured ? <Tag color="green">可用</Tag> : <Tag color="orange">演示模式</Tag>}
+                {modelStatus?.configured ? <Tag color="green">可用</Tag> : <Tag color="orange">规则模式</Tag>}
               </Descriptions.Item>
               <Descriptions.Item label="知识覆盖">
                 <Space>
@@ -782,9 +782,9 @@ export default function Dashboard() {
               <Descriptions.Item label="数据边界">
                 <Space>
                   <Tag color={securityStatus?.rbacEnabled ? 'green' : 'orange'}>
-                    {securityStatus?.rbacEnabled ? '按身份过滤' : '演示范围'}
+                    {securityStatus?.rbacEnabled ? '按身份过滤' : '本地范围'}
                   </Tag>
-                  <Text type="secondary">{securityStatus?.rbacUserCount ?? 0} 个演示用户</Text>
+                  <Text type="secondary">{securityStatus?.rbacUserCount ?? 0} 个工作身份</Text>
                 </Space>
               </Descriptions.Item>
               <Descriptions.Item label="后台通知">
