@@ -268,7 +268,7 @@ npm run build
 - AI 能力：OpenAI-compatible 模型适配、LLM Tool Calling、规则路由 fallback、Tool Registry JSON Schema。
 - RAG 能力：阿里百炼 `text-embedding-v4`、1024 维 pgvector、HNSW 索引、关键词 + 向量混合检索、引用和拒答。
 - 可靠性能力：Outbox 事件表、CAS 分发锁、at-least-once 重试、Redis 优先限流、本地 fallback。
-- 可观测与治理能力：`X-Trace-Id`、Agent run、tool call、confirmation、retrieval log、数据保留策略、系统管理运行中心。
+- 可观测与治理能力：`X-Trace-Id`、Agent run、tool call、confirmation、retrieval log、Prometheus 业务指标、数据保留策略、系统管理运行中心。
 - 质量门禁：JUnit 后端测试、前端生产构建、Playwright 完整业务链路测试。
 
 上线前必须收紧的配置：

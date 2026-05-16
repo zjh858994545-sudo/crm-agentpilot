@@ -1,0 +1,40 @@
+groups:
+  - name: crm-agentpilot
+    rules:
+      - alert: AgentPilotOutboxDeadLetters
+        expr: agentpilot_outbox_dead_letter_events > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRM-AgentPilot has dead-letter outbox events"
+          description: "At least one outbox event exceeded retry limits. Open System Admin -> Outbox dead letters and retry after checking downstream systems."
+
+      - alert: AgentPilotOutboxBacklog
+        expr: agentpilot_outbox_pending_events > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot outbox backlog is growing"
+          description: "More than 100 outbox events are pending for over 10 minutes. Check Kafka/log-only dispatcher and downstream availability."
+
+      - alert: AgentPilotRetentionBacklog
+        expr: agentpilot_retention_eligible_rows > 10000
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot retention backlog exceeds one cleanup window"
+          description: "Rows eligible for retention cleanup exceed the default single-run limit. Verify backups, run dry-run, then clean in batches."
+
+      - alert: AgentPilotKnowledgeVectorCoverageLow
+        expr: |
+          agentpilot_knowledge_chunks_total > 0
+          and agentpilot_knowledge_vectorized_chunks / agentpilot_knowledge_chunks_total < 0.8
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot knowledge vector coverage is low"
+          description: "Less than 80% of knowledge chunks have pgvector embeddings. Rebuild vectors from System Admin."

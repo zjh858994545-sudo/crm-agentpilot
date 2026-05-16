@@ -108,6 +108,17 @@ npm run build
 - 审计状态：Agent run、tool call、confirmation 和 trace 信息。
 - Actuator 指标：`/actuator/health` 用于探活，`/actuator/metrics` 和 `/actuator/prometheus` 需要认证后访问，可接 Prometheus/Grafana。
 
+业务级 Prometheus 指标：
+
+- `agentpilot_outbox_pending_events`
+- `agentpilot_outbox_dispatching_events`
+- `agentpilot_outbox_dead_letter_events`
+- `agentpilot_knowledge_chunks_total`
+- `agentpilot_knowledge_vectorized_chunks`
+- `agentpilot_retention_eligible_rows`
+
+告警规则模板位于 `ops/prometheus/agentpilot-alert-rules.yml`，覆盖 Outbox 死信、Outbox backlog、保留策略 backlog 和知识向量覆盖率过低。
+
 运维人员优先关注：
 
 - 失败事件是否持续增长。
