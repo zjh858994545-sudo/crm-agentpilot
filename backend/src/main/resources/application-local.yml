@@ -1,7 +1,11 @@
 logging:
   level:
     root: INFO
-    com.agentpilot: DEBUG
+    com.agentpilot: ${AGENTPILOT_LOG_LEVEL:INFO}
+    com.agentpilot.agent.mapper: ${AGENTPILOT_SQL_LOG_LEVEL:WARN}
+    com.agentpilot.crm.mapper: ${AGENTPILOT_SQL_LOG_LEVEL:WARN}
+    com.agentpilot.rag.mapper: ${AGENTPILOT_SQL_LOG_LEVEL:WARN}
+    com.agentpilot.events.mapper: ${AGENTPILOT_SQL_LOG_LEVEL:WARN}
 
 spring:
   datasource:
