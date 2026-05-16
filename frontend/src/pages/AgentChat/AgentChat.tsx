@@ -446,6 +446,22 @@ export default function AgentChat() {
               <strong>{pendingConfirmations.length}</strong>
             </div>
           </div>
+          <div className={`agent-execution-rail ${loading ? 'is-running' : ''}`}>
+            {[
+              ['理解意图', '读取用户问题'],
+              ['选择工具', '匹配 Tool Schema'],
+              ['执行工具', '查询 CRM / RAG'],
+              ['输出结果', pending ? '等待确认' : '生成答复']
+            ].map(([title, desc], index) => (
+              <div className="execution-step" key={title}>
+                <span className="execution-dot">{index + 1}</span>
+                <div>
+                  <strong>{title}</strong>
+                  <small>{desc}</small>
+                </div>
+              </div>
+            ))}
+          </div>
           <div className="chat-window">
             {messages.map((item, index) => (
               <div className={`message-row ${item.role}`} key={`${item.role}-${index}`}>

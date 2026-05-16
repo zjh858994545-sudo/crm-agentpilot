@@ -225,6 +225,25 @@ export default function AgentRuns() {
       >
         {selectedRun && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div className="trace-flow">
+              <div className="trace-node active">
+                <DeploymentUnitOutlined />
+                <strong>Run</strong>
+                <span>#{selectedRun.id}</span>
+              </div>
+              <div className="trace-line" />
+              <div className="trace-node active">
+                <CodeOutlined />
+                <strong>Tool Call</strong>
+                <span>{toolCalls.length} 次</span>
+              </div>
+              <div className="trace-line" />
+              <div className={`trace-node ${selectedRun.status === 'FAILED' ? 'danger' : 'active'}`}>
+                <ClockCircleOutlined />
+                <strong>{selectedRun.status}</strong>
+                <span>{selectedRun.latencyMs ? `${selectedRun.latencyMs} ms` : '未记录'}</span>
+              </div>
+            </div>
             <Descriptions size="small" bordered column={2}>
               <Descriptions.Item label="意图">{selectedRun.intent}</Descriptions.Item>
               <Descriptions.Item label="状态">
@@ -236,8 +255,9 @@ export default function AgentRuns() {
               <Descriptions.Item label="完成时间">{formatTime(selectedRun.completedAt)}</Descriptions.Item>
             </Descriptions>
 
-            <Card size="small" title="Trace 展开">
+            <Card size="small" title="Trace 展开" className="trace-card">
               <Timeline
+                className="trace-timeline"
                 items={[
                   {
                     dot: <DeploymentUnitOutlined />,

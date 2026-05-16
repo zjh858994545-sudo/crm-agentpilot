@@ -24,7 +24,11 @@ import {
   Typography,
   message as antdMessage
 } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { BarChart, LineChart } from 'echarts/charts';
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
+import * as echarts from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AgentConfirmation,
@@ -50,6 +54,8 @@ import {
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
+
+echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 const fallbackCustomers: Customer[] = [
   {
@@ -190,6 +196,7 @@ function agentUrlForLead(lead: LeadRecommendation) {
 }
 
 export default function Dashboard() {
+  const trendChartRef = useRef<HTMLDivElement | null>(null);
   const [customers, setCustomers] = useState<Customer[]>(fallbackCustomers);
   const [leads, setLeads] = useState<LeadRecommendation[]>(fallbackLeads);
   const [tasks, setTasks] = useState<CrmTask[]>(fallbackTasks);
@@ -295,6 +302,35 @@ export default function Dashboard() {
     [leads]
   );
 
+  const leadTrend = useMemo(() => {
+    const buckets = new Map<string, { date: string; amount: number; high: number; total: number }>();
+    leads.forEach((lead) => {
+      const date = String(lead.expectedCloseDate ?? '').slice(5, 10) || '未知';
+      const item = buckets.get(date) ?? { date, amount: 0, high: 0, total: 0 };
+      item.amount += Number(lead.estimatedAmount || 0);
+      item.total += 1;
+      if (lead.priority === 'HIGH') {
+        item.high += 1;
+      }
+      buckets.set(date, item);
+    });
+    return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 7);
+  }, [leads]);
+
+  const riskHeatmap = useMemo(() => {
+    const riskLevels = ['LOW', 'MEDIUM', 'HIGH'];
+    const industries = [...new Set(customers.map((customer) => customer.industry || '其他'))].slice(0, 5);
+    const max = Math.max(
+      1,
+      ...industries.flatMap((industry) =>
+        riskLevels.map(
+          (risk) => customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length
+        )
+      )
+    );
+    return { industries, riskLevels, max };
+  }, [customers]);
+
   const workItems = useMemo(
     () => [
       {
@@ -362,6 +398,70 @@ export default function Dashboard() {
   const vectorPercent = knowledgeStatus?.chunkCount
     ? Math.round((knowledgeStatus.vectorizedChunkCount / knowledgeStatus.chunkCount) * 100)
     : 0;
+
+  useEffect(() => {
+    if (!trendChartRef.current) {
+      return;
+    }
+    const chart = echarts.init(trendChartRef.current);
+    chart.setOption({
+      animationDuration: 700,
+      grid: { left: 34, right: 18, top: 34, bottom: 28 },
+      tooltip: { trigger: 'axis' },
+      legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: '#65758b' } },
+      xAxis: {
+        type: 'category',
+        data: leadTrend.map((item) => item.date),
+        axisLine: { lineStyle: { color: '#dbe4ef' } },
+        axisTick: { show: false },
+        axisLabel: { color: '#65758b' }
+      },
+      yAxis: [
+        {
+          type: 'value',
+          axisLabel: { color: '#65758b' },
+          splitLine: { lineStyle: { color: '#edf1f6' } }
+        },
+        {
+          type: 'value',
+          axisLabel: { color: '#65758b' },
+          splitLine: { show: false }
+        }
+      ],
+      series: [
+        {
+          name: '预计金额',
+          type: 'bar',
+          barWidth: 18,
+          data: leadTrend.map((item) => item.amount),
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#2563eb' },
+              { offset: 1, color: '#93c5fd' }
+            ])
+          }
+        },
+        {
+          name: '高优商机',
+          type: 'line',
+          yAxisIndex: 1,
+          smooth: true,
+          symbolSize: 7,
+          data: leadTrend.map((item) => item.high),
+          lineStyle: { width: 3, color: '#dc2626' },
+          itemStyle: { color: '#dc2626' },
+          areaStyle: { color: 'rgba(220, 38, 38, 0.08)' }
+        }
+      ]
+    });
+    const resize = () => chart.resize();
+    window.addEventListener('resize', resize);
+    return () => {
+      window.removeEventListener('resize', resize);
+      chart.dispose();
+    };
+  }, [leadTrend]);
 
   return (
     <Space direction="vertical" size={18} style={{ width: '100%' }}>
@@ -534,6 +634,42 @@ export default function Dashboard() {
                 ))}
               </Space>
             )}
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={15}>
+          <Card className="command-card" title="商机趋势">
+            <div ref={trendChartRef} className="chart-canvas" />
+          </Card>
+        </Col>
+        <Col xs={24} xl={9}>
+          <Card className="command-card" title="客户风险热力">
+            <div className="risk-heatmap">
+              <div className="risk-heatmap-head" />
+              {riskHeatmap.riskLevels.map((risk) => (
+                <div className="risk-heatmap-head" key={risk}>{risk}</div>
+              ))}
+              {riskHeatmap.industries.map((industry) => (
+                <div className="risk-heatmap-row" key={industry}>
+                  <div className="risk-heatmap-label">{industry}</div>
+                  {riskHeatmap.riskLevels.map((risk) => {
+                    const count = customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length;
+                    const intensity = count / riskHeatmap.max;
+                    return (
+                      <div
+                        className={`risk-heatmap-cell risk-${risk.toLowerCase()}`}
+                        style={{ opacity: 0.28 + intensity * 0.72 }}
+                        key={`${industry}-${risk}`}
+                      >
+                        {count}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </Card>
         </Col>
       </Row>

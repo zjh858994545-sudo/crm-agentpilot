@@ -18,6 +18,7 @@ test.describe('CRM-AgentPilot sales workflow', () => {
     await page.getByRole('button', { name: /让 Agent 处理/ }).last().click();
     await expect(page).toHaveURL(/\/agent\?.*customerId=1001/);
     await expect(page.getByText(/已带入上游业务上下文/)).toBeVisible();
+    await expect(page.getByText(/理解意图/)).toBeVisible();
     await expect(page.getByRole('textbox')).toHaveValue(/美家房产/);
   });
 
@@ -26,6 +27,8 @@ test.describe('CRM-AgentPilot sales workflow', () => {
     await expect(page.getByRole('heading', { name: /今天先处理谁/ })).toBeVisible();
     await expect(page.getByText(/待确认写入/).first()).toBeVisible();
     await expect(page.getByText(/业务闭环/)).toBeVisible();
+    await expect(page.getByText(/商机趋势/)).toBeVisible();
+    await expect(page.getByText(/客户风险热力/)).toBeVisible();
 
     await page.getByRole('link', { name: '系统能力', exact: true }).click();
     await expect(page.getByRole('heading', { name: /系统能力/ })).toBeVisible();
