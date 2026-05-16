@@ -30,12 +30,9 @@ import { Link } from 'react-router-dom';
 import {
   AgentConfirmation,
   confirmAgentAction,
-  CrmTask,
-  Customer,
   DashboardMetrics,
   EventStatus,
   fetchAgentConfirmationPage,
-  fetchCustomers,
   fetchDashboardMetrics,
   fetchEventStatus,
   fetchHealth,
@@ -43,7 +40,6 @@ import {
   fetchLeadRecommendations,
   fetchModelStatus,
   fetchSecurityStatus,
-  fetchTasks,
   HealthView,
   KnowledgeStatus,
   LeadRecommendation,
@@ -65,18 +61,6 @@ function currency(value?: number) {
     return '-';
   }
   return `¥${Number(value).toLocaleString('zh-CN')}`;
-}
-
-function isOpenTask(task: CrmTask) {
-  return !['DONE', 'CANCELLED', 'CLOSED'].includes(String(task.status ?? '').toUpperCase());
-}
-
-function isDueSoon(value?: string) {
-  if (!value) {
-    return false;
-  }
-  const due = new Date(value).getTime();
-  return Number.isFinite(due) && due <= Date.now() + 2 * 86400000;
 }
 
 function trendDateLabel(value?: string) {
@@ -105,9 +89,7 @@ function agentUrlForLead(lead: LeadRecommendation) {
 
 export default function Dashboard() {
   const trendChartRef = useRef<HTMLDivElement | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [leads, setLeads] = useState<LeadRecommendation[]>([]);
-  const [tasks, setTasks] = useState<CrmTask[]>([]);
   const [health, setHealth] = useState<HealthView | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
@@ -131,9 +113,7 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.allSettled([
       fetchAgentConfirmationPage({ status: 'PENDING', page: 1, pageSize: 4 }),
-      fetchCustomers(),
       fetchLeadRecommendations(20),
-      fetchTasks(),
       fetchHealth(),
       fetchModelStatus(),
       fetchKnowledgeStatus(),
@@ -143,9 +123,7 @@ export default function Dashboard() {
     ]).then((results) => {
       const [
         confirmationsResult,
-        customersResult,
         leadsResult,
-        tasksResult,
         healthResult,
         modelResult,
         knowledgeResult,
@@ -158,14 +136,8 @@ export default function Dashboard() {
       if (confirmationsResult.status === 'fulfilled') {
         setPendingConfirmations(confirmationsResult.value.items);
       }
-      if (customersResult.status === 'fulfilled') {
-        setCustomers(customersResult.value);
-      }
       if (leadsResult.status === 'fulfilled') {
         setLeads(leadsResult.value);
-      }
-      if (tasksResult.status === 'fulfilled') {
-        setTasks(tasksResult.value);
       }
       if (healthResult.status === 'fulfilled') {
         setHealth(healthResult.value);
@@ -186,40 +158,32 @@ export default function Dashboard() {
         setDashboardMetrics(dashboardMetricsResult.value);
       }
 
-      const businessDataFailed = results.slice(1, 4).some((result) => result.status === 'rejected');
+      const businessDataFailed = leadsResult.status === 'rejected' || dashboardMetricsResult.status === 'rejected';
       setBusinessDataMode(businessDataFailed ? 'unavailable' : 'connected');
       if (businessDataFailed) {
-        setError('后端业务数据暂不可用，今日工作台未加载完整客户、商机和任务。');
+        setError('后端业务指标暂不可用，今日工作台未加载完整商机、趋势和风险统计。');
       }
     });
   }, []);
 
   const localMetrics = useMemo(() => {
     const highLeads = leads.filter((item) => item.priority === 'HIGH');
-    const riskCustomers = customers.filter((item) => item.riskLevel === 'HIGH');
-    const dueTasks = tasks.filter((task) => isOpenTask(task) && isDueSoon(task.dueTime));
-    const renewalCustomers = customers.filter((item) =>
-      [item.lifecycleStage, item.tags].some((value) => String(value ?? '').includes('续费'))
-    );
     const amount = highLeads.reduce((sum, item) => sum + Number(item.estimatedAmount || 0), 0);
 
     return {
       highLeads,
-      riskCustomers,
-      dueTasks,
-      renewalCustomers,
       amount
     };
-  }, [customers, leads, tasks]);
+  }, [leads]);
 
   const displayMetrics = useMemo(() => {
     const summary = dashboardMetrics?.summary;
     return {
       highLeadCount: summary?.highLeadCount ?? localMetrics.highLeads.length,
       highLeadAmount: Number(summary?.highLeadAmount ?? localMetrics.amount),
-      riskCustomerCount: summary?.riskCustomerCount ?? localMetrics.riskCustomers.length,
-      dueTaskCount: summary?.dueTaskCount ?? localMetrics.dueTasks.length,
-      renewalCustomerCount: summary?.renewalCustomerCount ?? localMetrics.renewalCustomers.length,
+      riskCustomerCount: summary?.riskCustomerCount ?? 0,
+      dueTaskCount: summary?.dueTaskCount ?? 0,
+      renewalCustomerCount: summary?.renewalCustomerCount ?? 0,
       pendingConfirmationCount: summary?.pendingConfirmationCount ?? pendingConfirmations.length
     };
   }, [dashboardMetrics, localMetrics, pendingConfirmations.length]);
@@ -250,19 +214,8 @@ export default function Dashboard() {
   );
 
   const riskHeatmap = useMemo(() => {
-    const riskLevels = ['LOW', 'MEDIUM', 'HIGH'];
-    const industries = [...new Set(customers.map((customer) => customer.industry || '其他'))].slice(0, 5);
-    const localCells = industries.flatMap((industry) =>
-      riskLevels.map((risk) => ({
-        industry,
-        riskLevel: risk,
-        count: customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length
-      }))
-    );
-    const max = Math.max(1, ...localCells.map((cell) => cell.count));
-    const localRiskHeatmap = { industries, riskLevels, max, cells: localCells };
-    return dashboardMetrics?.riskHeatmap?.cells?.length ? dashboardMetrics.riskHeatmap : localRiskHeatmap;
-  }, [customers, dashboardMetrics]);
+    return dashboardMetrics?.riskHeatmap ?? { industries: [], riskLevels: ['LOW', 'MEDIUM', 'HIGH'], max: 1, cells: [] };
+  }, [dashboardMetrics]);
 
   const workItems = useMemo(
     () => [
@@ -604,34 +557,36 @@ export default function Dashboard() {
         </Col>
         <Col xs={24} xl={9}>
           <Card className="command-card" title="客户风险热力">
-            <div className="risk-heatmap">
-              <div className="risk-heatmap-head" />
-              {riskHeatmap.riskLevels.map((risk) => (
-                <div className="risk-heatmap-head" key={risk}>{risk}</div>
-              ))}
-              {riskHeatmap.industries.map((industry) => (
-                <div className="risk-heatmap-row" key={industry}>
-                  <div className="risk-heatmap-label">{industry}</div>
-                  {riskHeatmap.riskLevels.map((risk) => {
-                    const serverCount = riskHeatmap.cells.find(
-                      (cell) => cell.industry === industry && cell.riskLevel === risk
-                    )?.count;
-                    const count = customers.filter((customer) => (customer.industry || '其他') === industry && customer.riskLevel === risk).length;
-                    const heatmapCount = serverCount ?? count;
-                    const intensity = heatmapCount / riskHeatmap.max;
-                    return (
-                      <div
-                        className={`risk-heatmap-cell risk-${risk.toLowerCase()}`}
-                        style={{ opacity: 0.28 + intensity * 0.72 }}
-                        key={`${industry}-${risk}`}
-                      >
-                        {heatmapCount}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+            {riskHeatmap.industries.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险统计" />
+            ) : (
+              <div className="risk-heatmap">
+                <div className="risk-heatmap-head" />
+                {riskHeatmap.riskLevels.map((risk) => (
+                  <div className="risk-heatmap-head" key={risk}>{risk}</div>
+                ))}
+                {riskHeatmap.industries.map((industry) => (
+                  <div className="risk-heatmap-row" key={industry}>
+                    <div className="risk-heatmap-label">{industry}</div>
+                    {riskHeatmap.riskLevels.map((risk) => {
+                      const heatmapCount = riskHeatmap.cells.find(
+                        (cell) => cell.industry === industry && cell.riskLevel === risk
+                      )?.count ?? 0;
+                      const intensity = heatmapCount / riskHeatmap.max;
+                      return (
+                        <div
+                          className={`risk-heatmap-cell risk-${risk.toLowerCase()}`}
+                          style={{ opacity: 0.28 + intensity * 0.72 }}
+                          key={`${industry}-${risk}`}
+                        >
+                          {heatmapCount}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </Col>
       </Row>
