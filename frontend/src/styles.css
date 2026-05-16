@@ -921,6 +921,18 @@ body {
   line-height: 1.55;
 }
 
+.admin-risk-panel {
+  min-height: 188px;
+  padding: 14px;
+  background: #f7f9fc;
+  border: 1px solid #e4ebf5;
+  border-radius: 8px;
+}
+
+.admin-risk-panel .ant-alert {
+  border-radius: 8px;
+}
+
 .workflow-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);

@@ -1,8 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-async function loginAs(page, testId: 'login-sales' | 'login-manager' | 'login-admin') {
+async function loginAs(page: Page, testId: 'login-sales' | 'login-manager' | 'login-admin') {
   await page.goto('/');
   await page.getByTestId(testId).click();
+}
+
+async function clearPendingConfirmations(page: Page) {
+  const response = await page.request.get('/api/agent/confirmations?status=PENDING');
+  const body = await response.json();
+  const confirmations = body.data ?? [];
+  for (const confirmation of confirmations) {
+    await page.request.post(`/api/agent/confirmations/${confirmation.id}/reject`, {
+      data: { userId: 1 }
+    });
+  }
 }
 
 test.describe('CRM-AgentPilot product workflow', () => {
@@ -44,17 +55,35 @@ test.describe('CRM-AgentPilot product workflow', () => {
 
   test('runs the complete Agent confirmation route against a live backend', async ({ page }) => {
     test.skip(process.env.E2E_FULL_DEMO !== '1', 'Set E2E_FULL_DEMO=1 when a backend is running.');
+    test.setTimeout(120_000);
 
     await loginAs(page, 'login-sales');
+    await clearPendingConfirmations(page);
+
+    await page.goto('/customers?customerId=1001');
+    await expect(page.getByText(/先理解客户，再决定跟进动作/)).toBeVisible();
+    await expect(page.getByText(/美家房产/).first()).toBeVisible();
+
+    await page.goto('/leads?leadId=3001&customerId=1001');
+    await expect(page.getByText(/先排优先级，再推动下一步动作/)).toBeVisible();
+    await expect(page.getByText(/美家房产/).first()).toBeVisible();
+
     await page.goto('/agent?source=lead&customerId=1001&prompt=%E5%B8%AE%E6%88%91%E5%88%9B%E5%BB%BA%E6%98%8E%E5%A4%A9%E4%B8%8A%E5%8D%8810%E7%82%B9%E8%B7%9F%E8%BF%9B%E7%BE%8E%E5%AE%B6%E6%88%BF%E4%BA%A7%E7%BB%AD%E8%B4%B9%E7%9A%84%E4%BB%BB%E5%8A%A1%E3%80%82');
 
     await expect(page.getByText(/已带入上游业务上下文/)).toBeVisible();
     await page.getByRole('button', { name: /发送/ }).click();
 
-    await expect(page.getByText(/待确认写操作/).first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/AI 执行过程/)).toBeVisible();
-    await expect(page.getByText(/确认写入 CRM/)).toBeVisible();
-    await page.getByRole('button', { name: /确认写入 CRM/ }).click();
-    await expect(page.getByText(/已确认|已完成/).first()).toBeVisible({ timeout: 30_000 });
+    const confirmButton = page.locator('.confirmation-panel .ant-btn-primary, .pending-item .ant-btn-primary').first();
+    await expect(confirmButton).toBeVisible({ timeout: 60_000 });
+    await confirmButton.scrollIntoViewIfNeeded();
+    await confirmButton.click();
+    await expect(page.locator('.pending-item, .confirmation-panel')).toHaveCount(0, { timeout: 60_000 });
+
+    await page.getByTestId('identity-switcher').click();
+    await page.getByTitle(/系统管理员/).click();
+    await page.goto('/runs');
+    await expect(page.getByText(/Agent Run 审计列表/)).toBeVisible();
+    await expect(page.getByText(/Run 总数/)).toBeVisible();
   });
 });

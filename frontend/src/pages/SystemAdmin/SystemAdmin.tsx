@@ -34,6 +34,12 @@ type CapabilityRow = {
   interviewLine: string;
 };
 
+type RiskItem = {
+  title: string;
+  detail: string;
+  color: string;
+};
+
 function statusTag(value?: string | boolean) {
   if (value === true) {
     return <Tag color="green">已开启</Tag>;
@@ -84,6 +90,96 @@ export default function SystemAdmin() {
     () => tools.filter((tool) => ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(tool.function.name)).length,
     [tools]
   );
+
+  const vectorCoverage = knowledgeStatus?.chunkCount
+    ? Math.round(((knowledgeStatus.vectorizedChunkCount ?? 0) / knowledgeStatus.chunkCount) * 100)
+    : 0;
+  const deadLetterCount = eventStatus?.outboxDeadLetters ?? 0;
+
+  const riskItems: RiskItem[] = [
+    ...(securityStatus?.strictWithoutToken
+      ? [
+          {
+            title: '严格模式缺少访问 token',
+            detail: '系统会拒绝所有受保护 API，请配置 AGENTPILOT_API_TOKEN 后再启动。',
+            color: 'red'
+          }
+        ]
+      : []),
+    ...(securityStatus && !securityStatus.rateLimit?.enabled
+      ? [
+          {
+            title: '接口限流未开启',
+            detail: '模型调用和 AI 助手接口缺少成本保护，建议生产环境开启。',
+            color: 'orange'
+          }
+        ]
+      : []),
+    ...(deadLetterCount > 0
+      ? [
+          {
+            title: '存在死信事件',
+            detail: 'Outbox 有事件超过最大重试次数，需要管理员检查下游或人工重试。',
+            color: 'red'
+          }
+        ]
+      : []),
+    ...(knowledgeStatus && knowledgeStatus.chunkCount > 0 && vectorCoverage < 80
+      ? [
+          {
+            title: '知识索引覆盖不足',
+            detail: `当前仅 ${vectorCoverage}% 知识片段完成向量索引，建议重建知识索引。`,
+            color: 'orange'
+          }
+        ]
+      : []),
+    ...(modelStatus && !modelStatus.configured
+      ? [
+          {
+            title: '模型处于演示模式',
+            detail: 'AI 助手会回退确定性演示逻辑，真实演示前请确认百炼 API key 已生效。',
+            color: 'blue'
+          }
+        ]
+      : [])
+  ];
+
+  const opsCards = [
+    {
+      title: '访问控制',
+      value: securityStatus?.rbacEnabled ? 'RBAC 已接入' : '演示兜底',
+      color: securityStatus?.rbacEnabled ? 'green' : 'orange',
+      detail: securityStatus?.rbacEnabled
+        ? `${securityStatus.rbacUserCount ?? 0} 个用户 / ${securityStatus.rbacRoleCount ?? 0} 个角色`
+        : '当前使用 demo 用户，适合本地演示'
+    },
+    {
+      title: '调用保护',
+      value: securityStatus?.rateLimit?.enabled ? '限流生效' : '未开启',
+      color: securityStatus?.rateLimit?.enabled ? 'green' : 'orange',
+      detail: securityStatus?.rateLimit?.enabled
+        ? `AI 助手 ${securityStatus.rateLimit.agentCapacity}/min，模型 ${securityStatus.rateLimit.modelCapacity}/min`
+        : '生产环境建议开启'
+    },
+    {
+      title: '事件可靠性',
+      value: deadLetterCount > 0 ? '需处理' : '正常',
+      color: deadLetterCount > 0 ? 'red' : 'green',
+      detail: `${eventStatus?.outboxPending ?? 0} 待分发 / ${eventStatus?.outboxDispatching ?? 0} 分发中 / ${deadLetterCount} 死信`
+    },
+    {
+      title: '知识检索',
+      value: knowledgeStatus?.pgvectorAvailable ? 'pgvector' : knowledgeStatus?.vectorStoreMode ?? '未知',
+      color: knowledgeStatus?.pgvectorAvailable ? 'green' : 'blue',
+      detail: `${knowledgeStatus?.vectorizedChunkCount ?? 0}/${knowledgeStatus?.chunkCount ?? 0} 片段已索引，覆盖 ${vectorCoverage}%`
+    },
+    {
+      title: '模型接入',
+      value: modelStatus?.configured ? '真实模型' : '演示模式',
+      color: modelStatus?.configured ? 'green' : 'orange',
+      detail: modelStatus?.configured ? `${modelStatus.vendor ?? modelStatus.provider} · ${modelStatus.model}` : '可回退规则路由'
+    }
+  ];
 
   const capabilityRows: CapabilityRow[] = [
     {
@@ -142,18 +238,65 @@ export default function SystemAdmin() {
 
       <Card
         className="command-card"
-        title="系统能力总览"
+        title="系统运行中枢"
         extra={
           <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>
-            刷新
+            刷新运行状态
           </Button>
         }
       >
-        <Paragraph style={{ marginBottom: 0 }}>
-          这个页面只服务系统管理员和面试讲解：把限流、RBAC、Outbox、Tool Schema、RAG 这些生产化能力集中到一处，
-          方便判断系统是否可控、可追踪、可恢复。
-        </Paragraph>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} lg={14}>
+            <Title level={4} style={{ marginTop: 0 }}>
+              把“能不能上线”拆成可观察、可解释、可恢复的运行指标
+            </Title>
+            <Paragraph style={{ marginBottom: 12 }}>
+              系统管理页只面向管理员和架构讲解，集中展示访问控制、接口限流、事件分发、知识索引和模型接入状态。
+              销售首页不展示这些技术细节，后台这里负责证明系统安全边界和运行韧性。
+            </Paragraph>
+            <Space wrap>
+              {statusTag(securityStatus?.mode ?? 'security-loading')}
+              {statusTag(eventStatus?.mode ?? 'events-loading')}
+              {statusTag(knowledgeStatus?.vectorStoreMode ?? 'knowledge-loading')}
+              {modelStatus?.configured ? <Tag color="green">真实模型已接入</Tag> : <Tag color="orange">模型演示模式</Tag>}
+            </Space>
+          </Col>
+          <Col xs={24} lg={10}>
+            <div className="admin-risk-panel">
+              <Text strong>管理员待办</Text>
+              {riskItems.length ? (
+                <Space direction="vertical" size={8} style={{ width: '100%', marginTop: 10 }}>
+                  {riskItems.map((item) => (
+                    <Alert
+                      key={item.title}
+                      type={item.color === 'red' ? 'error' : item.color === 'orange' ? 'warning' : 'info'}
+                      showIcon
+                      message={item.title}
+                      description={item.detail}
+                    />
+                  ))}
+                </Space>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前无阻塞项，可进入演示链路" style={{ margin: '12px 0 0' }} />
+              )}
+            </div>
+          </Col>
+        </Row>
       </Card>
+
+      <Row gutter={[16, 16]}>
+        {opsCards.map((item) => (
+          <Col xs={24} md={12} xl={6} xxl={4} key={item.title}>
+            <Card className="metric-card">
+              <Space direction="vertical" size={4}>
+                <Text type="secondary">{item.title}</Text>
+                <Tag color={item.color}>{item.value}</Tag>
+                <Text strong>{item.detail}</Text>
+              </Space>
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={6}>
@@ -184,7 +327,7 @@ export default function SystemAdmin() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>
-          <Card className="command-card" title="产品化能力清单">
+          <Card className="command-card" title="生产化能力证明">
             <Table
               rowKey="key"
               loading={loading}
@@ -206,7 +349,7 @@ export default function SystemAdmin() {
         </Col>
         <Col xs={24} xl={10}>
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Card className="command-card" title="RBAC 与限流">
+            <Card className="command-card" title="访问控制与调用保护">
               <Descriptions size="small" bordered column={1}>
                 <Descriptions.Item label="权限模式">
                   <Space>
@@ -229,7 +372,7 @@ export default function SystemAdmin() {
               </Descriptions>
             </Card>
 
-            <Card className="command-card" title="Outbox 分发状态">
+            <Card className="command-card" title="事件可靠性">
               <Descriptions size="small" bordered column={1}>
                 <Descriptions.Item label="模式">{statusTag(eventStatus?.mode ?? 'log-only')}</Descriptions.Item>
                 <Descriptions.Item label="待分发">{eventStatus?.outboxPending ?? 0}</Descriptions.Item>
@@ -242,7 +385,7 @@ export default function SystemAdmin() {
         </Col>
       </Row>
 
-      <Card className="command-card" title="面试时怎么讲这三件事">
+      <Card className="command-card" title="架构讲解提纲">
         <Timeline
           items={[
             {
@@ -293,7 +436,7 @@ export default function SystemAdmin() {
         />
       </Card>
 
-      <Card className="command-card" title="Tool Schema 概览">
+      <Card className="command-card" title="工具边界">
         {tools.length ? (
           <Table
             rowKey={(record) => record.function.name}
@@ -320,7 +463,7 @@ export default function SystemAdmin() {
         )}
       </Card>
 
-      <Card className="command-card" title="模型与向量检索">
+      <Card className="command-card" title="模型与知识检索">
         <Descriptions size="small" bordered column={2}>
           <Descriptions.Item label="模型">{modelStatus?.model ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="模型模式">{modelStatus?.mode ?? '-'}</Descriptions.Item>
