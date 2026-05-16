@@ -57,6 +57,7 @@ public class ModelController {
     }
 
     @PostMapping("/chat")
+    @PreAuthorize("hasAuthority('events:read')")
     public ApiResponse<Map<String, Object>> chat(@RequestBody Map<String, String> request) {
         String systemPrompt = request.getOrDefault("systemPrompt", "You are a concise CRM AI assistant.");
         String userPrompt = request.getOrDefault("prompt", "");
@@ -70,6 +71,7 @@ public class ModelController {
     }
 
     @PostMapping("/embedding")
+    @PreAuthorize("hasAuthority('events:read')")
     public ApiResponse<Map<String, Object>> embedding(@RequestBody Map<String, String> request) {
         String text = request.getOrDefault("text", "");
         double[] vector = embeddingService.embed(text);
