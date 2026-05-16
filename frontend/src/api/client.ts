@@ -96,6 +96,7 @@ export interface SecurityStatus {
   rbacUserCount?: number;
   rbacRoleCount?: number;
   tokenConfigured: boolean;
+  seedUsersEnabled?: boolean;
   strictWithoutToken: boolean;
   rateLimit?: {
     enabled: boolean;

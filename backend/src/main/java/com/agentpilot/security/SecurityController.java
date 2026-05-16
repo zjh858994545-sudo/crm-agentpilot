@@ -47,6 +47,7 @@ public class SecurityController {
         body.put("rbacUserCount", rbacUserCount);
         body.put("rbacRoleCount", rbacRoleCount);
         body.put("tokenConfigured", tokenConfigured);
+        body.put("seedUsersEnabled", properties.isSeedUsersEnabled());
         body.put("strictWithoutToken", properties.strict() && !tokenConfigured && rbacUserCount == 0);
         body.put("rateLimit", Map.of(
                 "enabled", rateLimitProperties.isEnabled(),

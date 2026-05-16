@@ -11,6 +11,7 @@ public class AgentPilotSecurityProperties {
     private String apiToken = "";
     private Long demoUserId = 1L;
     private Long demoSalesRepId = 1L;
+    private boolean seedUsersEnabled = true;
     private List<String> permissions = new ArrayList<>(List.of(
             "agent:use",
             "crm:read",
@@ -57,6 +58,14 @@ public class AgentPilotSecurityProperties {
 
     public void setDemoSalesRepId(Long demoSalesRepId) {
         this.demoSalesRepId = demoSalesRepId;
+    }
+
+    public boolean isSeedUsersEnabled() {
+        return seedUsersEnabled;
+    }
+
+    public void setSeedUsersEnabled(boolean seedUsersEnabled) {
+        this.seedUsersEnabled = seedUsersEnabled;
     }
 
     public List<String> getPermissions() {

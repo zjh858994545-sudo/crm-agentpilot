@@ -1,5 +1,6 @@
 package com.agentpilot.security;
 
+import com.agentpilot.security.config.AgentPilotSecurityProperties;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import java.util.Optional;
 @Service
 public class RbacPrincipalService {
     private final JdbcTemplate jdbcTemplate;
+    private final AgentPilotSecurityProperties securityProperties;
 
     public record UserProfile(
             Long userId,
@@ -28,8 +30,9 @@ public class RbacPrincipalService {
     ) {
     }
 
-    public RbacPrincipalService(JdbcTemplate jdbcTemplate) {
+    public RbacPrincipalService(JdbcTemplate jdbcTemplate, AgentPilotSecurityProperties securityProperties) {
         this.jdbcTemplate = jdbcTemplate;
+        this.securityProperties = securityProperties;
     }
 
     public Optional<AgentPilotPrincipal> findByApiToken(String apiToken) {
@@ -42,7 +45,9 @@ public class RbacPrincipalService {
                     """
                             SELECT id, sales_rep_id
                             FROM agentpilot_user
-                            WHERE api_token_sha256 = ? AND status = 'ACTIVE'
+                            WHERE api_token_sha256 = ?
+                              AND status = 'ACTIVE'
+                              AND (? = TRUE OR username NOT IN ('linxiaofeng', 'zhouyuqing', 'admin', 'chenming'))
                             """,
                     (rs, rowNum) -> {
                         Long userId = rs.getLong("id");
@@ -61,7 +66,8 @@ public class RbacPrincipalService {
                         );
                         return new AgentPilotPrincipal(userId, salesRepId, permissions);
                     },
-                    tokenHash
+                    tokenHash,
+                    securityProperties.isSeedUsersEnabled()
             );
             return Optional.ofNullable(principal);
         } catch (EmptyResultDataAccessException ex) {

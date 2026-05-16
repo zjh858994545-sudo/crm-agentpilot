@@ -492,6 +492,9 @@ export default function SystemAdmin() {
                 <Descriptions.Item label="角色 / 用户">
                   {securityStatus?.rbacRoleCount ?? 0} roles / {securityStatus?.rbacUserCount ?? 0} users
                 </Descriptions.Item>
+                <Descriptions.Item label="种子账号">
+                  {securityStatus?.seedUsersEnabled ? <Tag color="orange">本地可用</Tag> : <Tag color="green">生产禁用</Tag>}
+                </Descriptions.Item>
                 <Descriptions.Item label="Agent Chat">
                   {securityStatus?.rateLimit?.agentCapacity ?? '-'} / min
                 </Descriptions.Item>
