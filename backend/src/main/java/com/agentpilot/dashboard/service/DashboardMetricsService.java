@@ -1,9 +1,5 @@
 package com.agentpilot.dashboard.service;
 
-import com.agentpilot.crm.entity.CrmTask;
-import com.agentpilot.crm.entity.Customer;
-import com.agentpilot.crm.service.CrmTaskService;
-import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.dashboard.vo.DashboardMetrics;
 import com.agentpilot.dashboard.vo.DashboardRiskCell;
 import com.agentpilot.dashboard.vo.DashboardRiskHeatmap;
@@ -11,7 +7,6 @@ import com.agentpilot.dashboard.vo.DashboardSummary;
 import com.agentpilot.dashboard.vo.DashboardTrendPoint;
 import com.agentpilot.scoring.service.LeadScoringService;
 import com.agentpilot.scoring.vo.LeadRecommendation;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -26,14 +21,34 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 public class DashboardMetricsService {
     private static final DateTimeFormatter TREND_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final Set<String> OPEN_TASK_STATUSES = Set.of("TODO", "PENDING", "OPEN");
     private static final List<String> RISK_LEVELS = List.of("LOW", "MEDIUM", "HIGH");
+    private static final String HIGH_RISK_CUSTOMER_COUNT_SQL = """
+            SELECT COUNT(*)
+            FROM crm_customer
+            WHERE owner_sales_rep_id = ?
+              AND UPPER(COALESCE(risk_level, '')) = 'HIGH'
+            """;
+    private static final String RENEWAL_CUSTOMER_COUNT_SQL = """
+            SELECT COUNT(*)
+            FROM crm_customer
+            WHERE owner_sales_rep_id = ?
+              AND (
+                  COALESCE(lifecycle_stage, '') LIKE ?
+                  OR COALESCE(tags, '') LIKE ?
+              )
+            """;
+    private static final String DUE_TASK_COUNT_SQL = """
+            SELECT COUNT(*)
+            FROM crm_task
+            WHERE sales_rep_id = ?
+              AND UPPER(COALESCE(status, '')) IN ('TODO', 'PENDING', 'OPEN')
+              AND due_time IS NOT NULL
+              AND due_time <= ?
+            """;
     private static final String PENDING_CONFIRMATION_COUNT_SQL = """
             SELECT COUNT(*)
             FROM crm_agent_confirmation confirmation
@@ -46,47 +61,52 @@ public class DashboardMetricsService {
                     AND agent_run.user_id = ?
               )
             """;
+    private static final String RISK_HEATMAP_SQL = """
+            SELECT
+                COALESCE(NULLIF(industry, ''), 'Other') AS industry,
+                CASE
+                    WHEN UPPER(COALESCE(risk_level, '')) IN ('LOW', 'MEDIUM', 'HIGH')
+                    THEN UPPER(risk_level)
+                    ELSE 'LOW'
+                END AS risk_level,
+                COUNT(*) AS count_value
+            FROM crm_customer
+            WHERE owner_sales_rep_id = ?
+            GROUP BY
+                COALESCE(NULLIF(industry, ''), 'Other'),
+                CASE
+                    WHEN UPPER(COALESCE(risk_level, '')) IN ('LOW', 'MEDIUM', 'HIGH')
+                    THEN UPPER(risk_level)
+                    ELSE 'LOW'
+                END
+            """;
 
     private final LeadScoringService leadScoringService;
-    private final CustomerService customerService;
-    private final CrmTaskService taskService;
     private final JdbcTemplate jdbcTemplate;
 
     public DashboardMetricsService(
             LeadScoringService leadScoringService,
-            CustomerService customerService,
-            CrmTaskService taskService,
             JdbcTemplate jdbcTemplate
     ) {
         this.leadScoringService = leadScoringService;
-        this.customerService = customerService;
-        this.taskService = taskService;
         this.jdbcTemplate = jdbcTemplate;
     }
 
     public DashboardMetrics metrics(Long salesRepId, Long userId) {
         List<LeadRecommendation> recommendations = leadScoringService.recommend(salesRepId, 20);
-        List<Customer> customers = customerService.list(new LambdaQueryWrapper<Customer>()
-                .eq(Customer::getOwnerSalesRepId, salesRepId)
-                .orderByAsc(Customer::getId));
-        List<CrmTask> tasks = taskService.list(new LambdaQueryWrapper<CrmTask>()
-                .eq(CrmTask::getSalesRepId, salesRepId)
-                .orderByAsc(CrmTask::getDueTime));
 
-        DashboardSummary summary = summary(recommendations, customers, tasks, salesRepId, userId);
+        DashboardSummary summary = summary(recommendations, salesRepId, userId);
         return new DashboardMetrics(
                 salesRepId,
                 OffsetDateTime.now(),
                 summary,
                 leadTrend(recommendations),
-                riskHeatmap(customers)
+                riskHeatmap(salesRepId)
         );
     }
 
     private DashboardSummary summary(
             List<LeadRecommendation> recommendations,
-            List<Customer> customers,
-            List<CrmTask> tasks,
             Long salesRepId,
             Long userId
     ) {
@@ -97,15 +117,9 @@ public class DashboardMetricsService {
                 .map(LeadRecommendation::estimatedAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int riskCustomerCount = (int) customers.stream()
-                .filter(customer -> Objects.equals(normalizeRiskLevel(customer.getRiskLevel()), "HIGH"))
-                .count();
-        int dueTaskCount = (int) tasks.stream()
-                .filter(this::isOpenDueSoon)
-                .count();
-        int renewalCustomerCount = (int) customers.stream()
-                .filter(this::isRenewalCustomer)
-                .count();
+        int riskCustomerCount = intCount(HIGH_RISK_CUSTOMER_COUNT_SQL, salesRepId);
+        int dueTaskCount = intCount(DUE_TASK_COUNT_SQL, salesRepId, LocalDateTime.now().plusHours(48));
+        int renewalCustomerCount = intCount(RENEWAL_CUSTOMER_COUNT_SQL, salesRepId, "%续费%", "%续费%");
         int pendingConfirmationCount = pendingConfirmationCount(salesRepId, userId);
 
         return new DashboardSummary(
@@ -140,12 +154,15 @@ public class DashboardMetricsService {
                 .toList();
     }
 
-    private DashboardRiskHeatmap riskHeatmap(List<Customer> customers) {
-        Map<String, Map<String, Long>> counts = customers.stream()
-                .collect(Collectors.groupingBy(
-                        customer -> blankToOther(customer.getIndustry()),
-                        Collectors.groupingBy(customer -> normalizeRiskLevel(customer.getRiskLevel()), Collectors.counting())
-                ));
+    private DashboardRiskHeatmap riskHeatmap(Long salesRepId) {
+        Map<String, Map<String, Long>> counts = new LinkedHashMap<>();
+        jdbcTemplate.query(RISK_HEATMAP_SQL, rs -> {
+            String industry = blankToOther(rs.getString("industry"));
+            String riskLevel = normalizeRiskLevel(rs.getString("risk_level"));
+            long count = rs.getLong("count_value");
+            counts.computeIfAbsent(industry, ignored -> new LinkedHashMap<>())
+                    .put(riskLevel, count);
+        }, salesRepId);
         List<String> industries = counts.entrySet().stream()
                 .sorted(Comparator.comparingLong((Map.Entry<String, Map<String, Long>> entry) -> industryTotal(entry.getValue()))
                         .reversed()
@@ -172,29 +189,16 @@ public class DashboardMetricsService {
     }
 
     private int pendingConfirmationCount(Long salesRepId, Long userId) {
-        Long count = jdbcTemplate.queryForObject(PENDING_CONFIRMATION_COUNT_SQL, Long.class, salesRepId, userId);
-        return count == null ? 0 : count.intValue();
+        return intCount(PENDING_CONFIRMATION_COUNT_SQL, salesRepId, userId);
     }
 
     private long industryTotal(Map<String, Long> riskCounts) {
         return riskCounts.values().stream().mapToLong(Long::longValue).sum();
     }
 
-    private boolean isOpenDueSoon(CrmTask task) {
-        if (task.getDueTime() == null) {
-            return false;
-        }
-        String status = task.getStatus() == null ? "" : task.getStatus().toUpperCase(Locale.ROOT);
-        return OPEN_TASK_STATUSES.contains(status)
-                && !task.getDueTime().isAfter(LocalDateTime.now().plusHours(48));
-    }
-
-    private boolean isRenewalCustomer(Customer customer) {
-        return containsRenewal(customer.getLifecycleStage()) || containsRenewal(customer.getTags());
-    }
-
-    private boolean containsRenewal(String value) {
-        return value != null && value.contains("\u7eed\u8d39");
+    private int intCount(String sql, Object... args) {
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, args);
+        return count == null ? 0 : count.intValue();
     }
 
     private String normalizeRiskLevel(String value) {
