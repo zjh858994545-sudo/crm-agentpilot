@@ -17,14 +17,21 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
     private final AgentPilotSecurityProperties properties;
     private final ObjectMapper objectMapper;
+    private final RbacPrincipalService rbacPrincipalService;
 
-    public AgentPilotTokenAuthenticationFilter(AgentPilotSecurityProperties properties, ObjectMapper objectMapper) {
+    public AgentPilotTokenAuthenticationFilter(
+            AgentPilotSecurityProperties properties,
+            ObjectMapper objectMapper,
+            RbacPrincipalService rbacPrincipalService
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.rbacPrincipalService = rbacPrincipalService;
     }
 
     @Override
@@ -38,6 +45,13 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
             if (!properties.strict()) {
                 authenticateDemoUser();
             }
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        Optional<AgentPilotPrincipal> rbacPrincipal = rbacPrincipalService.findByApiToken(token);
+        if (rbacPrincipal.isPresent()) {
+            authenticate(rbacPrincipal.get());
             filterChain.doFilter(request, response);
             return;
         }
@@ -74,15 +88,18 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticateDemoUser() {
-        AgentPilotPrincipal principal = new AgentPilotPrincipal(
+        authenticate(new AgentPilotPrincipal(
                 properties.getDemoUserId(),
                 properties.getDemoSalesRepId(),
                 List.copyOf(properties.getPermissions())
-        );
+        ));
+    }
+
+    private void authenticate(AgentPilotPrincipal principal) {
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
-                properties.getPermissions().stream().map(SimpleGrantedAuthority::new).toList()
+                principal.permissions().stream().map(SimpleGrantedAuthority::new).toList()
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }

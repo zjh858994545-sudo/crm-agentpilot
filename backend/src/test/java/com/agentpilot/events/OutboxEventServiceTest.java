@@ -50,4 +50,41 @@ class OutboxEventServiceTest {
         assertThat(revived.getRetryCount()).isZero();
         assertThat(revived.getErrorMessage()).isNull();
     }
+
+    @Test
+    void dispatchClaimIsSingleWinnerAndStaleLocksAreReleased() {
+        OutboxEvent event = newEvent("PENDING", 0);
+        outboxEventService.save(event);
+
+        assertThat(outboxEventService.claimForDispatch(event.getId(), "worker-a")).isTrue();
+        assertThat(outboxEventService.claimForDispatch(event.getId(), "worker-b")).isFalse();
+
+        OutboxEvent claimed = outboxEventService.getById(event.getId());
+        assertThat(claimed.getStatus()).isEqualTo("DISPATCHING");
+        assertThat(claimed.getLockedBy()).isEqualTo("worker-a");
+        assertThat(claimed.getLockedAt()).isNotNull();
+
+        claimed.setLockedAt(LocalDateTime.now().minus(OutboxEventService.DISPATCH_LOCK_TTL).minusSeconds(1));
+        outboxEventService.updateById(claimed);
+
+        assertThat(outboxEventService.releaseStaleDispatching()).isGreaterThanOrEqualTo(1);
+        OutboxEvent released = outboxEventService.getById(event.getId());
+        assertThat(released.getStatus()).isEqualTo("FAILED");
+        assertThat(released.getLockedBy()).isNull();
+        assertThat(released.getLockedAt()).isNull();
+    }
+
+    private OutboxEvent newEvent(String status, int retryCount) {
+        OutboxEvent event = new OutboxEvent();
+        event.setEventId(UUID.randomUUID().toString());
+        event.setTopic("test-topic");
+        event.setEventType("test.event");
+        event.setAggregateType("test");
+        event.setAggregateId("1");
+        event.setPayloadJson("{\"ok\":true}");
+        event.setStatus(status);
+        event.setRetryCount(retryCount);
+        event.setCreatedAt(LocalDateTime.now());
+        return event;
+    }
 }

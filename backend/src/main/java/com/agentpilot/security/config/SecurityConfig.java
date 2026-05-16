@@ -2,6 +2,8 @@ package com.agentpilot.security.config;
 
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.security.AgentPilotTokenAuthenticationFilter;
+import com.agentpilot.security.RbacPrincipalService;
+import com.agentpilot.security.ratelimit.ApiRateLimitFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,7 +16,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 
@@ -25,12 +26,10 @@ public class SecurityConfig {
     @Bean
     public AgentPilotTokenAuthenticationFilter agentPilotTokenAuthenticationFilter(
             AgentPilotSecurityProperties properties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RbacPrincipalService rbacPrincipalService
     ) {
-        if (properties.strict() && !StringUtils.hasText(properties.getApiToken())) {
-            throw new IllegalStateException("strict security mode requires AGENTPILOT_API_TOKEN to be set");
-        }
-        return new AgentPilotTokenAuthenticationFilter(properties, objectMapper);
+        return new AgentPilotTokenAuthenticationFilter(properties, objectMapper, rbacPrincipalService);
     }
 
     @Bean
@@ -44,6 +43,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             AgentPilotTokenAuthenticationFilter tokenFilter,
+            ApiRateLimitFilter apiRateLimitFilter,
             ObjectMapper objectMapper
     ) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
@@ -75,6 +75,7 @@ public class SecurityConfig {
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(tokenFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(apiRateLimitFilter, AgentPilotTokenAuthenticationFilter.class);
         return http.build();
     }
 }

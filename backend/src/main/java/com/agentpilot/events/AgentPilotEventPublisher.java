@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class AgentPilotEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(AgentPilotEventPublisher.class);
+    private final String workerId = "agentpilot-" + UUID.randomUUID();
 
     private final EventProperties properties;
     private final ObjectProvider<KafkaTemplate<Object, Object>> kafkaTemplateProvider;
@@ -88,8 +89,10 @@ public class AgentPilotEventPublisher {
         result.put("agentToolCallTopic", properties.getAgentToolCallTopic());
         result.put("crmTaskTopic", properties.getCrmTaskTopic());
         result.put("outboxPending", outboxEventService.pendingCount());
+        result.put("outboxDispatching", outboxEventService.dispatchingCount());
         result.put("outboxDeadLetters", outboxEventService.deadLetterCount());
         result.put("maxRetryCount", OutboxEventService.MAX_RETRY_COUNT);
+        result.put("dispatcherWorkerId", workerId);
         return result;
     }
 
@@ -134,6 +137,7 @@ public class AgentPilotEventPublisher {
 
     @Scheduled(fixedDelayString = "${agentpilot.events.outbox-dispatch-delay-ms:5000}")
     public void dispatchPending() {
+        outboxEventService.releaseStaleDispatching();
         outboxEventService.listDispatchable(20).forEach(event -> dispatchOne(event.getId()));
     }
 
@@ -146,8 +150,11 @@ public class AgentPilotEventPublisher {
     }
 
     private void dispatchOne(Long outboxId) {
+        if (!outboxEventService.claimForDispatch(outboxId, workerId)) {
+            return;
+        }
         OutboxEvent outbox = outboxEventService.getById(outboxId);
-        if (outbox == null || "PUBLISHED".equals(outbox.getStatus()) || "DEAD_LETTER".equals(outbox.getStatus())) {
+        if (outbox == null) {
             return;
         }
         if (!properties.isKafkaEnabled()) {

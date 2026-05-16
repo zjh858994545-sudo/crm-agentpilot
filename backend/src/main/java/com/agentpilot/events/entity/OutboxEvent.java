@@ -20,6 +20,8 @@ public class OutboxEvent {
     private String status;
     private Integer retryCount;
     private String errorMessage;
+    private String lockedBy;
+    private LocalDateTime lockedAt;
     private LocalDateTime createdAt;
     private LocalDateTime publishedAt;
 
@@ -109,6 +111,22 @@ public class OutboxEvent {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public String getLockedBy() {
+        return lockedBy;
+    }
+
+    public void setLockedBy(String lockedBy) {
+        this.lockedBy = lockedBy;
+    }
+
+    public LocalDateTime getLockedAt() {
+        return lockedAt;
+    }
+
+    public void setLockedAt(LocalDateTime lockedAt) {
+        this.lockedAt = lockedAt;
     }
 
     public LocalDateTime getCreatedAt() {

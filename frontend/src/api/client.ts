@@ -43,8 +43,10 @@ export interface EventStatus {
   agentToolCallTopic: string;
   crmTaskTopic: string;
   outboxPending?: number;
+  outboxDispatching?: number;
   outboxDeadLetters?: number;
   maxRetryCount?: number;
+  dispatcherWorkerId?: string;
 }
 
 export interface KnowledgeStatus {
@@ -61,6 +63,9 @@ export interface SecurityStatus {
   demoUserId: number;
   demoSalesRepId: number;
   permissionCount: number;
+  rbacEnabled?: boolean;
+  rbacUserCount?: number;
+  rbacRoleCount?: number;
   tokenConfigured: boolean;
   strictWithoutToken: boolean;
 }

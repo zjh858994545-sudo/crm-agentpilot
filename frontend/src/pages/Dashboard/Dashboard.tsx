@@ -599,12 +599,17 @@ export default function Dashboard() {
                 </Space>
               </Descriptions.Item>
               <Descriptions.Item label="权限">
-                {securityStatus?.strict ? <Tag color="green">strict</Tag> : <Tag color="orange">permissive</Tag>}
+                <Space>
+                  {securityStatus?.strict ? <Tag color="green">strict</Tag> : <Tag color="orange">permissive</Tag>}
+                  {securityStatus?.rbacEnabled ? <Tag color="blue">RBAC</Tag> : null}
+                  <Text type="secondary">users={securityStatus?.rbacUserCount ?? 0}</Text>
+                </Space>
               </Descriptions.Item>
               <Descriptions.Item label="事件">
                 <Space>
                   {statusTag(eventStatus?.mode ?? 'log-only')}
                   <Text type="secondary">pending={eventStatus?.outboxPending ?? 0}</Text>
+                  <Text type="secondary">dispatching={eventStatus?.outboxDispatching ?? 0}</Text>
                   <Text type={(eventStatus?.outboxDeadLetters ?? 0) > 0 ? 'danger' : 'secondary'}>
                     dead={eventStatus?.outboxDeadLetters ?? 0}
                   </Text>

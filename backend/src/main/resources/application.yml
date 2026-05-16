@@ -71,3 +71,11 @@ agentpilot:
     api-token: ${AGENTPILOT_API_TOKEN:}
     demo-user-id: ${AGENTPILOT_DEMO_USER_ID:1}
     demo-sales-rep-id: ${AGENTPILOT_DEMO_SALES_REP_ID:1}
+  rate-limit:
+    enabled: ${AGENTPILOT_RATE_LIMIT_ENABLED:true}
+    default-capacity: ${AGENTPILOT_RATE_LIMIT_DEFAULT_CAPACITY:300}
+    default-refill-per-minute: ${AGENTPILOT_RATE_LIMIT_DEFAULT_REFILL_PER_MINUTE:300}
+    agent-capacity: ${AGENTPILOT_RATE_LIMIT_AGENT_CAPACITY:60}
+    agent-refill-per-minute: ${AGENTPILOT_RATE_LIMIT_AGENT_REFILL_PER_MINUTE:60}
+    model-capacity: ${AGENTPILOT_RATE_LIMIT_MODEL_CAPACITY:30}
+    model-refill-per-minute: ${AGENTPILOT_RATE_LIMIT_MODEL_REFILL_PER_MINUTE:30}

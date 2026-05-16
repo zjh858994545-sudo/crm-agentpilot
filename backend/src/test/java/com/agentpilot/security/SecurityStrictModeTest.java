@@ -32,8 +32,21 @@ class SecurityStrictModeTest {
                 .andExpect(jsonPath("$.code", is("UNAUTHORIZED")));
 
         mockMvc.perform(get("/api/customers")
-                        .header("X-AgentPilot-Token", "test-agentpilot-token"))
+                .header("X-AgentPilot-Token", "test-agentpilot-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)));
+    }
+
+    @Test
+    void strictModeCanAuthenticateDatabaseBackedRbacUser() throws Exception {
+        mockMvc.perform(get("/api/customers")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data[0].ownerSalesRepId", is(2)));
+
+        mockMvc.perform(get("/api/customers/1001")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-2"))
+                .andExpect(status().isForbidden());
     }
 }

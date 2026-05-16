@@ -4,6 +4,7 @@ import com.agentpilot.common.config.ApplicationInfoProperties;
 import com.agentpilot.events.config.EventProperties;
 import com.agentpilot.model.config.ModelProperties;
 import com.agentpilot.security.config.AgentPilotSecurityProperties;
+import com.agentpilot.security.ratelimit.ApiRateLimitProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,7 +16,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         ApplicationInfoProperties.class,
         ModelProperties.class,
         EventProperties.class,
-        AgentPilotSecurityProperties.class
+        AgentPilotSecurityProperties.class,
+        ApiRateLimitProperties.class
 })
 public class AgentPilotApplication {
 
