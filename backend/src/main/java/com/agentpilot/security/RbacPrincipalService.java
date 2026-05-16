@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,8 @@ public class RbacPrincipalService {
             String displayName,
             Long salesRepId,
             String status,
+            LocalDateTime lastAuthenticatedAt,
+            String lastAuthenticatedIp,
             List<String> roles,
             List<String> permissions
     ) {
@@ -77,6 +80,23 @@ public class RbacPrincipalService {
         return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agentpilot_role", Long.class);
     }
 
+    public void recordTokenUse(Long userId, String clientIp) {
+        if (userId == null) {
+            return;
+        }
+        jdbcTemplate.update(
+                """
+                        UPDATE agentpilot_user
+                        SET last_authenticated_at = CURRENT_TIMESTAMP,
+                            last_authenticated_ip = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                clientIp,
+                userId
+        );
+    }
+
     public Optional<UserProfile> findProfileByUserId(Long userId) {
         if (userId == null) {
             return Optional.empty();
@@ -84,7 +104,7 @@ public class RbacPrincipalService {
         try {
             UserProfile profile = jdbcTemplate.queryForObject(
                     """
-                            SELECT id, username, display_name, sales_rep_id, status
+                            SELECT id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
                             FROM agentpilot_user
                             WHERE id = ?
                             """,
@@ -96,6 +116,8 @@ public class RbacPrincipalService {
                                 rs.getString("display_name"),
                                 rs.getLong("sales_rep_id"),
                                 rs.getString("status"),
+                                rs.getTimestamp("last_authenticated_at") == null ? null : rs.getTimestamp("last_authenticated_at").toLocalDateTime(),
+                                rs.getString("last_authenticated_ip"),
                                 roleCodes(id),
                                 permissionCodes(id)
                         );
@@ -111,7 +133,7 @@ public class RbacPrincipalService {
     public List<UserProfile> listProfiles() {
         return jdbcTemplate.query(
                 """
-                        SELECT id, username, display_name, sales_rep_id, status
+                        SELECT id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
                         FROM agentpilot_user
                         ORDER BY id
                         """,
@@ -123,6 +145,8 @@ public class RbacPrincipalService {
                             rs.getString("display_name"),
                             rs.getLong("sales_rep_id"),
                             rs.getString("status"),
+                            rs.getTimestamp("last_authenticated_at") == null ? null : rs.getTimestamp("last_authenticated_at").toLocalDateTime(),
+                            rs.getString("last_authenticated_ip"),
                             roleCodes(id),
                             permissionCodes(id)
                     );

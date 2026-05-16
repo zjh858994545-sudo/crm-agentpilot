@@ -51,7 +51,9 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
 
         Optional<AgentPilotPrincipal> rbacPrincipal = rbacPrincipalService.findByApiToken(token);
         if (rbacPrincipal.isPresent()) {
-            authenticate(rbacPrincipal.get());
+            AgentPilotPrincipal principal = rbacPrincipal.get();
+            authenticate(principal);
+            rbacPrincipalService.recordTokenUse(principal.userId(), clientIp(request));
             filterChain.doFilter(request, response);
             return;
         }
@@ -63,6 +65,18 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
 
         authenticateDemoUser();
         filterChain.doFilter(request, response);
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 
     private String resolveToken(HttpServletRequest request) {

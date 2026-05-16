@@ -8,6 +8,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,6 +25,9 @@ class SecurityStrictModeTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private RbacPrincipalService rbacPrincipalService;
 
     @Test
     void strictModeRequiresAgentPilotTokenForApi() throws Exception {
@@ -62,13 +66,18 @@ class SecurityStrictModeTest {
     @Test
     void currentUserEndpointReturnsDatabaseBackedProfile() throws Exception {
         mockMvc.perform(get("/api/auth/me")
-                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                        .header("X-AgentPilot-Token", "agentpilot-manager")
+                        .header("X-Forwarded-For", "203.0.113.7"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.userId", is(100)))
                 .andExpect(jsonPath("$.data.displayName", is("陈明")))
                 .andExpect(jsonPath("$.data.salesRepId", is(1)))
                 .andExpect(jsonPath("$.data.primaryRole", is("manager")));
+
+        RbacPrincipalService.UserProfile profile = rbacPrincipalService.findProfileByUserId(100L).orElseThrow();
+        assertThat(profile.lastAuthenticatedAt()).isNotNull();
+        assertThat(profile.lastAuthenticatedIp()).isEqualTo("203.0.113.7");
     }
 
     @Test

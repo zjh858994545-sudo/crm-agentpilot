@@ -125,6 +125,8 @@ export interface SecurityUser {
   displayName: string;
   salesRepId: number;
   status: string;
+  lastAuthenticatedAt?: string;
+  lastAuthenticatedIp?: string;
   roles: string[];
   permissions: string[];
 }

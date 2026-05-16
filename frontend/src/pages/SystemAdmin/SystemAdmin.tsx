@@ -58,6 +58,13 @@ function statusTag(value?: string | boolean) {
   return <Tag color={color}>{String(text)}</Tag>;
 }
 
+function formatTime(value?: string) {
+  if (!value) {
+    return '未使用';
+  }
+  return value.replace('T', ' ').slice(0, 19);
+}
+
 export default function SystemAdmin() {
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
@@ -403,6 +410,16 @@ export default function SystemAdmin() {
             },
             { title: '销售范围', dataIndex: 'salesRepId', render: (value) => <Tag>salesRep #{value}</Tag> },
             { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
+            {
+              title: '最近认证',
+              dataIndex: 'lastAuthenticatedAt',
+              render: (value) => <Text type={value ? undefined : 'secondary'}>{formatTime(value)}</Text>
+            },
+            {
+              title: '来源 IP',
+              dataIndex: 'lastAuthenticatedIp',
+              render: (value) => <Text type="secondary">{value || '-'}</Text>
+            },
             { title: '权限数', dataIndex: 'permissions', render: (permissions: string[]) => permissions.length }
           ]}
         />
