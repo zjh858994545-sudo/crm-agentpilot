@@ -6,6 +6,20 @@ on:
   pull_request:
 
 jobs:
+  hygiene:
+    name: Repository Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Docker Compose config
+        run: docker compose -f docker-compose.yml -f docker-compose.full.yml --env-file .env.example config --quiet
+      - name: Check accidental API keys
+        run: |
+          if git grep -n -E 'sk-[A-Za-z0-9_-]{20,}|OPENAI_COMPATIBLE_API_KEY=sk-|OPENAI_COMPATIBLE_EMBEDDING_API_KEY=sk-' -- . ':(exclude).github/workflows/ci.yml'; then
+            echo "Potential API key found in tracked files."
+            exit 1
+          fi
+
   backend:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -33,7 +47,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Build
         run: npm run build
