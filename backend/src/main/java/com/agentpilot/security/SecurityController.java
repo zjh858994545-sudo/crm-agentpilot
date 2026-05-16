@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -58,5 +59,11 @@ public class SecurityController {
                 "modelRefillPerMinute", rateLimitProperties.getModelRefillPerMinute()
         ));
         return ApiResponse.ok(body);
+    }
+
+    @GetMapping("/users")
+    @PreAuthorize("hasAuthority('events:read')")
+    public ApiResponse<List<RbacPrincipalService.UserProfile>> users() {
+        return ApiResponse.ok(rbacPrincipalService.listProfiles());
     }
 }

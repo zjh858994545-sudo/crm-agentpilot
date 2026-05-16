@@ -70,4 +70,17 @@ class SecurityStrictModeTest {
                 .andExpect(jsonPath("$.data.salesRepId", is(1)))
                 .andExpect(jsonPath("$.data.primaryRole", is("manager")));
     }
+
+    @Test
+    void securityUsersEndpointRequiresAdminReadablePermission() throws Exception {
+        mockMvc.perform(get("/api/security/users")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-1"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/security/users")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data[0].username", is("linxiaofeng")));
+    }
 }

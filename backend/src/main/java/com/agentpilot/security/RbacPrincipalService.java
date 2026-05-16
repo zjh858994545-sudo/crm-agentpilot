@@ -90,37 +90,14 @@ public class RbacPrincipalService {
                             """,
                     (rs, rowNum) -> {
                         Long id = rs.getLong("id");
-                        List<String> roles = jdbcTemplate.queryForList(
-                                """
-                                        SELECT DISTINCT r.code
-                                        FROM agentpilot_role r
-                                        JOIN agentpilot_user_role ur ON ur.role_id = r.id
-                                        WHERE ur.user_id = ?
-                                        ORDER BY r.code
-                                        """,
-                                String.class,
-                                id
-                        );
-                        List<String> permissions = jdbcTemplate.queryForList(
-                                """
-                                        SELECT DISTINCT p.code
-                                        FROM agentpilot_permission p
-                                        JOIN agentpilot_role_permission rp ON rp.permission_id = p.id
-                                        JOIN agentpilot_user_role ur ON ur.role_id = rp.role_id
-                                        WHERE ur.user_id = ?
-                                        ORDER BY p.code
-                                        """,
-                                String.class,
-                                id
-                        );
                         return new UserProfile(
                                 id,
                                 rs.getString("username"),
                                 rs.getString("display_name"),
                                 rs.getLong("sales_rep_id"),
                                 rs.getString("status"),
-                                roles,
-                                permissions
+                                roleCodes(id),
+                                permissionCodes(id)
                         );
                     },
                     userId
@@ -129,6 +106,57 @@ public class RbacPrincipalService {
         } catch (EmptyResultDataAccessException ex) {
             return Optional.empty();
         }
+    }
+
+    public List<UserProfile> listProfiles() {
+        return jdbcTemplate.query(
+                """
+                        SELECT id, username, display_name, sales_rep_id, status
+                        FROM agentpilot_user
+                        ORDER BY id
+                        """,
+                (rs, rowNum) -> {
+                    Long id = rs.getLong("id");
+                    return new UserProfile(
+                            id,
+                            rs.getString("username"),
+                            rs.getString("display_name"),
+                            rs.getLong("sales_rep_id"),
+                            rs.getString("status"),
+                            roleCodes(id),
+                            permissionCodes(id)
+                    );
+                }
+        );
+    }
+
+    private List<String> roleCodes(Long userId) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT r.code
+                        FROM agentpilot_role r
+                        JOIN agentpilot_user_role ur ON ur.role_id = r.id
+                        WHERE ur.user_id = ?
+                        ORDER BY r.code
+                        """,
+                String.class,
+                userId
+        );
+    }
+
+    private List<String> permissionCodes(Long userId) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT p.code
+                        FROM agentpilot_permission p
+                        JOIN agentpilot_role_permission rp ON rp.permission_id = p.id
+                        JOIN agentpilot_user_role ur ON ur.role_id = rp.role_id
+                        WHERE ur.user_id = ?
+                        ORDER BY p.code
+                        """,
+                String.class,
+                userId
+        );
     }
 
     private String sha256(String value) {

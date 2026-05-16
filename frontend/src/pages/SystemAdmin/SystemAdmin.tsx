@@ -16,11 +16,13 @@ import {
   ModelStatus,
   OpenAiToolDefinition,
   SecurityStatus,
+  SecurityUser,
   fetchEventStatus,
   fetchKnowledgeStatus,
   fetchModelStatus,
   fetchOpenAiTools,
-  fetchSecurityStatus
+  fetchSecurityStatus,
+  fetchSecurityUsers
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
@@ -58,6 +60,7 @@ export default function SystemAdmin() {
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [tools, setTools] = useState<OpenAiToolDefinition[]>([]);
+  const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -69,13 +72,15 @@ export default function SystemAdmin() {
       fetchEventStatus(),
       fetchKnowledgeStatus(),
       fetchModelStatus(),
-      fetchOpenAiTools()
+      fetchOpenAiTools(),
+      fetchSecurityUsers()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
     if (results[2].status === 'fulfilled') setKnowledgeStatus(results[2].value);
     if (results[3].status === 'fulfilled') setModelStatus(results[3].value);
     if (results[4].status === 'fulfilled') setTools(results[4].value);
+    if (results[5].status === 'fulfilled') setSecurityUsers(results[5].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分系统状态读取失败，请确认后端已经启动并且当前 token 具备系统管理权限。');
     }
@@ -324,6 +329,42 @@ export default function SystemAdmin() {
           </Card>
         </Col>
       </Row>
+
+      <Card className="command-card" title="用户与权限范围">
+        <Table
+          rowKey="userId"
+          loading={loading}
+          pagination={false}
+          dataSource={securityUsers}
+          columns={[
+            {
+              title: '用户',
+              render: (_, record) => (
+                <Space direction="vertical" size={0}>
+                  <Text strong>{record.displayName}</Text>
+                  <Text type="secondary">{record.username}</Text>
+                </Space>
+              )
+            },
+            {
+              title: '角色',
+              dataIndex: 'roles',
+              render: (roles: string[]) => (
+                <Space size={4} wrap>
+                  {roles.map((role) => (
+                    <Tag key={role} color={role === 'system_admin' ? 'geekblue' : role === 'sales_manager' ? 'purple' : 'blue'}>
+                      {role}
+                    </Tag>
+                  ))}
+                </Space>
+              )
+            },
+            { title: '销售范围', dataIndex: 'salesRepId', render: (value) => <Tag>salesRep #{value}</Tag> },
+            { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
+            { title: '权限数', dataIndex: 'permissions', render: (permissions: string[]) => permissions.length }
+          ]}
+        />
+      </Card>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>

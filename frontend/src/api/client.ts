@@ -94,6 +94,16 @@ export interface AuthProfile {
   primaryRole: 'sales' | 'manager' | 'admin';
 }
 
+export interface SecurityUser {
+  userId: number;
+  username: string;
+  displayName: string;
+  salesRepId: number;
+  status: string;
+  roles: string[];
+  permissions: string[];
+}
+
 export interface DashboardSummary {
   highLeadCount: number;
   highLeadAmount: number;
@@ -484,6 +494,11 @@ export async function rebuildKnowledgeVectors() {
 
 export async function fetchSecurityStatus() {
   const response = await apiClient.get<ApiResponse<SecurityStatus>>('/security/status');
+  return response.data.data;
+}
+
+export async function fetchSecurityUsers() {
+  const response = await apiClient.get<ApiResponse<SecurityUser[]>>('/security/users');
   return response.data.data;
 }
 
