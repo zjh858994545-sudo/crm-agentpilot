@@ -68,6 +68,10 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
+                        .requestMatchers(
+                                "/actuator/metrics/**",
+                                "/actuator/prometheus"
+                        ).authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .requestMatchers(
                                 "/v3/api-docs/**",

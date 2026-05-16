@@ -51,6 +51,19 @@ class SecurityStrictModeTest {
     }
 
     @Test
+    void strictModeProtectsOperationalMetricsButAllowsHealthProbe() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/actuator/metrics")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void strictModeCanAuthenticateDatabaseBackedRbacUser() throws Exception {
         mockMvc.perform(get("/api/customers")
                         .header("X-AgentPilot-Token", "agentpilot-sales-2"))

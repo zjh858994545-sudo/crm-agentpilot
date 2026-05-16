@@ -103,6 +103,7 @@ npm run build
 - 限流状态：Agent、模型诊断、普通 API 的限流策略。
 - Outbox 状态：待分发、分发中、失败和已发布事件数量。
 - 审计状态：Agent run、tool call、confirmation 和 trace 信息。
+- Actuator 指标：`/actuator/health` 用于探活，`/actuator/metrics` 和 `/actuator/prometheus` 需要认证后访问，可接 Prometheus/Grafana。
 
 运维人员优先关注：
 
