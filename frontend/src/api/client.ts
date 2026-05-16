@@ -68,6 +68,15 @@ export interface SecurityStatus {
   rbacRoleCount?: number;
   tokenConfigured: boolean;
   strictWithoutToken: boolean;
+  rateLimit?: {
+    enabled: boolean;
+    defaultCapacity: number;
+    defaultRefillPerMinute: number;
+    agentCapacity: number;
+    agentRefillPerMinute: number;
+    modelCapacity: number;
+    modelRefillPerMinute: number;
+  };
 }
 
 export interface OpenAiToolDefinition {

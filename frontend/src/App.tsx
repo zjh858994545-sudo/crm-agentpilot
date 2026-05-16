@@ -24,6 +24,7 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import Evaluation from './pages/Evaluation/Evaluation';
 import KnowledgeBase from './pages/KnowledgeBase/KnowledgeBase';
 import Leads from './pages/Leads/Leads';
+import SystemAdmin from './pages/SystemAdmin/SystemAdmin';
 
 const { Header, Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -48,6 +49,7 @@ const managerNav: NavEntry[] = [
 ];
 
 const adminNav: NavEntry[] = [
+  { key: '/system', icon: <SettingOutlined />, label: '系统能力', role: '系统管理' },
   { key: '/runs', icon: <AuditOutlined />, label: '运行审计', role: '系统管理' },
   { key: '/evaluation', icon: <ExperimentOutlined />, label: '质量评估', role: '系统管理' }
 ];
@@ -117,6 +119,11 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
     title: '呼叫中心',
     subtitle: '生成通话摘要、识别质检风险，并确认写入联系记录',
     role: '销售'
+  },
+  '/system': {
+    title: '系统能力',
+    subtitle: '系统管理员集中查看限流、RBAC、Outbox、模型工具和向量检索状态',
+    role: '系统管理'
   },
   '/runs': {
     title: '运行审计',
@@ -188,6 +195,7 @@ function Shell() {
             <Route path="/leads" element={<Leads />} />
             <Route path="/knowledge" element={<KnowledgeBase />} />
             <Route path="/callcenter" element={<CallCenter />} />
+            <Route path="/system" element={<SystemAdmin />} />
             <Route path="/runs" element={<AgentRuns />} />
             <Route path="/evaluation" element={<Evaluation />} />
             <Route path="*" element={<Navigate to="/" replace />} />

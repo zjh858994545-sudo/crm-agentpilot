@@ -27,6 +27,10 @@ test.describe('CRM-AgentPilot sales workflow', () => {
     await expect(page.getByText(/待确认写入/).first()).toBeVisible();
     await expect(page.getByText(/业务闭环/)).toBeVisible();
 
+    await page.getByRole('link', { name: '系统能力', exact: true }).click();
+    await expect(page.getByRole('heading', { name: /系统能力/ })).toBeVisible();
+    await expect(page.getByText(/产品化能力清单/)).toBeVisible();
+
     await page.getByRole('link', { name: '运行审计', exact: true }).click();
     await expect(page.getByRole('heading', { name: /运行审计/ })).toBeVisible();
 
