@@ -95,7 +95,7 @@ const demoUsers: DemoUser[] = [
 
 const navItems: NavEntry[] = [
   { key: '/', icon: <DashboardOutlined />, label: '今日工作台', group: 'sales', visibleFor: ['sales', 'manager'] },
-  { key: '/agent', icon: <MessageOutlined />, label: 'Agent 工作台', group: 'sales', visibleFor: ['sales', 'manager'] },
+  { key: '/agent', icon: <MessageOutlined />, label: 'AI 助手', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/customers', icon: <TeamOutlined />, label: '客户 360', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/leads', icon: <ThunderboltOutlined />, label: '商机优先级', group: 'manager', visibleFor: ['sales', 'manager'] },
   { key: '/knowledge', icon: <BookOutlined />, label: '知识库问答', group: 'sales', visibleFor: ['sales', 'manager', 'admin'] },
@@ -114,12 +114,12 @@ const groupLabels: Record<NavEntry['group'], string> = {
 const pageMeta: Record<string, { title: string; subtitle: string; role: string }> = {
   '/': {
     title: '今日销售工作台',
-    subtitle: '把客户、商机、Agent 建议和待确认动作收在一个业务入口里',
+    subtitle: '把客户、商机、AI 建议和待确认动作收在一个业务入口里',
     role: '销售 / 主管'
   },
   '/agent': {
-    title: 'Agent 工作台',
-    subtitle: '用自然语言完成客户分析、知识检索、任务建议和写入确认',
+    title: 'AI 助手',
+    subtitle: '用自然语言完成客户分析、知识查询、任务建议和写入确认',
     role: '销售'
   },
   '/customers': {
@@ -149,12 +149,12 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
   },
   '/runs': {
     title: '运行审计',
-    subtitle: '系统管理员排查 Agent Run、Tool Call、Confirmation 全链路',
+    subtitle: '系统管理员排查每一次 AI 处理、工具调用和确认链路',
     role: '系统管理'
   },
   '/evaluation': {
     title: '质量评估',
-    subtitle: '系统管理员查看 JSONL 用例、工具命中、RAG 引用和延迟指标',
+    subtitle: '系统管理员查看评测用例、知识引用、工具命中和延迟指标',
     role: '系统管理'
   }
 };
@@ -217,7 +217,7 @@ function LoginPage({ onLogin }: { onLogin: (user: DemoUser) => void }) {
           <Text className="eyebrow">CRM-AgentPilot</Text>
           <Title level={2}>选择演示身份</Title>
           <Paragraph>
-            用销售、主管、系统管理员三个视角进入系统。每个身份都会写入对应 RBAC token，
+            用销售、主管、系统管理员三个视角进入系统。每个身份都会写入对应演示权限，
             前端菜单和后端数据范围一起切换。
           </Paragraph>
         </Space>
@@ -301,7 +301,7 @@ function Shell({ user, onUserChange }: { user: DemoUser; onUserChange: (user: De
       <Layout className="app-main">
         <Header className="app-header">
           <Space direction="vertical" size={2} className="header-title">
-            <Text className="eyebrow">CRM AI Agent Platform</Text>
+            <Text className="eyebrow">CRM AI Workspace</Text>
             <Title level={3}>{meta.title}</Title>
             <Text className="page-subtitle">{meta.subtitle}</Text>
           </Space>

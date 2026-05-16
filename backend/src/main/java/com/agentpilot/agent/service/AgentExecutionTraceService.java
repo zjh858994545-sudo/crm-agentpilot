@@ -63,7 +63,7 @@ public class AgentExecutionTraceService {
         ));
         steps.add(new AgentExecutionStep(
                 "route",
-                "识别意图并选择执行路径",
+                "理解问题并选择处理方式",
                 routingDescription(run),
                 "COMPLETED",
                 "ROUTING",
@@ -125,7 +125,7 @@ public class AgentExecutionTraceService {
                 steps,
                 routingMode(run),
                 currentStage(run, confirmations),
-                "写 CRM 前必须进入 confirmation，人确认后才执行真正写入。",
+                "写 CRM 前必须生成确认单，人确认后才执行真正写入。",
                 requiresConfirmation
         );
     }
@@ -133,7 +133,7 @@ public class AgentExecutionTraceService {
     private AgentExecutionStep confirmationStep(AgentConfirmation item) {
         return new AgentExecutionStep(
                 "confirmation-" + item.getId(),
-                "写操作确认门",
+                "写入确认单",
                 item.getActionSummary(),
                 confirmationStatus(item.getStatus()),
                 "CONFIRMATION",
@@ -151,17 +151,17 @@ public class AgentExecutionTraceService {
     private String routingMode(AgentRun run) {
         String intent = Optional.ofNullable(run.getIntent()).orElse("");
         if (intent.startsWith("LLM_TOOL:")) {
-            return "LLM Tool Calling";
+            return "智能工具选择";
         }
-        return "规则路由兜底";
+        return "稳定规则处理";
     }
 
     private String routingDescription(AgentRun run) {
         String intent = Optional.ofNullable(run.getIntent()).orElse("UNKNOWN");
         if (intent.startsWith("LLM_TOOL:")) {
-            return "模型根据 Tool Schema 选择了 " + intent.substring("LLM_TOOL:".length()) + "。";
+            return "AI 根据问题选择了 " + intent.substring("LLM_TOOL:".length()) + "。";
         }
-        return "系统使用可复现规则路由到 " + intent + "。";
+        return "系统使用稳定规则处理到 " + intent + "。";
     }
 
     private String currentStage(AgentRun run, List<AgentConfirmation> confirmations) {
@@ -194,9 +194,9 @@ public class AgentExecutionTraceService {
     private String toolDescription(AgentToolCall call, AgentConfirmation confirmation) {
         if (Boolean.TRUE.equals(call.getRequiresConfirmation())) {
             String status = confirmation == null ? "待生成确认单" : confirmation.getStatus();
-            return "写工具不会直接落库，当前确认状态：" + status + "。";
+            return "写入动作不会直接落库，当前确认状态：" + status + "。";
         }
-        return "读工具直接查询业务事实或知识库，用于生成可追溯回答。";
+        return "读取客户事实或知识库，用于生成可追溯回答。";
     }
 
     private String stepStatus(AgentToolCall call, AgentConfirmation confirmation) {
@@ -230,7 +230,7 @@ public class AgentExecutionTraceService {
 
     private String finalStepDescription(AgentRun run, List<AgentConfirmation> confirmations) {
         if (confirmations.stream().anyMatch(item -> Objects.equals(item.getStatus(), "PENDING"))) {
-            return "Agent 已生成建议，写 CRM 动作需要销售确认。";
+            return "AI 助手已生成建议，写 CRM 动作需要销售确认。";
         }
         if (Objects.equals(run.getStatus(), "FAILED")) {
             return Optional.ofNullable(run.getErrorMessage()).orElse("执行过程中出现异常。");

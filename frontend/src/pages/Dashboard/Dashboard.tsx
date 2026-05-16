@@ -385,7 +385,7 @@ export default function Dashboard() {
       {
         title: '确认 CRM 写入',
         value: displayMetrics.pendingConfirmationCount,
-        desc: 'Agent 已生成但还未落库的写操作',
+        desc: 'AI 已生成但还未确认落库的动作',
         icon: <SafetyCertificateOutlined />,
         to: '/agent',
         color: 'blue'
@@ -409,7 +409,7 @@ export default function Dashboard() {
       antdMessage.success('已确认，CRM 写操作已执行');
       await refreshConfirmations();
     } catch {
-      antdMessage.error('确认失败，请进入 Agent 工作台重试');
+      antdMessage.error('确认失败，请进入 AI 助手重试');
     } finally {
       setConfirmingId(null);
     }
@@ -422,7 +422,7 @@ export default function Dashboard() {
       antdMessage.info('已拒绝，本次写操作未执行');
       await refreshConfirmations();
     } catch {
-      antdMessage.error('拒绝失败，请进入 Agent 工作台重试');
+      antdMessage.error('拒绝失败，请进入 AI 助手重试');
     } finally {
       setConfirmingId(null);
     }
@@ -505,7 +505,7 @@ export default function Dashboard() {
           <Text className="eyebrow">Sales Command Center</Text>
           <Title level={3}>今天先处理谁，下一步做什么</Title>
           <Paragraph className="overview-copy">
-            首页只服务销售和销售主管：把高优商机、风险客户、待办跟进和 Agent 写入确认放在同一个业务入口里。
+            首页只服务销售和销售主管：把高优商机、风险客户、待办跟进和 AI 写入确认放在同一个业务入口里。
             技术审计、评测和系统状态已经收进系统管理区。
           </Paragraph>
           <div className="hero-kpi-strip">
@@ -527,7 +527,7 @@ export default function Dashboard() {
               <Button type="primary" icon={<ThunderboltOutlined />}>查看今日优先级</Button>
             </Link>
             <Link to="/agent">
-              <Button icon={<MessageOutlined />}>让 Agent 协助处理</Button>
+              <Button icon={<MessageOutlined />}>让 AI 协助处理</Button>
             </Link>
             <Link to="/customers">
               <Button icon={<TeamOutlined />}>进入客户 360</Button>
@@ -614,7 +614,7 @@ export default function Dashboard() {
                       </Space>
                       <div className="queue-actions">
                         <Link to={agentUrlForLead(lead)}>
-                          <Button size="small" type="primary" icon={<MessageOutlined />}>让 Agent 分析</Button>
+                          <Button size="small" type="primary" icon={<MessageOutlined />}>让 AI 分析</Button>
                         </Link>
                         <Link to={`/customers?customerId=${lead.customerId}`}>
                           <Button size="small" icon={<TeamOutlined />}>看客户</Button>
@@ -633,7 +633,7 @@ export default function Dashboard() {
             title="待确认写入"
             extra={
               <Link to="/agent">
-                <Button size="small" icon={<MessageOutlined />}>进入 Agent</Button>
+                <Button size="small" icon={<MessageOutlined />}>进入 AI 助手</Button>
               </Link>
             }
           >
@@ -646,7 +646,7 @@ export default function Dashboard() {
                     <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
                       <div>
                         <Text strong>{item.actionSummary}</Text>
-                        <div className="metric-label">{item.actionType} · Run #{item.runId}</div>
+                        <div className="metric-label">{item.actionType} · 处理流水 #{item.runId}</div>
                       </div>
                       <Tag color="orange">{item.status}</Tag>
                     </Space>
@@ -725,7 +725,7 @@ export default function Dashboard() {
           </Link>
           <Link to="/agent" className="flow-node">
             <MessageOutlined />
-            <Text strong>Agent</Text>
+            <Text strong>AI 助手</Text>
             <span>生成分析和建议动作</span>
           </Link>
           <Link to="/agent" className="flow-node">
@@ -766,46 +766,39 @@ export default function Dashboard() {
         <Col xs={24} xl={9}>
           <Card
             className="admin-summary-card"
-            title="系统管理摘要"
-            extra={
-              <Space>
-                <Link to="/runs">审计</Link>
-                <Link to="/evaluation">评估</Link>
-              </Space>
-            }
+            title="作业保障"
           >
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="服务">{statusTag(health?.status ?? 'LOCAL')}</Descriptions.Item>
-              <Descriptions.Item label="模型">
-                {statusTag(modelStatus?.configured ? modelStatus.model : 'mock')}
+              <Descriptions.Item label="服务状态">{statusTag(health?.status ?? 'LOCAL')}</Descriptions.Item>
+              <Descriptions.Item label="AI 助手">
+                {modelStatus?.configured ? <Tag color="green">可用</Tag> : <Tag color="orange">演示模式</Tag>}
               </Descriptions.Item>
-              <Descriptions.Item label="向量库">
+              <Descriptions.Item label="知识覆盖">
                 <Space>
-                  {statusTag(knowledgeStatus?.vectorStoreMode ?? 'java-fallback')}
-                  <Text type="secondary">{vectorPercent}%</Text>
+                  <Tag color={vectorPercent >= 80 ? 'green' : 'orange'}>{vectorPercent}%</Tag>
+                  <Text type="secondary">可检索</Text>
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="权限">
+              <Descriptions.Item label="数据边界">
                 <Space>
-                  {securityStatus?.strict ? <Tag color="green">strict</Tag> : <Tag color="orange">permissive</Tag>}
-                  {securityStatus?.rbacEnabled ? <Tag color="blue">RBAC</Tag> : null}
-                  <Text type="secondary">users={securityStatus?.rbacUserCount ?? 0}</Text>
+                  <Tag color={securityStatus?.rbacEnabled ? 'green' : 'orange'}>
+                    {securityStatus?.rbacEnabled ? '按身份过滤' : '演示范围'}
+                  </Tag>
+                  <Text type="secondary">{securityStatus?.rbacUserCount ?? 0} 个演示用户</Text>
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="事件">
+              <Descriptions.Item label="后台通知">
                 <Space>
-                  {statusTag(eventStatus?.mode ?? 'log-only')}
-                  <Text type="secondary">pending={eventStatus?.outboxPending ?? 0}</Text>
-                  <Text type="secondary">dispatching={eventStatus?.outboxDispatching ?? 0}</Text>
-                  <Text type={(eventStatus?.outboxDeadLetters ?? 0) > 0 ? 'danger' : 'secondary'}>
-                    dead={eventStatus?.outboxDeadLetters ?? 0}
-                  </Text>
+                  <Tag color={(eventStatus?.outboxDeadLetters ?? 0) > 0 ? 'red' : 'green'}>
+                    {(eventStatus?.outboxDeadLetters ?? 0) > 0 ? '需处理' : '正常'}
+                  </Tag>
+                  <Text type="secondary">待分发 {eventStatus?.outboxPending ?? 0}</Text>
                 </Space>
               </Descriptions.Item>
             </Descriptions>
             <div className="admin-note">
               <ClockCircleOutlined />
-              <span>技术能力不再打扰销售首页，统一收在系统管理区排查。</span>
+              <span>更细的模型、向量、事件和权限状态统一放在系统管理区排查。</span>
             </div>
           </Card>
         </Col>

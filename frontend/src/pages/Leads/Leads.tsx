@@ -209,7 +209,7 @@ export default function Leads() {
           <Text className="eyebrow">Opportunity Priority</Text>
           <Title level={4}>先排优先级，再推动下一步动作</Title>
           <Paragraph className="overview-copy">
-            商机页面向销售主管和一线销售：用评分解释确定今天先跟谁，再进入客户 360 补上下文，最后交给 Agent 生成跟进任务或话术。
+            商机页面面向销售主管和一线销售：用评分解释确定今天先跟谁，再进入客户 360 补上下文，最后交给 AI 助手生成跟进任务或话术。
           </Paragraph>
           <Tag color={dataMode === 'real' ? 'green' : 'orange'}>
             {dataMode === 'real' ? '真实商机数据' : '离线样例数据'}
@@ -218,7 +218,7 @@ export default function Leads() {
         <div className="workflow-stepper">
           <Link to="/customers" className="mini-flow-node"><TeamOutlined />客户</Link>
           <span className="mini-flow-node active"><ThunderboltOutlined />商机</span>
-          <Link to="/agent" className="mini-flow-node"><MessageOutlined />Agent</Link>
+          <Link to="/agent" className="mini-flow-node"><MessageOutlined />AI 助手</Link>
           <span className="mini-flow-node muted"><ProfileOutlined />确认</span>
         </div>
       </div>
@@ -357,7 +357,7 @@ export default function Leads() {
                     <Button size="small" icon={<TeamOutlined />}>看客户</Button>
                   </Link>
                   <Link to={agentUrlForLead(record)}>
-                    <Button size="small" type="primary" icon={<MessageOutlined />}>Agent 处理</Button>
+                            <Button size="small" type="primary" icon={<MessageOutlined />}>AI 处理</Button>
                   </Link>
                 </Space>
               )
@@ -395,14 +395,14 @@ export default function Leads() {
             <div className="drawer-action-bar">
               <div>
                 <Text strong>推荐处理路径</Text>
-                <div className="metric-label">先确认客户背景，再让 Agent 生成跟进策略或创建确认任务。</div>
+              <div className="metric-label">先确认客户背景，再让 AI 助手生成跟进策略或创建确认任务。</div>
               </div>
               <Space wrap>
                 <Link to={`/customers?customerId=${selected.customerId}`}>
                   <Button icon={<TeamOutlined />}>查看客户 360</Button>
                 </Link>
                 <Link to={agentUrlForLead(selected)}>
-                  <Button type="primary" icon={<MessageOutlined />}>让 Agent 处理</Button>
+                <Button type="primary" icon={<MessageOutlined />}>让 AI 处理</Button>
                 </Link>
               </Space>
             </div>

@@ -10,7 +10,7 @@ test.describe('CRM-AgentPilot product workflow', () => {
     await loginAs(page, 'login-sales');
     await page.goto('/agent');
 
-    await expect(page.getByText('Agent 执行过程')).toBeVisible();
+    await expect(page.getByText('AI 执行过程')).toBeVisible();
     await expect(page.getByText('接收销售问题')).toBeVisible();
     await expect(page.getByText('选择执行路径')).toBeVisible();
     await expect(page.getByText('执行工具')).toBeVisible();
@@ -52,7 +52,7 @@ test.describe('CRM-AgentPilot product workflow', () => {
     await page.getByRole('button', { name: /发送/ }).click();
 
     await expect(page.getByText(/待确认写操作/).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/Agent 执行过程/)).toBeVisible();
+    await expect(page.getByText(/AI 执行过程/)).toBeVisible();
     await expect(page.getByText(/确认写入 CRM/)).toBeVisible();
     await page.getByRole('button', { name: /确认写入 CRM/ }).click();
     await expect(page.getByText(/已确认|已完成/).first()).toBeVisible({ timeout: 30_000 });

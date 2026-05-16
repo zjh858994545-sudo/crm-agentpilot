@@ -69,7 +69,7 @@ class AgentOrchestratorTest {
 
         mockMvc.perform(get("/api/agent/runs/" + runId + "/execution"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.routingMode", is("规则路由兜底")))
+                .andExpect(jsonPath("$.data.routingMode", is("稳定规则处理")))
                 .andExpect(jsonPath("$.data.currentStage", is("COMPLETED")))
                 .andExpect(jsonPath("$.data.steps.length()", greaterThanOrEqualTo(4)))
                 .andExpect(jsonPath("$.data.steps[0].category", is("REQUEST")));

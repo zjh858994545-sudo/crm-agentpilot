@@ -45,6 +45,20 @@ function riskColor(value?: string) {
   return 'green';
 }
 
+const confirmationFieldLabels: Record<string, string> = {
+  customerId: '客户',
+  salesRepId: '销售',
+  leadId: '商机',
+  channel: '渠道',
+  content: '联系内容',
+  summary: '摘要',
+  customerIntent: '客户意向',
+  objections: '异议',
+  nextAction: '下一步',
+  contactAt: '联系时间',
+  idempotencyKey: '防重复标记'
+};
+
 export default function CallCenter() {
   const [customerId, setCustomerId] = useState(1001);
   const [salesRepId, setSalesRepId] = useState(1);
@@ -252,13 +266,19 @@ export default function CallCenter() {
           {confirmation ? (
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Alert type="info" showIcon message={confirmation.actionSummary} />
-              <pre className="json-preview">{JSON.stringify(confirmation.payload, null, 2)}</pre>
+              <Descriptions bordered size="small" column={1}>
+                {Object.entries(confirmation.payload).map(([key, value]) => (
+                  <Descriptions.Item label={confirmationFieldLabels[key] ?? key} key={key}>
+                    {String(value ?? '-')}
+                  </Descriptions.Item>
+                ))}
+              </Descriptions>
               <Button type="primary" loading={loading} onClick={confirmWrite}>
                 确认写入 CRM
               </Button>
             </Space>
           ) : (
-            <Text type="secondary">写联系记录前必须先生成 confirmation，避免 Agent 直接修改 CRM 数据。</Text>
+                    <Text type="secondary">写联系记录前必须先生成确认单，避免 AI 助手直接修改 CRM 数据。</Text>
           )}
         </Card>
       </div>

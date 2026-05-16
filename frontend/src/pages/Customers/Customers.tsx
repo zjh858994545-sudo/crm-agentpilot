@@ -226,7 +226,7 @@ export default function Customers() {
           <Text className="eyebrow">Customer Context</Text>
           <Typography.Title level={4}>先理解客户，再决定跟进动作</Typography.Title>
           <Paragraph className="overview-copy">
-            客户 360 是销售作业流的上下文入口：先看价值、风险、标签和历史跟进，再把客户带到 Agent 或商机优先级里继续处理。
+            客户 360 是销售作业流的上下文入口：先看价值、风险、标签和历史跟进，再把客户带到 AI 助手或商机优先级里继续处理。
           </Paragraph>
           <Tag color={dataMode === 'real' ? 'green' : 'orange'}>
             {dataMode === 'real' ? '真实 CRM 数据' : '离线样例数据'}
@@ -235,7 +235,7 @@ export default function Customers() {
         <div className="workflow-stepper">
           <span className="mini-flow-node active"><UserOutlined />客户</span>
           <Link to="/leads" className="mini-flow-node"><ThunderboltOutlined />商机</Link>
-          <Link to="/agent" className="mini-flow-node"><MessageOutlined />Agent</Link>
+          <Link to="/agent" className="mini-flow-node"><MessageOutlined />AI 助手</Link>
           <span className="mini-flow-node muted"><ProfileOutlined />确认</span>
         </div>
       </div>
@@ -355,7 +355,7 @@ export default function Customers() {
                 <Space size={6} wrap onClick={(event) => event.stopPropagation()}>
                   <Link to={agentUrlForCustomer(record)}>
                     <Button size="small" type="primary" icon={<MessageOutlined />}>
-                      Agent 分析
+                    AI 分析
                     </Button>
                   </Link>
                   <Link to={leadUrlForCustomer(record)}>
@@ -399,11 +399,11 @@ export default function Customers() {
             <div className="drawer-action-bar">
               <div>
                 <Text strong>下一步推荐</Text>
-                <div className="metric-label">把当前客户带入 Agent 分析，或回到商机优先级看排序原因。</div>
+              <div className="metric-label">把当前客户带入 AI 助手分析，或回到商机优先级看排序原因。</div>
               </div>
               <Space wrap>
                 <Link to={agentUrlForCustomer(selectedCustomer)}>
-                  <Button type="primary" icon={<MessageOutlined />}>让 Agent 分析</Button>
+                <Button type="primary" icon={<MessageOutlined />}>让 AI 分析</Button>
                 </Link>
                 <Link to={leadUrlForCustomer(selectedCustomer)}>
                   <Button icon={<ThunderboltOutlined />}>查看相关商机</Button>

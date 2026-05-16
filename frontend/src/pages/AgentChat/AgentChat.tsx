@@ -173,7 +173,7 @@ function inferResultTitle(response: AgentChatResponse | null) {
   if (toolNames.some((name) => name.includes('customer') || name.includes('contact'))) {
     return '客户分析结果';
   }
-  return 'Agent 处理结果';
+  return 'AI 处理结果';
 }
 
 function resultTone(response: AgentChatResponse | null) {
@@ -202,7 +202,7 @@ function nextActionText(response: AgentChatResponse | null) {
   }
   const title = inferResultTitle(response);
   if (title.includes('商机')) {
-    return '进入客户 360 补齐上下文，再让 Agent 生成具体跟进任务。';
+    return '进入客户 360 补齐上下文，再让 AI 助手生成具体跟进任务。';
   }
   if (title.includes('知识')) {
     return '把命中的 SOP 或政策引用带入客户沟通话术。';
@@ -210,7 +210,7 @@ function nextActionText(response: AgentChatResponse | null) {
   if (title.includes('客户')) {
     return '基于客户风险和异议生成下一次跟进动作。';
   }
-  return '继续补充客户或商机上下文，让 Agent 生成更具体动作。';
+  return '继续补充客户或商机上下文，让 AI 助手生成更具体动作。';
 }
 
 function formatJson(value?: string) {
@@ -255,14 +255,14 @@ function fallbackSteps(isRunning: boolean): AgentExecutionStep[] {
     {
       key: 'route',
       title: '选择执行路径',
-      description: 'LLM Tool Calling 或规则路由兜底',
+      description: '智能选择处理方式',
       status: isRunning ? 'RUNNING' : 'WAITING',
       category: 'ROUTING'
     },
     {
       key: 'tool',
       title: '执行工具',
-      description: '查询 CRM / RAG / 生成确认单',
+      description: '查询客户、知识库或生成确认单',
       status: 'WAITING',
       category: 'TOOL'
     },
@@ -274,6 +274,19 @@ function fallbackSteps(isRunning: boolean): AgentExecutionStep[] {
       category: 'OUTPUT'
     }
   ];
+}
+
+function routingModeLabel(value?: string) {
+  if (!value) {
+    return '等待处理';
+  }
+  if (value.includes('LLM') || value.includes('Tool')) {
+    return '智能选择工具';
+  }
+  if (value.includes('规则')) {
+    return '稳定规则处理';
+  }
+  return value;
 }
 
 function ExecutionProcess({
@@ -290,10 +303,10 @@ function ExecutionProcess({
     <div className={`agent-execution-board ${loading ? 'is-running' : ''}`}>
       <div className="execution-board-head">
         <div>
-          <Text strong>Agent 执行过程</Text>
+          <Text strong>AI 执行过程</Text>
           <div className="metric-label">
             {trace
-              ? `${trace.routingMode} · ${stageText[trace.currentStage] ?? trace.currentStage}`
+              ? `${routingModeLabel(trace.routingMode)} · ${stageText[trace.currentStage] ?? trace.currentStage}`
               : '等待发送问题'}
           </div>
         </div>
@@ -345,15 +358,15 @@ function TraceEvidence({ trace }: { trace: AgentExecutionTrace | null }) {
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <div className="trace-summary-strip">
         <div>
-          <span>Run</span>
+          <span>流水号</span>
           <strong>#{trace.run.id}</strong>
         </div>
         <div>
-          <span>路径</span>
-          <strong>{trace.routingMode}</strong>
+          <span>处理方式</span>
+          <strong>{routingModeLabel(trace.routingMode)}</strong>
         </div>
         <div>
-          <span>工具</span>
+          <span>动作</span>
           <strong>{trace.toolCalls.length}</strong>
         </div>
         <div>
@@ -378,16 +391,16 @@ function TraceEvidence({ trace }: { trace: AgentExecutionTrace | null }) {
                 <Text type="secondary">{step.description}</Text>
                 {(step.inputJson || step.outputJson) && (
                   <details className="trace-json-details">
-                    <summary>查看工具 JSON</summary>
+                    <summary>查看执行明细</summary>
                     {step.inputJson && (
                       <>
-                        <Text strong>Input</Text>
+                        <Text strong>输入</Text>
                         <pre className="json-preview compact">{formatJson(step.inputJson)}</pre>
                       </>
                     )}
                     {step.outputJson && (
                       <>
-                        <Text strong>Output</Text>
+                        <Text strong>输出</Text>
                         <pre className="json-preview compact">{formatJson(step.outputJson)}</pre>
                       </>
                     )}
@@ -482,7 +495,7 @@ export default function AgentChat() {
       setMessages((items) => [...items, { role: 'agent', content: response.answer }]);
       await Promise.all([refreshConfirmations(), loadExecutionTrace(response.runId)]);
     } catch {
-      setError('后端未连接，无法发送 Agent 请求。请确认 Spring Boot 服务已经启动。');
+      setError('后端未连接，无法发送 AI 助手请求。请确认服务已经启动。');
     } finally {
       setLoading(false);
     }
@@ -566,10 +579,10 @@ export default function AgentChat() {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <div className="workflow-hero">
         <div>
-          <Text className="eyebrow">Agent Action Center</Text>
+          <Text className="eyebrow">AI Sales Assistant</Text>
           <Title level={4}>把客户判断变成可确认的 CRM 动作</Title>
           <Paragraph className="overview-copy">
-            从客户或商机页面带着上下文进入，让 Agent 分析客户、检索知识、生成任务建议；凡是写 CRM 的动作都会先进入人工确认。
+            从客户或商机页面带着上下文进入，让 AI 助手分析客户、检索知识、生成任务建议；凡是写 CRM 的动作都会先进入人工确认。
           </Paragraph>
         </div>
         <div className="workflow-stepper">
@@ -583,7 +596,7 @@ export default function AgentChat() {
           </Link>
           <span className="mini-flow-node active">
             <MessageOutlined />
-            Agent
+            AI 助手
           </span>
           <span className="mini-flow-node">
             <SafetyCertificateOutlined />
@@ -646,8 +659,8 @@ export default function AgentChat() {
           <Card title="安全边界" className="command-card">
             <Timeline
               items={[
-                { dot: <ToolOutlined />, children: '读工具：客户、商机、知识库直接查询事实。' },
-                { dot: <ClockCircleOutlined />, children: '写工具：只生成确认单，不直接落库。' },
+                { dot: <ToolOutlined />, children: '读取信息：客户、商机、知识库直接查询事实。' },
+                { dot: <ClockCircleOutlined />, children: '写入动作：只生成确认单，不直接落库。' },
                 { dot: <CheckCircleOutlined />, children: '确认后：写入 CRM，并进入运行审计。' }
               ]}
             />
@@ -656,7 +669,7 @@ export default function AgentChat() {
 
         <Card
           className="chat-panel command-card"
-          title="Agent 对话"
+          title="AI 助手对话"
           extra={
             <Space>
               <Link to="/customers">
@@ -743,7 +756,7 @@ export default function AgentChat() {
               </Space>
               <div className="result-fact-grid">
                 <div className="result-fact">
-                  <span>Run</span>
+                  <span>处理流水</span>
                   <strong>#{lastResponse.runId}</strong>
                 </div>
                 <div className="result-fact">
@@ -751,8 +764,8 @@ export default function AgentChat() {
                   <strong>{lastResponse.sessionId}</strong>
                 </div>
                 <div className="result-fact">
-                  <span>执行路径</span>
-                  <strong>{executionTrace?.routingMode ?? '生成中'}</strong>
+                  <span>处理方式</span>
+                  <strong>{routingModeLabel(executionTrace?.routingMode)}</strong>
                 </div>
                 <div className="result-fact">
                   <span>写入保护</span>
@@ -812,7 +825,7 @@ export default function AgentChat() {
                       <div>
                         <Text strong>{item.actionSummary}</Text>
                         <div className="metric-label">
-                          {item.actionType} · Run #{item.runId}
+                          {item.actionType} · 处理流水 #{item.runId}
                         </div>
                       </div>
                       <Tag color="orange">{item.status}</Tag>
@@ -837,9 +850,9 @@ export default function AgentChat() {
           <TraceEvidence trace={executionTrace} />
 
           <Link to="/runs">
-            <Tooltip title="进入系统管理视角查看所有 Agent Run、Tool Call 和 JSON 输入输出">
+            <Tooltip title="进入系统管理视角查看完整处理记录、工具调用和输入输出">
               <Button block icon={<FileSearchOutlined />} style={{ marginTop: 12 }}>
-                查看运行审计
+                查看处理明细
               </Button>
             </Tooltip>
           </Link>

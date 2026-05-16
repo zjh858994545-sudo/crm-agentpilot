@@ -219,8 +219,8 @@ export default function KnowledgeBase() {
         </Col>
         <Col xs={24} md={8}>
           <Card className="metric-card">
-            <Statistic title="向量化进度" value={vectorPercent} suffix="%" prefix={<DatabaseOutlined />} />
-            <Text className="metric-label">{knowledgeStatus?.vectorStoreMode ?? 'java-fallback'}</Text>
+            <Statistic title="知识索引进度" value={vectorPercent} suffix="%" prefix={<DatabaseOutlined />} />
+            <Text className="metric-label">知识检索准备度</Text>
           </Card>
         </Col>
       </Row>
@@ -229,9 +229,9 @@ export default function KnowledgeBase() {
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} xl={10}>
             <Space direction="vertical" size={4}>
-              <Text strong>向量索引状态</Text>
+              <Text strong>检索索引状态</Text>
               <Text type="secondary">
-                文档导入后会自动切分并写入 embedding；如果迁移后出现缺失向量，管理员可以在这里补齐。
+                    文档导入后会自动切分并建立检索索引；如果迁移后出现索引缺失，管理员可以在这里补齐。
               </Text>
             </Space>
           </Col>
@@ -242,7 +242,7 @@ export default function KnowledgeBase() {
               strokeColor={knowledgeStatus?.pgvectorAvailable ? '#2563eb' : '#d97706'}
             />
             <Text className="metric-label">
-              {knowledgeStatus?.vectorizedChunkCount ?? 0} / {knowledgeStatus?.chunkCount ?? 0} 个分块已向量化
+              {knowledgeStatus?.vectorizedChunkCount ?? 0} / {knowledgeStatus?.chunkCount ?? 0} 个知识片段已建索引
             </Text>
           </Col>
           <Col xs={24} xl={6}>
@@ -253,7 +253,7 @@ export default function KnowledgeBase() {
               disabled={!canManageKnowledge}
               onClick={rebuildVectors}
             >
-              补齐缺失向量
+              补齐缺失索引
             </Button>
             {!canManageKnowledge && <Text className="metric-label">切换系统管理员后可执行恢复操作</Text>}
           </Col>
@@ -362,7 +362,7 @@ export default function KnowledgeBase() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
-          <Card className="command-card" title="RAG 问答">
+          <Card className="command-card" title="知识问答">
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <TextArea rows={3} value={question} onChange={(event) => setQuestion(event.target.value)} />
               <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={runAsk}>
