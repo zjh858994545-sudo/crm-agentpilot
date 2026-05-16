@@ -24,10 +24,7 @@ import {
   Typography,
   message as antdMessage
 } from 'antd';
-import { BarChart, LineChart } from 'echarts/charts';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
-import * as echarts from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
+import type { EChartsType } from 'echarts/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -56,8 +53,6 @@ import {
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
-
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 const priorityColor: Record<string, string> = {
   HIGH: 'red',
@@ -341,63 +336,88 @@ export default function Dashboard() {
     if (!trendChartRef.current) {
       return;
     }
-    const chart = echarts.init(trendChartRef.current);
-    chart.setOption({
-      animationDuration: 700,
-      grid: { left: 34, right: 18, top: 34, bottom: 28 },
-      tooltip: { trigger: 'axis' },
-      legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: '#65758b' } },
-      xAxis: {
-        type: 'category',
-        data: leadTrend.map((item) => trendDateLabel(item.date)),
-        axisLine: { lineStyle: { color: '#dbe4ef' } },
-        axisTick: { show: false },
-        axisLabel: { color: '#65758b' }
-      },
-      yAxis: [
-        {
-          type: 'value',
-          axisLabel: { color: '#65758b' },
-          splitLine: { lineStyle: { color: '#edf1f6' } }
+    let chart: EChartsType | null = null;
+    let disposed = false;
+
+    async function renderTrendChart() {
+      const [charts, components, echartsCore, renderers] = await Promise.all([
+        import('echarts/charts'),
+        import('echarts/components'),
+        import('echarts/core'),
+        import('echarts/renderers')
+      ]);
+      echartsCore.use([
+        charts.BarChart,
+        charts.LineChart,
+        components.GridComponent,
+        components.TooltipComponent,
+        components.LegendComponent,
+        renderers.CanvasRenderer
+      ]);
+      if (!trendChartRef.current || disposed) {
+        return;
+      }
+      chart = echartsCore.init(trendChartRef.current);
+      chart.setOption({
+        animationDuration: 700,
+        grid: { left: 34, right: 18, top: 34, bottom: 28 },
+        tooltip: { trigger: 'axis' },
+        legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: '#65758b' } },
+        xAxis: {
+          type: 'category',
+          data: leadTrend.map((item) => trendDateLabel(item.date)),
+          axisLine: { lineStyle: { color: '#dbe4ef' } },
+          axisTick: { show: false },
+          axisLabel: { color: '#65758b' }
         },
-        {
-          type: 'value',
-          axisLabel: { color: '#65758b' },
-          splitLine: { show: false }
-        }
-      ],
-      series: [
-        {
-          name: '预计金额',
-          type: 'bar',
-          barWidth: 18,
-          data: leadTrend.map((item) => item.amount),
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#2563eb' },
-              { offset: 1, color: '#93c5fd' }
-            ])
+        yAxis: [
+          {
+            type: 'value',
+            axisLabel: { color: '#65758b' },
+            splitLine: { lineStyle: { color: '#edf1f6' } }
+          },
+          {
+            type: 'value',
+            axisLabel: { color: '#65758b' },
+            splitLine: { show: false }
           }
-        },
-        {
-          name: '高优商机',
-          type: 'line',
-          yAxisIndex: 1,
-          smooth: true,
-          symbolSize: 7,
-          data: leadTrend.map((item) => item.high),
-          lineStyle: { width: 3, color: '#dc2626' },
-          itemStyle: { color: '#dc2626' },
-          areaStyle: { color: 'rgba(220, 38, 38, 0.08)' }
-        }
-      ]
-    });
-    const resize = () => chart.resize();
+        ],
+        series: [
+          {
+            name: '预计金额',
+            type: 'bar',
+            barWidth: 18,
+            data: leadTrend.map((item) => item.amount),
+            itemStyle: {
+              borderRadius: [4, 4, 0, 0],
+              color: new echartsCore.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: '#2563eb' },
+                { offset: 1, color: '#93c5fd' }
+              ])
+            }
+          },
+          {
+            name: '高优商机',
+            type: 'line',
+            yAxisIndex: 1,
+            smooth: true,
+            symbolSize: 7,
+            data: leadTrend.map((item) => item.high),
+            lineStyle: { width: 3, color: '#dc2626' },
+            itemStyle: { color: '#dc2626' },
+            areaStyle: { color: 'rgba(220, 38, 38, 0.08)' }
+          }
+        ]
+      });
+    }
+
+    renderTrendChart();
+    const resize = () => chart?.resize();
     window.addEventListener('resize', resize);
     return () => {
+      disposed = true;
       window.removeEventListener('resize', resize);
-      chart.dispose();
+      chart?.dispose();
     };
   }, [leadTrend]);
 

@@ -315,6 +315,16 @@ body {
   margin: 0 auto;
 }
 
+.page-loading {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #64748b;
+}
+
 .ant-card {
   overflow: hidden;
   border-color: #dde5f0;

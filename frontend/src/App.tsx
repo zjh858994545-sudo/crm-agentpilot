@@ -17,18 +17,19 @@ import {
 import { Alert, Badge, Button, Card, Form, Input, Layout, Menu, Space, Spin, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { fetchCurrentUser, type AuthProfile } from './api/client';
-import AgentChat from './pages/AgentChat/AgentChat';
-import AgentRuns from './pages/AgentRuns/AgentRuns';
-import CallCenter from './pages/CallCenter/CallCenter';
-import Customers from './pages/Customers/Customers';
-import Dashboard from './pages/Dashboard/Dashboard';
-import Evaluation from './pages/Evaluation/Evaluation';
-import KnowledgeBase from './pages/KnowledgeBase/KnowledgeBase';
-import Leads from './pages/Leads/Leads';
-import SystemAdmin from './pages/SystemAdmin/SystemAdmin';
+
+const AgentChat = lazy(() => import('./pages/AgentChat/AgentChat'));
+const AgentRuns = lazy(() => import('./pages/AgentRuns/AgentRuns'));
+const CallCenter = lazy(() => import('./pages/CallCenter/CallCenter'));
+const Customers = lazy(() => import('./pages/Customers/Customers'));
+const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
+const Evaluation = lazy(() => import('./pages/Evaluation/Evaluation'));
+const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase/KnowledgeBase'));
+const Leads = lazy(() => import('./pages/Leads/Leads'));
+const SystemAdmin = lazy(() => import('./pages/SystemAdmin/SystemAdmin'));
 
 const { Header, Sider, Content } = Layout;
 const { Paragraph, Text, Title } = Typography;
@@ -287,21 +288,32 @@ function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) 
           </Space>
         </Header>
         <Content className="app-content">
-          <Routes>
-            <Route path="/" element={route('/', <Dashboard />)} />
-            <Route path="/agent" element={route('/agent', <AgentChat />)} />
-            <Route path="/customers" element={route('/customers', <Customers />)} />
-            <Route path="/leads" element={route('/leads', <Leads />)} />
-            <Route path="/knowledge" element={route('/knowledge', <KnowledgeBase />)} />
-            <Route path="/callcenter" element={route('/callcenter', <CallCenter />)} />
-            <Route path="/system" element={route('/system', <SystemAdmin />)} />
-            <Route path="/runs" element={route('/runs', <AgentRuns />)} />
-            <Route path="/evaluation" element={route('/evaluation', <Evaluation />)} />
-            <Route path="*" element={<Navigate to={defaultPath} replace />} />
-          </Routes>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
+              <Route path="/" element={route('/', <Dashboard />)} />
+              <Route path="/agent" element={route('/agent', <AgentChat />)} />
+              <Route path="/customers" element={route('/customers', <Customers />)} />
+              <Route path="/leads" element={route('/leads', <Leads />)} />
+              <Route path="/knowledge" element={route('/knowledge', <KnowledgeBase />)} />
+              <Route path="/callcenter" element={route('/callcenter', <CallCenter />)} />
+              <Route path="/system" element={route('/system', <SystemAdmin />)} />
+              <Route path="/runs" element={route('/runs', <AgentRuns />)} />
+              <Route path="/evaluation" element={route('/evaluation', <Evaluation />)} />
+              <Route path="*" element={<Navigate to={defaultPath} replace />} />
+            </Routes>
+          </Suspense>
         </Content>
       </Layout>
     </Layout>
+  );
+}
+
+function PageLoading() {
+  return (
+    <div className="page-loading">
+      <Spin size="large" />
+      <Text type="secondary">正在加载工作区...</Text>
+    </div>
   );
 }
 
