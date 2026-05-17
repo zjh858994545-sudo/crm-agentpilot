@@ -9,12 +9,15 @@ Thumbs.db
 logs/
 .demo-logs/
 backups/
+.tmp/
 
 # Environment
 .env
 .env.local
 CRM-AgentPilot-*审查报告*.md
 CRM-AgentPilot-*審查報告*.md
+CRM-AgentPilot-*评估报告*.md
+CRM-AgentPilot-*報告*.md
 
 # Backend
 backend/target/

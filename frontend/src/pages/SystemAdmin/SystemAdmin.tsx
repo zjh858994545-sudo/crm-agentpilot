@@ -40,6 +40,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   AdminAuditLog,
+  CallCenterWebhookStatus,
   EventStatus,
   KnowledgeStatus,
   LaunchReadinessStatus,
@@ -56,6 +57,7 @@ import {
   createSecurityUser,
   describeApiError,
   fetchAdminAuditLogs,
+  fetchCallCenterWebhookStatus,
   fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
@@ -132,6 +134,7 @@ export default function SystemAdmin() {
   const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>([]);
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
+  const [webhookStatus, setWebhookStatus] = useState<CallCenterWebhookStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -149,7 +152,8 @@ export default function SystemAdmin() {
       fetchDeadLetters(),
       fetchRetentionStatus(),
       fetchLaunchReadiness(),
-      fetchAdminAuditLogs()
+      fetchAdminAuditLogs(),
+      fetchCallCenterWebhookStatus()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -162,6 +166,7 @@ export default function SystemAdmin() {
     if (results[8].status === 'fulfilled') setRetentionStatus(results[8].value);
     if (results[9].status === 'fulfilled') setReadinessStatus(results[9].value);
     if (results[10].status === 'fulfilled') setAdminAuditLogs(results[10].value);
+    if (results[11].status === 'fulfilled') setWebhookStatus(results[11].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
     }
@@ -431,6 +436,14 @@ export default function SystemAdmin() {
       detail: securityStatus?.rateLimit?.enabled
         ? `${securityStatus.rateLimit.backend ?? 'auto'} / AI ${securityStatus.rateLimit.agentCapacity}/min / Model ${securityStatus.rateLimit.modelCapacity}/min`
         : '生产环境建议开启'
+    },
+    {
+      title: '外部回调',
+      value: webhookStatus?.signatureEnabled ? '签名校验' : '内部模式',
+      color: webhookStatus?.signatureEnabled && webhookStatus.secretConfigured ? 'green' : 'orange',
+      detail: webhookStatus?.signatureEnabled
+        ? `HMAC + nonce 防重放 / ${webhookStatus.maxSkewSeconds}s 时间窗`
+        : '外部电话系统接入前需开启签名'
     },
     {
       title: '事件可靠性',
@@ -915,6 +928,13 @@ export default function SystemAdmin() {
                 <Descriptions.Item label="Agent Chat">{securityStatus?.rateLimit?.agentCapacity ?? '-'} / min</Descriptions.Item>
                 <Descriptions.Item label="Model Chat">{securityStatus?.rateLimit?.modelCapacity ?? '-'} / min</Descriptions.Item>
                 <Descriptions.Item label="普通 API">{securityStatus?.rateLimit?.defaultCapacity ?? '-'} / min</Descriptions.Item>
+                <Descriptions.Item label="电话回调签名">
+                  <Space wrap>
+                    {webhookStatus?.signatureEnabled ? <Tag color="green">HMAC 已开启</Tag> : <Tag color="orange">未开启</Tag>}
+                    {webhookStatus?.replayProtection ? <Tag color="blue">nonce 防重放</Tag> : <Tag>未启用</Tag>}
+                    <Text type="secondary">{webhookStatus?.maxSkewSeconds ?? 300}s 时间窗</Text>
+                  </Space>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 

@@ -28,7 +28,6 @@ import com.agentpilot.crm.service.ProductPackageService;
 import com.agentpilot.events.AgentPilotEventPublisher;
 import com.agentpilot.model.ChatModelClient;
 import com.agentpilot.model.ModelToolCall;
-import com.agentpilot.notification.service.NotificationService;
 import com.agentpilot.rag.service.RagService;
 import com.agentpilot.rag.vo.KnowledgeAnswer;
 import com.agentpilot.scoring.service.LeadScoringService;
@@ -80,7 +79,7 @@ public class AgentOrchestrator {
     private final RagService ragService;
     private final ChatModelClient chatModelClient;
     private final AgentPilotEventPublisher eventPublisher;
-    private final NotificationService notificationService;
+    private final ConfirmationGateway confirmationGateway;
     private final ObjectMapper objectMapper;
 
     public AgentOrchestrator(
@@ -99,7 +98,7 @@ public class AgentOrchestrator {
             RagService ragService,
             ChatModelClient chatModelClient,
             AgentPilotEventPublisher eventPublisher,
-            NotificationService notificationService,
+            ConfirmationGateway confirmationGateway,
             ObjectMapper objectMapper
     ) {
         this.sessionService = sessionService;
@@ -117,7 +116,7 @@ public class AgentOrchestrator {
         this.ragService = ragService;
         this.chatModelClient = chatModelClient;
         this.eventPublisher = eventPublisher;
-        this.notificationService = notificationService;
+        this.confirmationGateway = confirmationGateway;
         this.objectMapper = objectMapper;
     }
 
@@ -207,7 +206,7 @@ public class AgentOrchestrator {
                 toolCall.setCompletedAt(LocalDateTime.now());
                 toolCallService.updateById(toolCall);
             }
-            notificationService.markSourceRead(tenantId, userId, "confirmation", String.valueOf(confirmationId));
+            confirmationGateway.markNotificationRead(tenantId, userId, confirmationId);
             return Map.of(
                     "status", "FAILED",
                     "actionStatus", failureStatus.get(),
@@ -230,7 +229,7 @@ public class AgentOrchestrator {
             toolCall.setCompletedAt(LocalDateTime.now());
             toolCallService.updateById(toolCall);
         }
-        notificationService.markSourceRead(tenantId, userId, "confirmation", String.valueOf(confirmationId));
+        confirmationGateway.markNotificationRead(tenantId, userId, confirmationId);
         return Map.of("status", "CONFIRMED", "confirmationId", confirmationId, "result", result);
     }
 
@@ -265,7 +264,7 @@ public class AgentOrchestrator {
                     "confirmationId", confirmationId
             );
         }
-        notificationService.markSourceRead(tenantId, userId, "confirmation", String.valueOf(confirmationId));
+        confirmationGateway.markNotificationRead(tenantId, userId, confirmationId);
         return Map.of("status", "REJECTED", "confirmationId", confirmationId);
     }
 
@@ -383,16 +382,13 @@ public class AgentOrchestrator {
         payload.put("idempotencyKey", idempotencyKey);
 
         AgentToolCall call = recordTool(run.getId(), "createFollowupTask", payload, Map.of("status", "NEED_CONFIRMATION"), "NEED_CONFIRMATION", null, 0L);
-        AgentConfirmation confirmation = new AgentConfirmation();
-        confirmation.setRunId(run.getId());
-        confirmation.setToolCallId(call.getId());
-        confirmation.setActionType("CREATE_FOLLOWUP_TASK");
-        confirmation.setActionSummary("创建" + dueTime + "跟进" + customer.getName() + "的任务");
-        confirmation.setPayloadJson(toJson(payload));
-        confirmation.setStatus("PENDING");
-        confirmation.setExpiredAt(LocalDateTime.now().plusHours(24));
-        confirmationService.save(confirmation);
-        notificationService.notifyConfirmationRequired(run, confirmation);
+        AgentConfirmation confirmation = confirmationGateway.createPending(
+                run,
+                call,
+                "CREATE_FOLLOWUP_TASK",
+                "创建" + dueTime + "跟进" + customer.getName() + "的任务",
+                payload
+        );
 
         call.setConfirmationId(confirmation.getId());
         call.setOutputJson(toJson(Map.of("confirmationId", confirmation.getId())));
@@ -585,17 +581,7 @@ public class AgentOrchestrator {
             String actionSummary,
             Map<String, Object> payload
     ) {
-        AgentConfirmation confirmation = new AgentConfirmation();
-        confirmation.setRunId(run.getId());
-        confirmation.setToolCallId(call.getId());
-        confirmation.setActionType(actionType);
-        confirmation.setActionSummary(actionSummary);
-        confirmation.setPayloadJson(toJson(payload));
-        confirmation.setStatus("PENDING");
-        confirmation.setExpiredAt(LocalDateTime.now().plusHours(24));
-        confirmationService.save(confirmation);
-        notificationService.notifyConfirmationRequired(run, confirmation);
-        return confirmation;
+        return confirmationGateway.createPending(run, call, actionType, actionSummary, payload);
     }
 
     private AgentChatResponse fallback(AgentSession session, AgentRun run) {

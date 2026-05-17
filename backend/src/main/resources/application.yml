@@ -97,6 +97,11 @@ agentpilot:
     webhook-enabled: ${AGENTPILOT_NOTIFICATION_WEBHOOK_ENABLED:false}
     webhook-url: ${AGENTPILOT_NOTIFICATION_WEBHOOK_URL:}
     webhook-timeout-seconds: ${AGENTPILOT_NOTIFICATION_WEBHOOK_TIMEOUT_SECONDS:5}
+  callcenter:
+    webhook:
+      signature-enabled: ${AGENTPILOT_CALLCENTER_WEBHOOK_SIGNATURE_ENABLED:false}
+      secret: ${AGENTPILOT_CALLCENTER_WEBHOOK_SECRET:}
+      max-skew-seconds: ${AGENTPILOT_CALLCENTER_WEBHOOK_MAX_SKEW_SECONDS:300}
   retention:
     enabled: ${AGENTPILOT_RETENTION_ENABLED:false}
     scheduled-cleanup-enabled: ${AGENTPILOT_RETENTION_SCHEDULED_CLEANUP_ENABLED:false}

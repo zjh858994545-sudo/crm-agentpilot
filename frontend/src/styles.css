@@ -1977,6 +1977,133 @@ body {
   border-inline-start-color: #bfdbfe;
 }
 
+.mobile-sales-loading {
+  display: flex;
+  min-height: 360px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.mobile-work-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 14px;
+  align-items: center;
+  padding: 18px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.09) 0%, rgba(15, 118, 110, 0.05) 48%, rgba(255, 255, 255, 0) 72%),
+    #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  box-shadow: var(--ap-shadow-md);
+}
+
+.mobile-work-hero h3 {
+  margin: 0;
+}
+
+.mobile-work-hero p {
+  max-width: 640px;
+  margin-bottom: 0;
+  color: var(--ap-muted);
+  line-height: 1.7;
+}
+
+.mobile-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-kpi-grid div {
+  min-height: 76px;
+  padding: 12px;
+  background: #fbfcfe;
+  border: 1px solid #e4ebf5;
+  border-radius: 8px;
+}
+
+.mobile-kpi-grid span,
+.mobile-score-strip span {
+  display: block;
+  color: var(--ap-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mobile-kpi-grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--ap-ink);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.mobile-primary-card {
+  border-color: #bfdbfe;
+}
+
+.mobile-score-strip {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  background: #f0f7ff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+}
+
+.mobile-score-strip .anticon {
+  color: #2563eb;
+  margin-top: 2px;
+}
+
+.mobile-score-strip strong {
+  display: block;
+  color: var(--ap-ink);
+  line-height: 1.4;
+}
+
+.mobile-confirmation-item {
+  padding: 12px !important;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #fffbeb 0%, #fff8ed 100%);
+  border: 1px solid #f5b041;
+  border-radius: 8px;
+}
+
+.mobile-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-shortcut-grid a {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
+  gap: 8px;
+  align-items: center;
+  min-height: 58px;
+  padding: 12px;
+  color: var(--ap-ink);
+  background: #fbfcfe;
+  border: 1px solid #e4ebf5;
+  border-radius: 8px;
+}
+
+.mobile-shortcut-grid a:hover {
+  color: var(--ap-ink);
+  border-color: #93b4ff;
+  box-shadow: var(--ap-shadow-hover);
+}
+
+.mobile-shortcut-grid .anticon:first-child {
+  color: #2563eb;
+  font-size: 18px;
+}
+
 @media (max-width: 1180px) {
   .agent-layout {
     grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
@@ -2117,10 +2244,17 @@ body {
   .team-metric-grid,
   .priority-queue,
   .hero-kpi-strip,
+  .mobile-kpi-grid,
+  .mobile-shortcut-grid,
   .agent-session-strip,
   .agent-execution-rail,
   .role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-work-hero {
+    grid-template-columns: 1fr;
+    padding: 16px;
   }
 
   .risk-heatmap {

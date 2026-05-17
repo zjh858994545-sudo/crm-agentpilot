@@ -2,6 +2,8 @@ package com.agentpilot.notification.service;
 
 import com.agentpilot.notification.config.NotificationProperties;
 import com.agentpilot.notification.entity.AgentPilotNotification;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -17,9 +19,11 @@ public class NotificationDeliveryService {
 
     private final NotificationProperties properties;
     private final RestClient restClient;
+    private final MeterRegistry meterRegistry;
 
-    public NotificationDeliveryService(NotificationProperties properties) {
+    public NotificationDeliveryService(NotificationProperties properties, MeterRegistry meterRegistry) {
         this.properties = properties;
+        this.meterRegistry = meterRegistry;
         this.restClient = RestClient.create();
     }
 
@@ -31,6 +35,7 @@ public class NotificationDeliveryService {
                     notification.getRecipientUserId(),
                     notification.getTitle()
             );
+            incrementDelivery("log_only");
             return;
         }
         try {
@@ -40,7 +45,9 @@ public class NotificationDeliveryService {
                     .body(payload(notification))
                     .retrieve()
                     .toBodilessEntity();
+            incrementDelivery("success");
         } catch (RuntimeException ex) {
+            incrementDelivery("failed");
             log.warn(
                     "notification webhook delivery failed notificationId={} type={}",
                     notification.getId(),
@@ -72,5 +79,12 @@ public class NotificationDeliveryService {
         payload.put("sourceId", notification.getSourceId());
         payload.put("createdAt", notification.getCreatedAt());
         return payload;
+    }
+
+    private void incrementDelivery(String result) {
+        Counter.builder("agentpilot_notification_webhook_delivery_total")
+                .tag("result", result)
+                .register(meterRegistry)
+                .increment();
     }
 }

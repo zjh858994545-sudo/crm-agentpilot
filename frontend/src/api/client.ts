@@ -148,6 +148,13 @@ export interface SecurityStatus {
   };
 }
 
+export interface CallCenterWebhookStatus {
+  signatureEnabled: boolean;
+  secretConfigured: boolean;
+  maxSkewSeconds: number;
+  replayProtection: boolean;
+}
+
 export interface AuthProfile {
   userId: number;
   tenantId: string;
@@ -741,6 +748,11 @@ export async function fetchSecurityStatus() {
   return response.data.data;
 }
 
+export async function fetchCallCenterWebhookStatus() {
+  const response = await apiClient.get<ApiResponse<CallCenterWebhookStatus>>('/callcenter/webhook/status');
+  return response.data.data;
+}
+
 export async function fetchSecurityUsers() {
   const response = await apiClient.get<ApiResponse<SecurityUser[]>>('/security/users');
   return response.data.data;
@@ -1050,7 +1062,7 @@ export async function processCallEndedEvent(payload: {
   recordingUrl?: string;
   transcript: string;
 }) {
-  const response = await apiClient.post<ApiResponse<CallEndedEventResponse>>('/callcenter/call-ended-events', payload);
+  const response = await apiClient.post<ApiResponse<CallEndedEventResponse>>('/callcenter/call-ended-events/internal', payload);
   return response.data.data;
 }
 

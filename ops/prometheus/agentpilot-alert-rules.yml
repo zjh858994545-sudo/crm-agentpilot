@@ -37,6 +37,24 @@ groups:
           summary: "CRM-AgentPilot rate limit is frequently triggered"
           description: "429 responses are above threshold. Check whether traffic is expected, Redis rate-limit backend is healthy, and model cost protection is working."
 
+      - alert: AgentPilotWebhookReplayOrSignatureRejections
+        expr: sum(rate(agentpilot_webhook_rejected_total{endpoint="call-ended-events"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot call-center webhook rejections are increasing"
+          description: "Inbound call-ended events are being rejected by timestamp, nonce replay, or signature validation. Check provider clock skew, shared secret rotation, and possible replay attempts."
+
+      - alert: AgentPilotNotificationWebhookFailures
+        expr: sum(rate(agentpilot_notification_webhook_delivery_total{result="failed"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot notification webhook delivery is failing"
+          description: "Confirmation reminders cannot be pushed to the external gateway. Check WeCom/DingTalk/SMS gateway availability, webhook URL, and network egress."
+
       - alert: AgentPilotOutboxDeadLetters
         expr: agentpilot_outbox_dead_letter_events > 0
         for: 5m

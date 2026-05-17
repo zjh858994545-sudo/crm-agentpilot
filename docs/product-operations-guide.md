@@ -314,3 +314,44 @@ Production integration notes:
 - The call-end endpoint must be protected by tenant identity, request signature validation, and replay protection before being exposed to third-party callbacks.
 - WeCom/DingTalk/SMS push should subscribe to `CONFIRMATION_REQUIRED` notifications and deliver them to the sales rep's phone.
 - Notification and confirmation remain intentionally separate: notification is for reachability, confirmation is the write-safety boundary.
+
+## 15. Inbound Webhook Security
+
+External telephony providers must call `POST /api/callcenter/call-ended-events`. This endpoint is a production boundary and should not be exposed without signature validation.
+
+Enable protection:
+
+```text
+AGENTPILOT_CALLCENTER_WEBHOOK_SIGNATURE_ENABLED=true
+AGENTPILOT_CALLCENTER_WEBHOOK_SECRET=<managed-secret>
+AGENTPILOT_CALLCENTER_WEBHOOK_MAX_SKEW_SECONDS=300
+```
+
+Required headers:
+
+```text
+X-AgentPilot-Webhook-Timestamp: <epoch-seconds>
+X-AgentPilot-Webhook-Nonce: <unique-random-nonce>
+X-AgentPilot-Webhook-Signature: sha256=<hmac-sha256>
+```
+
+Signature payload:
+
+```text
+timestamp + "." + nonce + "." + rawJsonBody
+```
+
+The backend rejects:
+
+- missing or malformed timestamp, nonce, or signature;
+- timestamp outside the configured skew window;
+- invalid HMAC signature;
+- repeated nonce for the same tenant and endpoint.
+
+The browser product uses `POST /api/callcenter/call-ended-events/internal` for authenticated in-app simulations and operator workflows. Do not put the webhook secret in frontend code.
+
+Prometheus metrics:
+
+- `agentpilot_webhook_accepted_total{endpoint="call-ended-events"}`
+- `agentpilot_webhook_rejected_total{endpoint="call-ended-events",reason="..."}`
+- `agentpilot_notification_webhook_delivery_total{result="success|failed|log_only"}`

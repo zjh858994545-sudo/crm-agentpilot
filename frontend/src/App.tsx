@@ -8,6 +8,7 @@ import {
   LoginOutlined,
   LogoutOutlined,
   MessageOutlined,
+  MobileOutlined,
   PhoneOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -39,6 +40,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
 const Evaluation = lazy(() => import('./pages/Evaluation/Evaluation'));
 const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase/KnowledgeBase'));
 const Leads = lazy(() => import('./pages/Leads/Leads'));
+const MobileSales = lazy(() => import('./pages/MobileSales/MobileSales'));
 const SystemAdmin = lazy(() => import('./pages/SystemAdmin/SystemAdmin'));
 
 const { Header, Sider, Content } = Layout;
@@ -56,6 +58,7 @@ type NavEntry = {
 
 const navItems: NavEntry[] = [
   { key: '/', icon: <DashboardOutlined />, label: '今日工作台', group: 'sales', visibleFor: ['sales', 'manager'] },
+  { key: '/mobile', icon: <MobileOutlined />, label: '移动作业', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/agent', icon: <MessageOutlined />, label: 'AI 助手', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/customers', icon: <TeamOutlined />, label: '客户 360', group: 'sales', visibleFor: ['sales', 'manager'] },
   { key: '/leads', icon: <ThunderboltOutlined />, label: '商机优先级', group: 'manager', visibleFor: ['sales', 'manager'] },
@@ -132,6 +135,11 @@ class WorkspaceErrorBoundary extends Component<WorkspaceErrorBoundaryProps, Work
 }
 
 const pageMeta: Record<string, { title: string; subtitle: string; role: string }> = {
+  '/mobile': {
+    title: '移动销售作业',
+    subtitle: '面向外出拜访和电话后处理，聚合待确认写入、高优商机和 AI 准备动作',
+    role: '销售 / 主管'
+  },
   '/': {
     title: '今日销售工作台',
     subtitle: '把客户、商机、AI 建议和待确认动作收在一个业务入口里',
@@ -457,6 +465,7 @@ function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) 
             <Suspense fallback={<PageLoading />}>
               <Routes>
                 <Route path="/" element={route('/', <Dashboard />)} />
+                <Route path="/mobile" element={route('/mobile', <MobileSales />)} />
                 <Route path="/agent" element={route('/agent', <AgentChat />)} />
                 <Route path="/customers" element={route('/customers', <Customers />)} />
                 <Route path="/leads" element={route('/leads', <Leads />)} />
