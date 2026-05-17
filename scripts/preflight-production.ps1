@@ -11,6 +11,7 @@ $required = @(
   "AGENTPILOT_SECURITY_MODE",
   "AGENTPILOT_SEED_USERS_ENABLED",
   "AGENTPILOT_RATE_LIMIT_ENABLED",
+  "AGENTPILOT_RATE_LIMIT_BACKEND",
   "SPRING_DATASOURCE_URL",
   "SPRING_DATASOURCE_USERNAME",
   "SPRING_DATASOURCE_PASSWORD",
@@ -77,6 +78,12 @@ if ($seedUsers -ne "false") {
 $rateLimitEnabled = Get-EnvValue "AGENTPILOT_RATE_LIMIT_ENABLED"
 if ($rateLimitEnabled -ne "true") {
   Write-Host "[FAIL] AGENTPILOT_RATE_LIMIT_ENABLED must be true for production" -ForegroundColor Red
+  $failed++
+}
+
+$rateLimitBackend = Get-EnvValue "AGENTPILOT_RATE_LIMIT_BACKEND"
+if ($rateLimitBackend -ne "redis") {
+  Write-Host "[FAIL] AGENTPILOT_RATE_LIMIT_BACKEND must be redis for multi-instance production deployments" -ForegroundColor Red
   $failed++
 }
 

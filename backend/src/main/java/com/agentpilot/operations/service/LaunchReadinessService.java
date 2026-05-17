@@ -100,13 +100,15 @@ public class LaunchReadinessService {
                 "至少保留一个 ACTIVE 租户；企业客户开通、停用和备份恢复都应以租户注册表为准"
         ));
         checks.add(jwtTenantAllowListCheck(productionPhase));
+        boolean rateLimitReady = rateLimitProperties.isEnabled()
+                && (!productionPhase || "redis".equalsIgnoreCase(rateLimitProperties.getBackend()));
         checks.add(check(
                 "rate-limit.enabled",
                 "接口限流",
-                rateLimitProperties.isEnabled(),
+                rateLimitReady,
                 "FAIL",
                 "限流后端：" + rateLimitProperties.getBackend(),
-                "生产环境开启 AGENTPILOT_RATE_LIMIT_ENABLED=true，并优先使用 Redis 分布式限流"
+                "生产环境开启 AGENTPILOT_RATE_LIMIT_ENABLED=true，并设置 AGENTPILOT_RATE_LIMIT_BACKEND=redis"
         ));
         checks.add(check(
                 "model.chat",
