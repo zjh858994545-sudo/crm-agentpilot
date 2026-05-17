@@ -4,6 +4,7 @@ param(
     [switch]$SkipPreflight,
     [switch]$SkipRuntimeHealthcheck,
     [switch]$SkipDockerCheck,
+    [string]$EnvFile = "",
     [string]$MavenRepo = $(if ($env:MAVEN_REPO_LOCAL) { $env:MAVEN_REPO_LOCAL } else { "F:\后端开发新项目\DevCache\m2" }),
     [string]$BaseUrl = $(if ($env:AGENTPILOT_BASE_URL) { $env:AGENTPILOT_BASE_URL } else { "http://localhost:18080" }),
     [string]$Token = $(if ($env:AGENTPILOT_API_TOKEN) { $env:AGENTPILOT_API_TOKEN } else { "" })
@@ -61,6 +62,10 @@ if (-not $SkipPreflight) {
         $args = @()
         if ($SkipDockerCheck) {
             $args += "-SkipDockerCheck"
+        }
+        if ($EnvFile -and $EnvFile.Trim().Length -gt 0) {
+            $args += "-EnvFile"
+            $args += $EnvFile
         }
         & (Join-Path $PSScriptRoot "preflight-production.ps1") @args
     }

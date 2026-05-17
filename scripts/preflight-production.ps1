@@ -1,4 +1,5 @@
 param(
+  [string]$EnvFile = "",
   [switch]$SkipDockerCheck
 )
 
@@ -28,6 +29,32 @@ $required = @(
 
 $failed = 0
 
+function Import-EnvFile {
+  param([string]$Path)
+  if (-not $Path -or $Path.Trim().Length -eq 0) {
+    return
+  }
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "Env file not found: $Path"
+  }
+  Get-Content -LiteralPath $Path | ForEach-Object {
+    $line = $_.Trim()
+    if (-not $line -or $line.StartsWith("#")) {
+      return
+    }
+    $idx = $line.IndexOf("=")
+    if ($idx -le 0) {
+      return
+    }
+    $name = $line.Substring(0, $idx).Trim()
+    $value = $line.Substring($idx + 1).Trim()
+    if ($name) {
+      [Environment]::SetEnvironmentVariable($name, $value, "Process")
+    }
+  }
+  Write-Host "[OK] loaded env file $Path"
+}
+
 function Get-EnvValue {
   param([string]$Name)
   $value = [Environment]::GetEnvironmentVariable($Name, "Process")
@@ -47,9 +74,15 @@ function Assert-Env {
     Write-Host "[FAIL] missing $Name" -ForegroundColor Red
     return $false
   }
+  if ($value -match "<.*secret.*>" -or $value -match "CHANGE_ME|TODO|REPLACE_ME") {
+    Write-Host "[FAIL] $Name still contains a placeholder value" -ForegroundColor Red
+    return $false
+  }
   Write-Host "[OK] $Name"
   return $true
 }
+
+Import-EnvFile $EnvFile
 
 foreach ($item in $required) {
   if (-not (Assert-Env $item)) {

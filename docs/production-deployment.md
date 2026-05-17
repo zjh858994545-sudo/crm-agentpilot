@@ -24,6 +24,8 @@ Use this when one AgentPilot cluster serves multiple companies.
 
 ## Required Environment Variables
 
+Use `.env.production.example` as the deployment template. Copy the values into the target host environment, Docker secrets, Kubernetes secrets, or CI protected variables; do not deploy with placeholder secrets.
+
 ```powershell
 AGENTPILOT_APP_PHASE=production
 AGENTPILOT_SECURITY_MODE=strict
@@ -75,6 +77,12 @@ Before starting production, run the static preflight:
 
 ```powershell
 .\scripts\preflight-production.ps1
+```
+
+If you keep deployment variables in a local env file for staging validation, load it explicitly:
+
+```powershell
+.\scripts\preflight-production.ps1 -EnvFile .\.env.production
 ```
 
 If the runtime host does not use Docker, run:
@@ -129,6 +137,12 @@ The release gate runs backend tests, frontend production build, static productio
 
 ```powershell
 .\scripts\release-gate.ps1 -SkipBackendTests -SkipPreflight -SkipRuntimeHealthcheck
+```
+
+For staging releases backed by an env file:
+
+```powershell
+.\scripts\release-gate.ps1 -EnvFile .\.env.production -SkipDockerCheck
 ```
 
 Do not treat a manual browser check as a release gate replacement. Browser checks prove the happy path; the release gate proves build correctness, security preconditions, and runtime health.
