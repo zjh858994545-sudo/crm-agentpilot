@@ -121,11 +121,12 @@ CRM data contains business contact information and conversation details. Product
 1. Build backend jar and frontend static bundle in CI.
 2. Run backend unit/integration tests.
 3. Run frontend production build.
-4. Run Playwright smoke flow against staging.
-5. Apply database migrations in staging, then production.
-6. Rebuild missing knowledge vectors after embedding model changes.
-7. Run readiness and ops healthcheck.
-8. Tag release and keep rollback artifacts.
+4. Run frontend bundle budget checks.
+5. Run Playwright smoke flow against staging.
+6. Apply database migrations in staging, then production.
+7. Rebuild missing knowledge vectors after embedding model changes.
+8. Run readiness and ops healthcheck.
+9. Tag release and keep rollback artifacts.
 
 For a single workstation or staging server, use the release gate script to make the same checks repeatable:
 
@@ -133,7 +134,7 @@ For a single workstation or staging server, use the release gate script to make 
 .\scripts\release-gate.ps1 -SkipDockerCheck
 ```
 
-The release gate runs backend tests, frontend production build, static production preflight, and runtime operations healthcheck. In CI, keep all steps enabled. During local UI-only work, you can skip the slower or unavailable steps explicitly:
+The release gate runs backend tests, frontend production build, frontend bundle budget checks, static production preflight, and runtime operations healthcheck. In CI, keep all steps enabled. During local UI-only work, you can skip the slower or unavailable steps explicitly:
 
 ```powershell
 .\scripts\release-gate.ps1 -SkipBackendTests -SkipPreflight -SkipRuntimeHealthcheck
@@ -151,6 +152,12 @@ Runtime healthcheck details:
 - With an admin token, it verifies `/api/auth/me`, `/api/dashboard/metrics`, `/api/tenants`, model status, knowledge status, outbox status, readiness, and retention status.
 - If the token only represents a sales user, use `-SkipAdminHealthchecks` on `release-gate.ps1` or `-SkipAdminChecks` on `ops-healthcheck.ps1`.
 - The release gate uses `F:\DockerData\AgentPilotCache\m2` as the default Maven cache on Windows to avoid C-drive pressure and non-ASCII path issues. Override with `MAVEN_REPO_LOCAL` when needed.
+
+Frontend performance budget:
+
+- `scripts/check-frontend-bundle.ps1` scans `frontend/dist/assets` after `npm run build`.
+- Default thresholds are 1100 KB for a single JS/CSS asset, 850 KB total JS gzip, and 80 KB total CSS gzip.
+- Use `-SkipFrontendBundleBudget` only while investigating a known bundle regression; do not skip it for release approval.
 
 Do not treat a manual browser check as a release gate replacement. Browser checks prove the happy path; the release gate proves build correctness, security preconditions, and runtime health.
 

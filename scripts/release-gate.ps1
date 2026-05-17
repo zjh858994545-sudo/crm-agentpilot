@@ -1,6 +1,7 @@
 param(
     [switch]$SkipBackendTests,
     [switch]$SkipFrontendBuild,
+    [switch]$SkipFrontendBundleBudget,
     [switch]$SkipPreflight,
     [switch]$SkipRuntimeHealthcheck,
     [switch]$SkipAdminHealthchecks,
@@ -68,6 +69,12 @@ if (-not $SkipFrontendBuild) {
         } finally {
             Pop-Location
         }
+    }
+}
+
+if (-not $SkipFrontendBuild -and -not $SkipFrontendBundleBudget) {
+    Invoke-Step "Frontend bundle budget" {
+        & (Join-Path $PSScriptRoot "check-frontend-bundle.ps1")
     }
 }
 
