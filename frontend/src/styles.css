@@ -9,6 +9,11 @@ body,
   margin: 0;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 :root {
   --ap-primary: #2563eb;
   --ap-primary-dark: #1d4ed8;
@@ -32,6 +37,7 @@ body {
   color: #162033;
   background:
     linear-gradient(180deg, #f5f7fb 0%, #eef2f6 42%, #e9eef5 100%);
+  overscroll-behavior-y: none;
 }
 
 .app-shell {
@@ -2087,7 +2093,12 @@ body {
   }
 
   .app-content {
-    padding: 16px;
+    padding: 16px 14px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .ant-btn,
+  .app-sider .ant-menu-item {
+    min-height: 40px;
   }
 
   .summary-panel {
