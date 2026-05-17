@@ -284,3 +284,13 @@ Outbox 堆积：
 - 更大规模真实评测集与失败样例库。
 - 联系记录写入幂等和 confirmation 乐观锁。
 - 云数据库自动备份、异地灾备和恢复演练自动化。
+
+## 13. Runtime Healthcheck Acceptance
+
+`scripts/ops-healthcheck.ps1` is the runtime acceptance script for staging and production smoke verification. It is intentionally stricter than a browser demo:
+
+- Every request carries a unique `X-Trace-Id`; the script fails if the response header does not echo the same trace id.
+- Core checks cover health, authenticated profile, security posture, dashboard metrics, model status, knowledge vector status, outbox status, launch readiness, and retention status.
+- Admin checks also validate the tenant registry through `/api/tenants`; use `-SkipAdminChecks` only when validating with a sales-only token.
+- `scripts/release-gate.ps1` calls this script in the runtime stage and supports `-SkipAdminHealthchecks` for non-admin staging checks.
+- The script should be run after deployment, after configuration changes, and after incident recovery.

@@ -145,6 +145,13 @@ For staging releases backed by an env file:
 .\scripts\release-gate.ps1 -EnvFile .\.env.production -SkipDockerCheck
 ```
 
+Runtime healthcheck details:
+
+- `scripts/ops-healthcheck.ps1` sends a unique `X-Trace-Id` for every check and fails if the backend does not echo the same trace id.
+- With an admin token, it verifies `/api/auth/me`, `/api/dashboard/metrics`, `/api/tenants`, model status, knowledge status, outbox status, readiness, and retention status.
+- If the token only represents a sales user, use `-SkipAdminHealthchecks` on `release-gate.ps1` or `-SkipAdminChecks` on `ops-healthcheck.ps1`.
+- The release gate uses `F:\DockerData\AgentPilotCache\m2` as the default Maven cache on Windows to avoid C-drive pressure and non-ASCII path issues. Override with `MAVEN_REPO_LOCAL` when needed.
+
 Do not treat a manual browser check as a release gate replacement. Browser checks prove the happy path; the release gate proves build correctness, security preconditions, and runtime health.
 
 ## Rollback

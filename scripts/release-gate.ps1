@@ -3,6 +3,7 @@ param(
     [switch]$SkipFrontendBuild,
     [switch]$SkipPreflight,
     [switch]$SkipRuntimeHealthcheck,
+    [switch]$SkipAdminHealthchecks,
     [switch]$SkipDockerCheck,
     [string]$EnvFile = "",
     [string]$MavenRepo = $(if ($env:MAVEN_REPO_LOCAL) { $env:MAVEN_REPO_LOCAL } else { "F:\DockerData\AgentPilotCache\m2" }),
@@ -86,7 +87,11 @@ if (-not $SkipPreflight) {
 
 if (-not $SkipRuntimeHealthcheck) {
     Invoke-Step "Runtime operations healthcheck" {
-        & (Join-Path $PSScriptRoot "ops-healthcheck.ps1") -BaseUrl $BaseUrl -Token $Token
+        $args = @("-BaseUrl", $BaseUrl, "-Token", $Token)
+        if ($SkipAdminHealthchecks) {
+            $args += "-SkipAdminChecks"
+        }
+        & (Join-Path $PSScriptRoot "ops-healthcheck.ps1") @args
     }
 }
 
