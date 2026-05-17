@@ -81,6 +81,7 @@ public class AgentOrchestrator {
     private final AgentPilotEventPublisher eventPublisher;
     private final ConfirmationGateway confirmationGateway;
     private final LlmToolRouter llmToolRouter;
+    private final IntentRouter intentRouter;
     private final ObjectMapper objectMapper;
 
     public AgentOrchestrator(
@@ -101,6 +102,7 @@ public class AgentOrchestrator {
             AgentPilotEventPublisher eventPublisher,
             ConfirmationGateway confirmationGateway,
             LlmToolRouter llmToolRouter,
+            IntentRouter intentRouter,
             ObjectMapper objectMapper
     ) {
         this.sessionService = sessionService;
@@ -120,6 +122,7 @@ public class AgentOrchestrator {
         this.eventPublisher = eventPublisher;
         this.confirmationGateway = confirmationGateway;
         this.llmToolRouter = llmToolRouter;
+        this.intentRouter = intentRouter;
         this.objectMapper = objectMapper;
     }
 
@@ -129,8 +132,8 @@ public class AgentOrchestrator {
         memoryService.append(session.getId(), "user", request.message());
         AgentRun run = createRun(request, session);
 
-        String ruleIntent = routeIntent(request.message());
-        AgentChatResponse response = requiresDeterministicWriteFlow(ruleIntent)
+        String ruleIntent = intentRouter.route(request.message());
+        AgentChatResponse response = intentRouter.requiresDeterministicWriteFlow(ruleIntent)
                 ? routeByRules(request, session, run, ruleIntent)
                 : tryLlmToolCalling(request, session, run)
                 .orElseGet(() -> routeByRules(request, session, run, ruleIntent));
@@ -153,7 +156,7 @@ public class AgentOrchestrator {
     }
 
     private AgentChatResponse routeByRules(AgentChatRequest request, AgentSession session, AgentRun run) {
-        return routeByRules(request, session, run, routeIntent(request.message()));
+        return routeByRules(request, session, run, intentRouter.route(request.message()));
     }
 
     private AgentChatResponse routeByRules(AgentChatRequest request, AgentSession session, AgentRun run, String intent) {
@@ -837,32 +840,6 @@ public class AgentOrchestrator {
                 || !Objects.equals(run.getSalesRepId(), salesRepId))) {
             throw new AccessDeniedException("confirmation is outside current data scope");
         }
-    }
-
-    private String routeIntent(String message) {
-        if (message.contains("创建") && message.contains("任务")) {
-            return "CREATE_TASK";
-        }
-        if ((message.contains("写入") || message.contains("记录")) && message.contains("联系记录")) {
-            return "WRITE_CONTACT_LOG";
-        }
-        if ((message.contains("更新") || message.contains("修改")) && message.contains("商机") && message.contains("阶段")) {
-            return "UPDATE_LEAD_STAGE";
-        }
-        if (message.contains("优先") || message.contains("跟进哪些") || message.contains("跟进谁")) {
-            return "LEAD_RECOMMENDATION";
-        }
-        if (message.contains("分析") || message.contains("客户")) {
-            return "CUSTOMER_ANALYSIS";
-        }
-        if (message.contains("怎么") || message.contains("能不能") || message.contains("政策") || message.contains("质检")) {
-            return "KNOWLEDGE_QA";
-        }
-        return "GENERAL";
-    }
-
-    private boolean requiresDeterministicWriteFlow(String intent) {
-        return Set.of("CREATE_TASK", "WRITE_CONTACT_LOG", "UPDATE_LEAD_STAGE").contains(intent);
     }
 
     private Customer resolveCustomer(AgentChatRequest request) {

@@ -23,6 +23,49 @@ export class AgentPilotApiError extends Error {
   }
 }
 
+const CLIENT_ERROR_LOG_KEY = 'agentpilot.clientErrorLogs';
+
+export interface ClientErrorLog {
+  id: string;
+  occurredAt: string;
+  method: string;
+  url: string;
+  status?: number;
+  code?: string;
+  message: string;
+  traceId?: string;
+}
+
+export function fetchClientErrorLogs() {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  try {
+    return JSON.parse(window.localStorage.getItem(CLIENT_ERROR_LOG_KEY) || '[]') as ClientErrorLog[];
+  } catch {
+    return [];
+  }
+}
+
+export function clearClientErrorLogs() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(CLIENT_ERROR_LOG_KEY);
+  }
+}
+
+function recordClientError(log: Omit<ClientErrorLog, 'id' | 'occurredAt'>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const next: ClientErrorLog = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    occurredAt: new Date().toISOString(),
+    ...log
+  };
+  const logs = [next, ...fetchClientErrorLogs()].slice(0, 30);
+  window.localStorage.setItem(CLIENT_ERROR_LOG_KEY, JSON.stringify(logs));
+}
+
 export function describeApiError(error: unknown) {
   if (error instanceof AgentPilotApiError) {
     return error.traceId ? `${error.message} Trace ID：${error.traceId}` : error.message;
@@ -727,6 +770,14 @@ apiClient.interceptors.response.use(
               : status && status >= 500
                 ? '服务端暂时异常，请联系管理员并提供 Trace ID。'
                 : '网络请求失败，请检查服务是否已启动。');
+      recordClientError({
+        method: String(error.config?.method || 'GET').toUpperCase(),
+        url: error.config?.url || '',
+        status,
+        code,
+        message,
+        traceId
+      });
       return Promise.reject(new AgentPilotApiError(message, { status, code, traceId }));
     }
     return Promise.reject(error);
@@ -836,6 +887,13 @@ export async function fetchRetentionStatus() {
 export async function fetchUsageSnapshot() {
   const response = await apiClient.get<ApiResponse<UsageSnapshot>>('/operations/usage');
   return response.data.data;
+}
+
+export async function downloadDiagnosticsBundle() {
+  const response = await apiClient.get<Blob>('/operations/diagnostics.zip', {
+    responseType: 'blob'
+  });
+  return response.data;
 }
 
 export async function fetchAdminAuditLogs() {

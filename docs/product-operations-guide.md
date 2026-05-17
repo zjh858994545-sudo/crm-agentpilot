@@ -199,7 +199,19 @@ cd "F:\后端开发新项目\crm-agentpilot"
 - 定期做恢复演练，不能只保留“看起来存在”的备份文件。
 - 真实生产环境建议使用云数据库自动备份 + 异地备份 + 定期恢复演练，脚本作为私有化/本地部署兜底。
 
-## 10. 数据生命周期
+## 10. 诊断包
+
+系统管理页提供“下载诊断包”能力，对应接口：
+
+```text
+GET /api/operations/diagnostics.zip
+```
+
+诊断包用于线上故障排查，包含上线就绪检查、数据保留状态、租户用量摘要、Outbox 状态、JVM 摘要、数据库摘要和关键表行数。
+
+诊断包刻意不导出客户明细、联系记录、通话正文、API Token 或模型 Key，避免运维附件变成数据泄露源。
+
+## 11. 数据生命周期
 
 系统提供保留策略中心，避免审计、检索和事件日志无限增长。
 
@@ -228,7 +240,7 @@ AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN=10000
 - 如果 dry-run 结果超过 `AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN`，先分批或提高上限，不要在高峰期一次性清理大批数据。
 - 定时清理只在 `AGENTPILOT_RETENTION_ENABLED=true` 且 `AGENTPILOT_RETENTION_SCHEDULED_CLEANUP_ENABLED=true` 时执行。
 
-## 11. 故障处理
+## 12. 故障处理
 
 模型调用失败：
 
@@ -261,7 +273,7 @@ Outbox 堆积：
 - 如果后端返回超过单次清理上限，先备份数据库，再调整 `AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN`。
 - 如果清理被禁用，确认 `AGENTPILOT_RETENTION_ENABLED=true`。
 
-## 12. 后续商业化路线
+## 13. 后续商业化路线
 
 已经具备的产品化能力：
 
@@ -284,8 +296,9 @@ Outbox 堆积：
 - 更大规模真实评测集与失败样例库。
 - 联系记录写入幂等和 confirmation 乐观锁。
 - 云数据库自动备份、异地灾备和恢复演练自动化。
+- 移动端离线草稿同步、批量确认、电话拨打权限与通话 SDK 集成。
 
-## 13. Runtime Healthcheck Acceptance
+## 14. Runtime Healthcheck Acceptance
 
 `scripts/ops-healthcheck.ps1` is the runtime acceptance script for staging and production smoke verification. It is intentionally stricter than a browser demo:
 
@@ -296,7 +309,7 @@ Outbox 堆积：
 - `scripts/release-gate.ps1` calls this script in the runtime stage and supports `-SkipAdminHealthchecks` for non-admin staging checks.
 - The script should be run after deployment, after configuration changes, and after incident recovery.
 
-## 14. Sales Notification And Call-End Workflow
+## 15. Sales Notification And Call-End Workflow
 
 The product story is now centered on: **AI suggests, humans decide, every CRM write has a responsible owner**.
 
@@ -392,3 +405,14 @@ Interpretation:
 - `dashboard` validates tenant/sales-rep scoped aggregation and database query latency.
 - `agent` validates rate limiting, tool routing, and model provider stability. Use mock mode for frequent load tests; use real model mode only for small confirmation tests to control cost.
 - P95 latency and non-2xx status codes should be reviewed before each production release.
+
+For staging or pre-production, use the k6 script:
+
+```powershell
+k6 run `
+  -e BASE_URL=http://localhost:18080 `
+  -e AGENTPILOT_API_TOKEN=$env:AGENTPILOT_API_TOKEN `
+  .\ops\k6\agentpilot-smoke.js
+```
+
+The k6 script exercises Dashboard metrics and Agent Chat together, and sets P95 thresholds for both paths. Run it with an isolated tenant, controlled model budget, PostgreSQL slow-query logging, and Outbox monitoring enabled.

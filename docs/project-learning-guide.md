@@ -638,9 +638,11 @@ AGENTPILOT_NOTIFICATION_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/
 - Docker 诊断：`scripts/diagnose-docker.ps1` 用来检查 Docker Desktop、磁盘、代理、端口和镜像拉取问题。它解决的是“部署失败时不知道卡在哪里”的问题。
 - 生产部署：`docker-compose.prod.yml`、`deploy/nginx/agentpilot.conf.template` 和 `scripts/deploy-prod.ps1` 给出 HTTPS 反向代理、严格鉴权、Redis 限流、Kafka、数据目录和健康检查的标准模板。
 - 通知渠道：`generic / wecom / dingtalk` 三种格式把 confirmation 提醒推到企业工作软件；但写 CRM 仍然必须回系统确认，通知不等于写入。
-- 压测脚本：`scripts/load-test.ps1` 可以压 `health / dashboard / agent` 三类场景，输出 P50/P95/P99 和错误样例。它验证限流、聚合查询、Agent 链路在压力下是否稳定。
+- 压测脚本：`scripts/load-test.ps1` 可以压 `health / dashboard / agent` 三类场景，输出 P50/P95/P99 和错误样例；`ops/k6/agentpilot-smoke.js` 是更正式的预生产压测脚本，同时压 Dashboard metrics 和 Agent Chat。
 - 用量统计：`/api/operations/usage` 聚合今日和近 7 天 Agent 会话、工具调用、确认单、通知、Outbox 和平均耗时。它不是完整计费系统，但已经是成本/容量治理的底座。
-- Orchestrator 拆分：`LlmToolRouter` 专门负责 LLM Tool Calling 选择工具，`ConfirmationGateway` 专门负责写入确认单和通知。`AgentOrchestrator` 仍然偏重，但已经开始按“路由、确认、执行”拆开。
+- 诊断包：`/api/operations/diagnostics.zip` 可以从系统管理页下载，包含就绪检查、保留策略、用量、Outbox、JVM 和数据库摘要，但不导出客户明细和密钥。
+- 错误体验：前端会记录最近接口错误、状态码和 TraceId，系统管理页能复制 TraceId 给后端排查。
+- Orchestrator 拆分：`IntentRouter` 专门负责规则意图路由，`LlmToolRouter` 专门负责 LLM Tool Calling 选择工具，`ConfirmationGateway` 专门负责写入确认单和通知。`AgentOrchestrator` 仍然偏重，但已经开始按“路由、确认、执行”拆开。
 
 你可以用一句话概括：我不是只做了一个能演示的 Agent 页面，而是补了部署、诊断、触达、压测、用量、权限和审计这些真实上线会遇到的问题。
 ## 13. Webhook 签名和移动作业怎么讲
@@ -663,7 +665,8 @@ AGENTPILOT_NOTIFICATION_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/
 1. 看今天还有多少待确认写入。
 2. 看下一位最该跟进的客户。
 3. 一键让 AI 准备话术，然后回到确认流。
+4. 拜访后先保存离线草稿，网络稳定后再同步到 CRM 留痕。
 
 你可以这样解释：
 
-> PC 工作台适合主管复盘和系统管理，销售外出时需要更短路径。我新增了移动作业页，把待确认、Top 商机和 AI 准备动作放到同一屏，减少销售在路上翻菜单的成本。
+> PC 工作台适合主管复盘和系统管理，销售外出时需要更短路径。我新增了移动作业页，把待确认、Top 商机、AI 准备、批量确认和离线草稿放到同一屏，减少销售在路上翻菜单和事后补录的成本。

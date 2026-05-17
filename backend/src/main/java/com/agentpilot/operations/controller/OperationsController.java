@@ -3,6 +3,7 @@ package com.agentpilot.operations.controller;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.operations.service.LaunchReadinessService;
+import com.agentpilot.operations.service.OperationsDiagnosticService;
 import com.agentpilot.operations.service.RetentionMaintenanceService;
 import com.agentpilot.operations.service.UsageMetricsService;
 import com.agentpilot.operations.vo.LaunchReadinessStatus;
@@ -12,6 +13,10 @@ import com.agentpilot.operations.vo.RetentionStatus;
 import com.agentpilot.operations.vo.UsageSnapshot;
 import com.agentpilot.security.CurrentUser;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,17 +33,20 @@ public class OperationsController {
     private final RetentionMaintenanceService retentionMaintenanceService;
     private final LaunchReadinessService launchReadinessService;
     private final UsageMetricsService usageMetricsService;
+    private final OperationsDiagnosticService operationsDiagnosticService;
 
     public OperationsController(
             AdminAuditService adminAuditService,
             RetentionMaintenanceService retentionMaintenanceService,
             LaunchReadinessService launchReadinessService,
-            UsageMetricsService usageMetricsService
+            UsageMetricsService usageMetricsService,
+            OperationsDiagnosticService operationsDiagnosticService
     ) {
         this.adminAuditService = adminAuditService;
         this.retentionMaintenanceService = retentionMaintenanceService;
         this.launchReadinessService = launchReadinessService;
         this.usageMetricsService = usageMetricsService;
+        this.operationsDiagnosticService = operationsDiagnosticService;
     }
 
     @GetMapping("/readiness")
@@ -54,6 +62,22 @@ public class OperationsController {
     @GetMapping("/usage")
     public ApiResponse<UsageSnapshot> usage() {
         return ApiResponse.ok(usageMetricsService.snapshot(CurrentUser.tenantId()));
+    }
+
+    @GetMapping("/diagnostics.zip")
+    public ResponseEntity<byte[]> diagnosticsBundle() {
+        byte[] payload = operationsDiagnosticService.buildBundle(CurrentUser.tenantId(), CurrentUser.userId());
+        adminAuditService.record(
+                "operations.diagnostics.download",
+                "diagnostics",
+                CurrentUser.tenantId(),
+                "Downloaded operations diagnostic bundle"
+        );
+        String filename = "agentpilot-diagnostics-" + CurrentUser.tenantId() + ".zip";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(payload);
     }
 
     @PostMapping("/retention/run")

@@ -5,6 +5,7 @@ import {
   ClusterOutlined,
   CopyOutlined,
   DatabaseOutlined,
+  DownloadOutlined,
   EditOutlined,
   KeyOutlined,
   LockOutlined,
@@ -41,6 +42,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AdminAuditLog,
   CallCenterWebhookStatus,
+  ClientErrorLog,
   EventStatus,
   KnowledgeStatus,
   LaunchReadinessStatus,
@@ -57,9 +59,12 @@ import {
   UsageSnapshot,
   createTenant,
   createSecurityUser,
+  clearClientErrorLogs,
   describeApiError,
+  downloadDiagnosticsBundle,
   fetchAdminAuditLogs,
   fetchCallCenterWebhookStatus,
+  fetchClientErrorLogs,
   fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
@@ -141,12 +146,14 @@ export default function SystemAdmin() {
   const [webhookStatus, setWebhookStatus] = useState<CallCenterWebhookStatus | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<NotificationDeliveryStatus | null>(null);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
+  const [clientErrorLogs, setClientErrorLogs] = useState<ClientErrorLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const load = async () => {
     setLoading(true);
     setError('');
+    setClientErrorLogs(fetchClientErrorLogs());
     const results = await Promise.allSettled([
       fetchSecurityStatus(),
       fetchEventStatus(),
@@ -354,6 +361,33 @@ export default function SystemAdmin() {
     }
   };
 
+  const downloadDiagnostics = async () => {
+    setLoading(true);
+    try {
+      const blob = await downloadDiagnosticsBundle();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `agentpilot-diagnostics-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      antdMessage.success('诊断包已生成');
+      await load();
+    } catch (err) {
+      antdMessage.error(`诊断包生成失败：${describeApiError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearRecentClientErrors = () => {
+    clearClientErrorLogs();
+    setClientErrorLogs([]);
+    antdMessage.success('最近错误记录已清空');
+  };
+
   const writeToolCount = useMemo(
     () => tools.filter((tool) => ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(tool.function.name)).length,
     [tools]
@@ -559,6 +593,9 @@ export default function SystemAdmin() {
         title="系统运行中心"
         extra={
           <Space>
+            <Button icon={<DownloadOutlined />} loading={loading} onClick={downloadDiagnostics}>
+              下载诊断包
+            </Button>
             <Button icon={<DatabaseOutlined />} loading={loading} onClick={rebuildVectors}>
               重建知识索引
             </Button>
@@ -790,6 +827,36 @@ export default function SystemAdmin() {
             { title: '对象', width: 180, render: (_, record: AdminAuditLog) => `${record.targetType} #${record.targetId}` },
             { title: '说明', dataIndex: 'summary' },
             { title: 'Trace ID', dataIndex: 'traceId', width: 180, render: (value) => <Text type="secondary" copyable={Boolean(value)}>{value || '-'}</Text> }
+          ]}
+        />
+      </Card>
+
+      <Card
+        className="command-card"
+        title="最近接口错误"
+        extra={
+          <Space>
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => setClientErrorLogs(fetchClientErrorLogs())}>
+              刷新
+            </Button>
+            <Button size="small" icon={<ClearOutlined />} onClick={clearRecentClientErrors} disabled={!clientErrorLogs.length}>
+              清空
+            </Button>
+          </Space>
+        }
+      >
+        <Table
+          rowKey="id"
+          size="small"
+          pagination={clientErrorLogs.length > 6 ? { pageSize: 6 } : false}
+          dataSource={clientErrorLogs}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前浏览器没有记录到接口错误" /> }}
+          columns={[
+            { title: '时间', dataIndex: 'occurredAt', width: 180, render: (value) => <Text>{formatTime(value)}</Text> },
+            { title: '接口', width: 260, render: (_, record: ClientErrorLog) => <Text code>{record.method} {record.url}</Text> },
+            { title: '状态', dataIndex: 'status', width: 90, render: (value) => <Tag color={value >= 500 ? 'red' : value === 429 ? 'orange' : 'blue'}>{value || '-'}</Tag> },
+            { title: '错误', dataIndex: 'message', ellipsis: true },
+            { title: 'Trace ID', dataIndex: 'traceId', width: 190, render: (value) => <Text copyable={Boolean(value)} type="secondary">{value || '-'}</Text> }
           ]}
         />
       </Card>
