@@ -322,6 +322,18 @@ export interface DashboardMetrics {
   riskHeatmap: DashboardRiskHeatmap;
 }
 
+export interface DashboardTeamMemberMetric {
+  salesRepId: number;
+  salesRepName: string;
+  teamName: string;
+  openLeadCount: number;
+  highLeadCount: number;
+  openLeadAmount: number;
+  riskCustomerCount: number;
+  dueTaskCount: number;
+  pendingConfirmationCount: number;
+}
+
 export interface OpenAiToolDefinition {
   type: string;
   function: {
@@ -826,6 +838,11 @@ export async function fetchDashboardMetrics() {
   return response.data.data;
 }
 
+export async function fetchDashboardTeamMetrics() {
+  const response = await apiClient.get<ApiResponse<DashboardTeamMemberMetric[]>>('/dashboard/team-metrics');
+  return response.data.data;
+}
+
 export async function fetchOpenAiTools() {
   const response = await apiClient.get<ApiResponse<OpenAiToolDefinition[]>>('/agent/tools/openai');
   return response.data.data;
@@ -865,9 +882,9 @@ export async function fetchLeadDetail(leadId: number) {
   return response.data.data;
 }
 
-export async function fetchLeadRecommendations(topK = 10) {
+export async function fetchLeadRecommendations(topK = 10, salesRepId?: number) {
   const response = await apiClient.get<ApiResponse<LeadRecommendation[]>>('/leads/recommend', {
-    params: { topK }
+    params: { topK, salesRepId }
   });
   return response.data.data;
 }

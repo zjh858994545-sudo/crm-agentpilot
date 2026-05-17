@@ -30,9 +30,11 @@ import {
   AgentConfirmation,
   confirmAgentAction,
   DashboardMetrics,
+  DashboardTeamMemberMetric,
   EventStatus,
   fetchAgentConfirmationPage,
   fetchDashboardMetrics,
+  fetchDashboardTeamMetrics,
   fetchEventStatus,
   fetchHealth,
   fetchKnowledgeStatus,
@@ -97,6 +99,7 @@ export default function Dashboard() {
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
+  const [teamMetrics, setTeamMetrics] = useState<DashboardTeamMemberMetric[]>([]);
   const [pendingConfirmations, setPendingConfirmations] = useState<AgentConfirmation[]>([]);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [businessDataMode, setBusinessDataMode] = useState<'connected' | 'unavailable'>('unavailable');
@@ -120,7 +123,8 @@ export default function Dashboard() {
       fetchKnowledgeStatus(),
       fetchSecurityStatus(),
       fetchEventStatus(),
-      fetchDashboardMetrics()
+      fetchDashboardMetrics(),
+      fetchDashboardTeamMetrics()
     ]).then((results) => {
       const [
         confirmationsResult,
@@ -130,7 +134,8 @@ export default function Dashboard() {
         knowledgeResult,
         securityResult,
         eventResult,
-        dashboardMetricsResult
+        dashboardMetricsResult,
+        teamMetricsResult
       ] =
         results;
 
@@ -157,6 +162,9 @@ export default function Dashboard() {
       }
       if (dashboardMetricsResult.status === 'fulfilled') {
         setDashboardMetrics(dashboardMetricsResult.value);
+      }
+      if (teamMetricsResult.status === 'fulfilled') {
+        setTeamMetrics(teamMetricsResult.value);
       }
 
       const businessDataFailed = leadsResult.status === 'rejected' || dashboardMetricsResult.status === 'rejected';
@@ -621,6 +629,42 @@ export default function Dashboard() {
           </Link>
         </div>
       </Card>
+
+      {teamMetrics.length > 1 ? (
+        <Card className="command-card" title="主管团队视图">
+          <div className="team-metric-grid">
+            {teamMetrics.map((member) => (
+              <Link to={`/leads?salesRepId=${member.salesRepId}`} className="team-metric-card" key={member.salesRepId}>
+                <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
+                  <div>
+                    <Text strong>{member.salesRepName}</Text>
+                    <div className="metric-label">{member.teamName || '销售团队'} · ID {member.salesRepId}</div>
+                  </div>
+                  <Tag color={member.highLeadCount > 0 ? 'red' : 'green'}>{member.highLeadCount} 高优</Tag>
+                </Space>
+                <div className="team-metric-values">
+                  <span>
+                    <strong>{member.openLeadCount}</strong>
+                    <em>开放商机</em>
+                  </span>
+                  <span>
+                    <strong>{currency(member.openLeadAmount)}</strong>
+                    <em>在谈金额</em>
+                  </span>
+                  <span>
+                    <strong>{member.riskCustomerCount}</strong>
+                    <em>风险客户</em>
+                  </span>
+                  <span>
+                    <strong>{member.pendingConfirmationCount}</strong>
+                    <em>待背书</em>
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={15}>

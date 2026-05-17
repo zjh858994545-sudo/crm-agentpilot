@@ -124,6 +124,16 @@ class SecurityStrictModeTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.salesRepId", is(1)));
 
+        mockMvc.perform(get("/api/dashboard/team-metrics")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.length()", org.hamcrest.Matchers.greaterThanOrEqualTo(2)));
+
+        mockMvc.perform(get("/api/dashboard/team-metrics")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-2"))
+                .andExpect(status().isForbidden());
+
         mockMvc.perform(get("/api/customers").param("salesRepId", "2")
                         .header("X-AgentPilot-Token", "agentpilot-manager"))
                 .andExpect(status().isOk())

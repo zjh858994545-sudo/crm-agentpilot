@@ -86,12 +86,14 @@ export default function Leads() {
   const [error, setError] = useState('');
   const urlLeadId = Number(searchParams.get('leadId'));
   const urlCustomerId = Number(searchParams.get('customerId'));
+  const urlSalesRepId = Number(searchParams.get('salesRepId'));
   const resolvedUrlLeadId = Number.isFinite(urlLeadId) && urlLeadId > 0 ? urlLeadId : undefined;
   const resolvedUrlCustomerId = Number.isFinite(urlCustomerId) && urlCustomerId > 0 ? urlCustomerId : undefined;
+  const resolvedUrlSalesRepId = Number.isFinite(urlSalesRepId) && urlSalesRepId > 0 ? urlSalesRepId : undefined;
 
   useEffect(() => {
     setLoading(true);
-    fetchLeadRecommendations(20)
+    fetchLeadRecommendations(20, resolvedUrlSalesRepId)
       .then((nextRecommendations) => {
         setRecommendations(nextRecommendations);
         setDataMode('connected');
@@ -103,7 +105,7 @@ export default function Leads() {
         setError(describeApiError(err));
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [resolvedUrlSalesRepId]);
 
   const industries = useMemo(
     () => Array.from(new Set(recommendations.map((item) => item.industry))).filter(Boolean),
@@ -181,6 +183,7 @@ export default function Leads() {
           <Tag color={dataMode === 'connected' ? 'green' : 'orange'}>
             {dataMode === 'connected' ? '商机服务已连接' : '商机服务未连接'}
           </Tag>
+          {resolvedUrlSalesRepId ? <Tag color="blue">销售 ID {resolvedUrlSalesRepId}</Tag> : null}
         </div>
         <div className="workflow-stepper">
           <Link to="/customers" className="mini-flow-node"><TeamOutlined />客户</Link>

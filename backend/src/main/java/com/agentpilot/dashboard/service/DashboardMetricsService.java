@@ -4,6 +4,7 @@ import com.agentpilot.dashboard.vo.DashboardMetrics;
 import com.agentpilot.dashboard.vo.DashboardRiskCell;
 import com.agentpilot.dashboard.vo.DashboardRiskHeatmap;
 import com.agentpilot.dashboard.vo.DashboardSummary;
+import com.agentpilot.dashboard.vo.DashboardTeamMemberMetric;
 import com.agentpilot.dashboard.vo.DashboardTrendPoint;
 import com.agentpilot.scoring.service.LeadScoringService;
 import com.agentpilot.scoring.vo.LeadRecommendation;
@@ -85,6 +86,42 @@ public class DashboardMetricsService {
                     ELSE 'LOW'
                 END
             """;
+    private static final String TEAM_METRICS_SQL = """
+            SELECT
+                sales_rep.id AS sales_rep_id,
+                sales_rep.name AS sales_rep_name,
+                COALESCE(sales_rep.team_name, '') AS team_name,
+                COUNT(DISTINCT CASE WHEN UPPER(COALESCE(lead.status, '')) = 'OPEN' THEN lead.id END) AS open_lead_count,
+                COUNT(DISTINCT CASE WHEN UPPER(COALESCE(lead.status, '')) = 'OPEN' AND COALESCE(lead.score, 0) >= 80 THEN lead.id END) AS high_lead_count,
+                COALESCE(SUM(CASE WHEN UPPER(COALESCE(lead.status, '')) = 'OPEN' THEN lead.estimated_amount ELSE 0 END), 0) AS open_lead_amount,
+                COUNT(DISTINCT CASE WHEN UPPER(COALESCE(customer.risk_level, '')) = 'HIGH' THEN customer.id END) AS risk_customer_count,
+                COUNT(DISTINCT CASE
+                    WHEN UPPER(COALESCE(task.status, '')) IN ('TODO', 'PENDING', 'OPEN')
+                     AND task.due_time IS NOT NULL
+                     AND task.due_time <= ?
+                    THEN task.id END
+                ) AS due_task_count,
+                COUNT(DISTINCT CASE WHEN confirmation.status = 'PENDING' THEN confirmation.id END) AS pending_confirmation_count
+            FROM crm_sales_rep sales_rep
+            LEFT JOIN crm_lead lead
+                ON lead.tenant_id = sales_rep.tenant_id
+               AND lead.sales_rep_id = sales_rep.id
+            LEFT JOIN crm_customer customer
+                ON customer.tenant_id = sales_rep.tenant_id
+               AND customer.owner_sales_rep_id = sales_rep.id
+            LEFT JOIN crm_task task
+                ON task.tenant_id = sales_rep.tenant_id
+               AND task.sales_rep_id = sales_rep.id
+            LEFT JOIN crm_agent_run agent_run
+                ON agent_run.tenant_id = sales_rep.tenant_id
+               AND agent_run.sales_rep_id = sales_rep.id
+            LEFT JOIN crm_agent_confirmation confirmation
+                ON confirmation.run_id = agent_run.id
+            WHERE sales_rep.tenant_id = ?
+              AND UPPER(COALESCE(sales_rep.status, '')) = 'ACTIVE'
+            GROUP BY sales_rep.id, sales_rep.name, sales_rep.team_name
+            ORDER BY high_lead_count DESC, risk_customer_count DESC, pending_confirmation_count DESC, sales_rep.id ASC
+            """;
 
     private final LeadScoringService leadScoringService;
     private final JdbcTemplate jdbcTemplate;
@@ -108,6 +145,20 @@ public class DashboardMetricsService {
                 leadTrend(recommendations),
                 riskHeatmap(tenantId, salesRepId)
         );
+    }
+
+    public List<DashboardTeamMemberMetric> teamMetrics(String tenantId) {
+        return jdbcTemplate.query(TEAM_METRICS_SQL, (rs, rowNum) -> new DashboardTeamMemberMetric(
+                rs.getLong("sales_rep_id"),
+                rs.getString("sales_rep_name"),
+                rs.getString("team_name"),
+                rs.getInt("open_lead_count"),
+                rs.getInt("high_lead_count"),
+                rs.getBigDecimal("open_lead_amount"),
+                rs.getInt("risk_customer_count"),
+                rs.getInt("due_task_count"),
+                rs.getInt("pending_confirmation_count")
+        ), LocalDateTime.now().plusHours(48), tenantId);
     }
 
     private DashboardSummary summary(
