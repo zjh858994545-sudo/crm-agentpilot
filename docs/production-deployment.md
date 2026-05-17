@@ -66,7 +66,7 @@ Do not put API keys in source code, screenshots, docs, shell history, or fronten
 5. `GET /api/knowledge/status` shows `vectorStoreMode=pgvector-hybrid`.
 6. `GET /api/security/status` shows strict mode, real RBAC users, rate limit enabled, and expected JWT status.
 7. `GET /api/operations/readiness` has no blocking failures.
-8. Run `scripts/ops-healthcheck.ps1` from an operations workstation.
+8. Run `scripts/ops-healthcheck.ps1` from an operations workstation. The script fails not only on HTTP errors, but also when readiness is `BLOCKED`, strict security is unusable, or Outbox has dead-letter events.
 
 Before starting production, run the static preflight:
 

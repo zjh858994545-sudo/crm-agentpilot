@@ -17,6 +17,35 @@ function Invoke-AgentPilot {
   Invoke-RestMethod -Method $Method -Uri "$BaseUrl$Path" -Headers $headers
 }
 
+function Assert-OperationalResult {
+  param(
+    [string]$Name,
+    [object]$Result
+  )
+
+  if ($null -eq $Result -or ($Result.PSObject.Properties.Name -contains "success" -and -not $Result.success)) {
+    throw "$Name returned an unsuccessful API response."
+  }
+
+  if ($Name -eq "Security" -and $Result.data.strictWithoutToken) {
+    throw "Security is in strict mode without an access token or RBAC user."
+  }
+
+  if ($Name -eq "Events" -and $Result.data.outboxDeadLetters -gt 0) {
+    throw "Outbox has $($Result.data.outboxDeadLetters) dead-letter events."
+  }
+
+  if ($Name -eq "Readiness") {
+    $overall = $Result.data.overallStatus
+    if ($overall -eq "BLOCKED") {
+      throw "Launch readiness is BLOCKED: pass=$($Result.data.passCount), warn=$($Result.data.warnCount), fail=$($Result.data.failCount)."
+    }
+    if ($overall -eq "WARN") {
+      Write-Host "[WARN] Launch readiness has warnings: pass=$($Result.data.passCount), warn=$($Result.data.warnCount), fail=$($Result.data.failCount)" -ForegroundColor Yellow
+    }
+  }
+}
+
 Write-Host "CRM-AgentPilot operations healthcheck"
 Write-Host "BaseUrl: $BaseUrl"
 
@@ -34,6 +63,7 @@ $failed = 0
 foreach ($check in $checks) {
   try {
     $result = Invoke-AgentPilot -Path $check.path
+    Assert-OperationalResult -Name $check.name -Result $result
     $code = if ($result.code) { $result.code } else { "OK" }
     Write-Host "[OK] $($check.name) $($check.path) code=$code"
   } catch {
