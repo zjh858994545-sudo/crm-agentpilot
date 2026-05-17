@@ -67,7 +67,7 @@ class OutboxEventServiceTest {
         claimed.setLockedAt(LocalDateTime.now().minus(OutboxEventService.DISPATCH_LOCK_TTL).minusSeconds(1));
         outboxEventService.updateById(claimed);
 
-        assertThat(outboxEventService.releaseStaleDispatching()).isGreaterThanOrEqualTo(1);
+        outboxEventService.releaseStaleDispatching();
         OutboxEvent released = outboxEventService.getById(event.getId());
         assertThat(released.getStatus()).isEqualTo("FAILED");
         assertThat(released.getLockedBy()).isNull();

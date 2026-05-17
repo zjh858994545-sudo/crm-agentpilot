@@ -17,7 +17,9 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -252,6 +254,44 @@ class SecurityStrictModeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data[0].username", is("linxiaofeng")));
+    }
+
+    @Test
+    void tenantManagementRequiresOpsPermissionAndCanChangeTenantStatus() throws Exception {
+        mockMvc.perform(get("/api/tenants")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/tenants")
+                        .header("X-AgentPilot-Token", "test-agentpilot-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"id":"tenant-commercial","name":"Commercial Tenant","planCode":"enterprise"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id", is("tenant-commercial")))
+                .andExpect(jsonPath("$.data.status", is("ACTIVE")));
+
+        mockMvc.perform(put("/api/tenants/tenant-commercial")
+                        .header("X-AgentPilot-Token", "test-agentpilot-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Commercial Tenant Updated","planCode":"enterprise-plus"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.planCode", is("enterprise-plus")));
+
+        mockMvc.perform(patch("/api/tenants/tenant-commercial/status")
+                        .header("X-AgentPilot-Token", "test-agentpilot-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DISABLED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("DISABLED")));
+
+        mockMvc.perform(get("/api/tenants")
+                        .header("X-AgentPilot-Token", "test-agentpilot-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 
     @Test
