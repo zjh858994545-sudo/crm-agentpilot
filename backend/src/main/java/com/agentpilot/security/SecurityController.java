@@ -1,6 +1,7 @@
 package com.agentpilot.security;
 
 import com.agentpilot.common.response.ApiResponse;
+import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.security.config.AgentPilotSecurityProperties;
 import com.agentpilot.security.config.JwtSsoProperties;
 import com.agentpilot.security.ratelimit.ApiRateLimitProperties;
@@ -28,17 +29,20 @@ public class SecurityController {
     private final JwtSsoProperties jwtSsoProperties;
     private final RbacPrincipalService rbacPrincipalService;
     private final ApiRateLimitProperties rateLimitProperties;
+    private final AdminAuditService adminAuditService;
 
     public SecurityController(
             AgentPilotSecurityProperties properties,
             JwtSsoProperties jwtSsoProperties,
             RbacPrincipalService rbacPrincipalService,
-            ApiRateLimitProperties rateLimitProperties
+            ApiRateLimitProperties rateLimitProperties,
+            AdminAuditService adminAuditService
     ) {
         this.properties = properties;
         this.jwtSsoProperties = jwtSsoProperties;
         this.rbacPrincipalService = rbacPrincipalService;
         this.rateLimitProperties = rateLimitProperties;
+        this.adminAuditService = adminAuditService;
     }
 
     @GetMapping("/status")
@@ -103,6 +107,12 @@ public class SecurityController {
                 request == null ? null : request.salesRepId(),
                 request == null ? null : request.roles()
         );
+        adminAuditService.record(
+                "security.user.create",
+                "agentpilot_user",
+                String.valueOf(result.profile().userId()),
+                "Created RBAC user " + result.profile().username()
+        );
         return ApiResponse.ok(UserProvisioningResponse.from(result));
     }
 
@@ -113,13 +123,20 @@ public class SecurityController {
             @RequestBody UserUpsertRequest request
     ) {
         String tenantId = resolveTenantId(request == null ? null : request.tenantId());
-        return ApiResponse.ok(rbacPrincipalService.updateUser(
+        RbacPrincipalService.UserProfile profile = rbacPrincipalService.updateUser(
                 userId,
                 tenantId,
                 request == null ? null : request.displayName(),
                 request == null ? null : request.salesRepId(),
                 request == null ? null : request.roles()
-        ));
+        );
+        adminAuditService.record(
+                "security.user.update",
+                "agentpilot_user",
+                String.valueOf(profile.userId()),
+                "Updated RBAC user " + profile.username()
+        );
+        return ApiResponse.ok(profile);
     }
 
     @PatchMapping("/users/{userId}/status")
@@ -128,17 +145,30 @@ public class SecurityController {
             @PathVariable Long userId,
             @RequestBody UserStatusRequest request
     ) {
-        return ApiResponse.ok(rbacPrincipalService.changeUserStatus(
+        RbacPrincipalService.UserProfile profile = rbacPrincipalService.changeUserStatus(
                 userId,
                 CurrentUser.tenantId(),
                 request == null ? null : request.status()
-        ));
+        );
+        adminAuditService.record(
+                "security.user.status",
+                "agentpilot_user",
+                String.valueOf(profile.userId()),
+                "Changed RBAC user status to " + profile.status()
+        );
+        return ApiResponse.ok(profile);
     }
 
     @PostMapping("/users/{userId}/token")
     @PreAuthorize("hasAuthority('ops:write')")
     public ApiResponse<UserProvisioningResponse> regenerateUserToken(@PathVariable Long userId) {
         RbacPrincipalService.UserProvisioningResult result = rbacPrincipalService.regenerateToken(userId, CurrentUser.tenantId());
+        adminAuditService.record(
+                "security.user.token.rotate",
+                "agentpilot_user",
+                String.valueOf(result.profile().userId()),
+                "Rotated RBAC token for user " + result.profile().username()
+        );
         return ApiResponse.ok(UserProvisioningResponse.from(result));
     }
 

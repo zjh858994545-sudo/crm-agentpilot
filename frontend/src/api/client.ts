@@ -238,6 +238,18 @@ export interface RetentionCleanupResult {
   categories: RetentionCategoryResult[];
 }
 
+export interface AdminAuditLog {
+  id: number;
+  tenantId: string;
+  actorUserId: number;
+  action: string;
+  targetType: string;
+  targetId: string;
+  summary: string;
+  traceId?: string;
+  createdAt?: string;
+}
+
 export interface LaunchReadinessCheck {
   key: string;
   name: string;
@@ -740,6 +752,11 @@ export async function updateTenantStatus(id: string, status: 'ACTIVE' | 'DISABLE
 
 export async function fetchRetentionStatus() {
   const response = await apiClient.get<ApiResponse<RetentionStatus>>('/operations/retention');
+  return response.data.data;
+}
+
+export async function fetchAdminAuditLogs() {
+  const response = await apiClient.get<ApiResponse<AdminAuditLog[]>>('/operations/admin-audit');
   return response.data.data;
 }
 

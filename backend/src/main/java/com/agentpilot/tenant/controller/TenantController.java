@@ -1,6 +1,7 @@
 package com.agentpilot.tenant.controller;
 
 import com.agentpilot.common.response.ApiResponse;
+import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.tenant.entity.AgentPilotTenant;
 import com.agentpilot.tenant.service.TenantService;
 import com.agentpilot.tenant.vo.TenantStatusRequest;
@@ -22,9 +23,11 @@ import java.util.List;
 @PreAuthorize("hasAuthority('ops:read')")
 public class TenantController {
     private final TenantService tenantService;
+    private final AdminAuditService adminAuditService;
 
-    public TenantController(TenantService tenantService) {
+    public TenantController(TenantService tenantService, AdminAuditService adminAuditService) {
         this.tenantService = tenantService;
+        this.adminAuditService = adminAuditService;
     }
 
     @GetMapping
@@ -35,7 +38,9 @@ public class TenantController {
     @PostMapping
     @PreAuthorize("hasAuthority('ops:write')")
     public ApiResponse<AgentPilotTenant> create(@RequestBody TenantUpsertRequest request) {
-        return ApiResponse.ok(tenantService.createTenant(request));
+        AgentPilotTenant tenant = tenantService.createTenant(request);
+        adminAuditService.record("tenant.create", "tenant", tenant.getId(), "Created tenant " + tenant.getName());
+        return ApiResponse.ok(tenant);
     }
 
     @PutMapping("/{tenantId}")
@@ -44,7 +49,9 @@ public class TenantController {
             @PathVariable String tenantId,
             @RequestBody TenantUpsertRequest request
     ) {
-        return ApiResponse.ok(tenantService.updateTenant(tenantId, request));
+        AgentPilotTenant tenant = tenantService.updateTenant(tenantId, request);
+        adminAuditService.record("tenant.update", "tenant", tenant.getId(), "Updated tenant " + tenant.getName());
+        return ApiResponse.ok(tenant);
     }
 
     @PatchMapping("/{tenantId}/status")
@@ -53,6 +60,8 @@ public class TenantController {
             @PathVariable String tenantId,
             @RequestBody TenantStatusRequest request
     ) {
-        return ApiResponse.ok(tenantService.changeStatus(tenantId, request == null ? null : request.status()));
+        AgentPilotTenant tenant = tenantService.changeStatus(tenantId, request == null ? null : request.status());
+        adminAuditService.record("tenant.status", "tenant", tenant.getId(), "Changed tenant status to " + tenant.getStatus());
+        return ApiResponse.ok(tenant);
     }
 }

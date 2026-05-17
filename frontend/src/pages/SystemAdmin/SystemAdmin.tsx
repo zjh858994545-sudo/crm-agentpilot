@@ -39,6 +39,7 @@ import {
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AdminAuditLog,
   EventStatus,
   KnowledgeStatus,
   LaunchReadinessStatus,
@@ -54,6 +55,7 @@ import {
   createTenant,
   createSecurityUser,
   describeApiError,
+  fetchAdminAuditLogs,
   fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
@@ -127,6 +129,7 @@ export default function SystemAdmin() {
   const [editingUser, setEditingUser] = useState<SecurityUser | null>(null);
   const [issuedToken, setIssuedToken] = useState<{ displayName: string; apiToken: string } | null>(null);
   const [deadLetters, setDeadLetters] = useState<OutboxEvent[]>([]);
+  const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>([]);
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -145,7 +148,8 @@ export default function SystemAdmin() {
       fetchTenants(),
       fetchDeadLetters(),
       fetchRetentionStatus(),
-      fetchLaunchReadiness()
+      fetchLaunchReadiness(),
+      fetchAdminAuditLogs()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -157,6 +161,7 @@ export default function SystemAdmin() {
     if (results[7].status === 'fulfilled') setDeadLetters(results[7].value);
     if (results[8].status === 'fulfilled') setRetentionStatus(results[8].value);
     if (results[9].status === 'fulfilled') setReadinessStatus(results[9].value);
+    if (results[10].status === 'fulfilled') setAdminAuditLogs(results[10].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
     }
@@ -711,6 +716,24 @@ export default function SystemAdmin() {
                 );
               }
             }
+          ]}
+        />
+      </Card>
+
+      <Card className="command-card" title="管理员操作审计">
+        <Table
+          rowKey="id"
+          loading={loading}
+          pagination={adminAuditLogs.length > 8 ? { pageSize: 8 } : false}
+          dataSource={adminAuditLogs}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无管理员操作记录" /> }}
+          columns={[
+            { title: '时间', dataIndex: 'createdAt', width: 180, render: (value) => <Text>{formatTime(value)}</Text> },
+            { title: '操作者', dataIndex: 'actorUserId', width: 110, render: (value) => <Tag>user #{value}</Tag> },
+            { title: '动作', dataIndex: 'action', width: 180, render: (value) => <Text code>{value}</Text> },
+            { title: '对象', width: 180, render: (_, record: AdminAuditLog) => `${record.targetType} #${record.targetId}` },
+            { title: '说明', dataIndex: 'summary' },
+            { title: 'Trace ID', dataIndex: 'traceId', width: 180, render: (value) => <Text type="secondary" copyable={Boolean(value)}>{value || '-'}</Text> }
           ]}
         />
       </Card>
