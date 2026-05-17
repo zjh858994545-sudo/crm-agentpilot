@@ -59,6 +59,18 @@ Do not put API keys in source code, screenshots, docs, shell history, or fronten
 7. `GET /api/operations/readiness` has no blocking failures.
 8. Run `scripts/ops-healthcheck.ps1` from an operations workstation.
 
+Before starting production, run the static preflight:
+
+```powershell
+.\scripts\preflight-production.ps1
+```
+
+If the runtime host does not use Docker, run:
+
+```powershell
+.\scripts\preflight-production.ps1 -SkipDockerCheck
+```
+
 ## Data Isolation Rules
 
 Production code must follow these rules:
@@ -104,4 +116,3 @@ Minimum alerts:
 - Retention eligible rows growing.
 - HTTP 401/403/429 spikes.
 - Model provider latency and error rate.
-
