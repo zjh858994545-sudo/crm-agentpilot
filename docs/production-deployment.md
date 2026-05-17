@@ -29,6 +29,14 @@ AGENTPILOT_SECURITY_MODE=strict
 AGENTPILOT_SEED_USERS_ENABLED=false
 AGENTPILOT_API_TOKEN=
 AGENTPILOT_DEMO_TENANT_ID=demo
+AGENTPILOT_JWT_ENABLED=false
+AGENTPILOT_JWT_ISSUER_URI=
+AGENTPILOT_JWT_AUDIENCE=crm-agentpilot
+AGENTPILOT_JWT_USER_ID_CLAIM=user_id
+AGENTPILOT_JWT_TENANT_CLAIM=tenant_id
+AGENTPILOT_JWT_SALES_REP_CLAIM=sales_rep_id
+AGENTPILOT_JWT_ROLES_CLAIM=roles
+AGENTPILOT_JWT_PERMISSIONS_CLAIM=permissions
 
 SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/agentpilot
 SPRING_DATASOURCE_USERNAME=agentpilot
@@ -55,7 +63,7 @@ Do not put API keys in source code, screenshots, docs, shell history, or fronten
 3. `GET /api/health` returns `UP`.
 4. `GET /api/model/status` shows `llm-enabled` for production LLM mode.
 5. `GET /api/knowledge/status` shows `vectorStoreMode=pgvector-hybrid`.
-6. `GET /api/security/status` shows strict mode and real RBAC users.
+6. `GET /api/security/status` shows strict mode, real RBAC users, rate limit enabled, and expected JWT status.
 7. `GET /api/operations/readiness` has no blocking failures.
 8. Run `scripts/ops-healthcheck.ps1` from an operations workstation.
 
@@ -78,8 +86,19 @@ Production code must follow these rules:
 - Frontend never decides `tenantId`; it only displays it.
 - Backend derives `tenantId` from `AgentPilotPrincipal`.
 - CRM customer, lead, task, contact log, agent session, and agent run queries include `tenant_id`.
+- Sales users can only access their own `salesRepId`; `sales_manager` and `system_admin` can access other sales reps in the same tenant.
 - Confirmation ownership checks validate tenant, user, and sales scope before executing CRM writes.
 - Event payloads include enough IDs for downstream idempotency, but downstream services must re-check tenant scope.
+
+## Privacy Controls
+
+CRM data contains business contact information and conversation details. Production APIs must expose the minimum fields needed by the current page.
+
+- Customer mobile numbers are masked in customer views.
+- Contact log responses use `ContactLogView` instead of returning the raw entity.
+- Contact log response text masks mobile numbers and email addresses.
+- Internal fields such as `tenantId` and write idempotency keys are not returned to sales pages.
+- Full raw records, if needed for compliance investigation, should be exported through a separate audited admin endpoint.
 
 ## Release Steps
 

@@ -1,15 +1,18 @@
-# Enterprise SSO and JWT Roadmap
+# Enterprise SSO and JWT Authentication
 
-Current production-ready baseline is database RBAC token authentication. It is suitable for internal tools and service integration. Enterprise deployment should evolve toward SSO/JWT so user lifecycle, MFA, password policy, and offboarding are controlled by the customer's identity provider.
+Current production-ready baseline supports both database RBAC token authentication and enterprise JWT authentication. RBAC tokens are useful for internal tools and service accounts. Enterprise JWT is the preferred path for commercial deployments because user lifecycle, MFA, password policy, and offboarding are controlled by the customer's identity provider.
 
 ## Current State
 
 - `X-AgentPilot-Token` or `Authorization: Bearer <token>` is accepted.
 - Database tokens are stored as SHA-256 hashes in `agentpilot_user`.
 - Authentication loads `userId`, `tenantId`, `salesRepId`, roles, and permissions from the database.
-- Demo fallback token is only for local permissive mode.
+- When `AGENTPILOT_JWT_ENABLED=true`, `Authorization: Bearer <jwt>` is decoded with Spring Security's JWT decoder.
+- JWT authentication validates issuer metadata, audience, tenant claim, sales-rep claim, and either roles or permissions.
+- JWT roles are mapped to the same `AgentPilotPrincipal` used by RBAC tokens, so `@PreAuthorize` and CRM data-scope checks are shared.
+- Demo fallback identity is only for local permissive mode.
 
-## Target SSO/JWT State
+## Supported SSO/JWT State
 
 Supported identity providers:
 
@@ -36,30 +39,35 @@ JWT claims required by AgentPilot:
 
 ## Backend Implementation Plan
 
-1. Add `spring-boot-starter-oauth2-resource-server`.
-2. Configure issuer and audience:
+Already implemented:
+
+1. `spring-boot-starter-oauth2-resource-server`.
+2. `JwtSsoAuthenticationFilter` before the database token filter.
+3. Audience validation and configurable claim names.
+4. Role-to-permission mapping for `sales`, `sales_manager`, and `system_admin`.
+5. Database RBAC token support remains available for service accounts and migration periods.
+
+Configuration:
 
 ```yaml
-spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${AGENTPILOT_JWT_ISSUER_URI:}
-
 agentpilot:
   security:
     jwt:
       enabled: ${AGENTPILOT_JWT_ENABLED:false}
+      issuer-uri: ${AGENTPILOT_JWT_ISSUER_URI:}
       audience: ${AGENTPILOT_JWT_AUDIENCE:crm-agentpilot}
+      user-id-claim: ${AGENTPILOT_JWT_USER_ID_CLAIM:user_id}
       tenant-claim: ${AGENTPILOT_JWT_TENANT_CLAIM:tenant_id}
       sales-rep-claim: ${AGENTPILOT_JWT_SALES_REP_CLAIM:sales_rep_id}
+      roles-claim: ${AGENTPILOT_JWT_ROLES_CLAIM:roles}
+      permissions-claim: ${AGENTPILOT_JWT_PERMISSIONS_CLAIM:permissions}
 ```
 
-3. Add a `JwtAuthenticationConverter` that maps claims to `AgentPilotPrincipal`.
-4. Keep database RBAC token support for service accounts and migration period.
-5. Add login audit rows with `issuer`, `subject`, `tenantId`, `salesRepId`, and IP.
-6. Add tenant allow-list checks so a token from an unknown tenant cannot create implicit access.
+Still recommended before external production rollout:
+
+1. Add login audit rows with `issuer`, `subject`, `tenantId`, `salesRepId`, and IP.
+2. Add tenant allow-list checks so a token from an unknown tenant cannot create implicit access.
+3. Add a staging IdP integration test with a real JWKS endpoint.
 
 ## Frontend Implementation Plan
 
@@ -85,4 +93,3 @@ agentpilot:
 - Use short token TTL.
 - Service accounts should have narrow permissions.
 - Sensitive model API keys stay server-side only.
-
