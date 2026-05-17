@@ -3,14 +3,17 @@ import {
   AuditOutlined,
   ClearOutlined,
   ClusterOutlined,
+  CopyOutlined,
   DatabaseOutlined,
   EditOutlined,
+  KeyOutlined,
   LockOutlined,
   PlusOutlined,
   PoweroffOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  UserAddOutlined
 } from '@ant-design/icons';
 import {
   Alert,
@@ -21,6 +24,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Row,
@@ -44,9 +48,11 @@ import {
   RetentionStatus,
   SecurityStatus,
   SecurityUser,
+  SecurityUserUpsertPayload,
   Tenant,
   TenantUpsertPayload,
   createTenant,
+  createSecurityUser,
   describeApiError,
   fetchDeadLetters,
   fetchEventStatus,
@@ -59,10 +65,13 @@ import {
   fetchSecurityUsers,
   fetchTenants,
   rebuildKnowledgeVectors,
+  regenerateSecurityUserToken,
   retryDeadLetter,
   runRetentionCleanup,
   updateTenant,
-  updateTenantStatus
+  updateTenantStatus,
+  updateSecurityUser,
+  updateSecurityUserStatus
 } from '../../api/client';
 import ApiErrorNotice from '../../components/ApiErrorNotice';
 
@@ -104,6 +113,7 @@ function formatTime(value?: string) {
 
 export default function SystemAdmin() {
   const [tenantForm] = Form.useForm<TenantUpsertPayload>();
+  const [userForm] = Form.useForm<SecurityUserUpsertPayload>();
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
@@ -113,6 +123,9 @@ export default function SystemAdmin() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<SecurityUser | null>(null);
+  const [issuedToken, setIssuedToken] = useState<{ displayName: string; apiToken: string } | null>(null);
   const [deadLetters, setDeadLetters] = useState<OutboxEvent[]>([]);
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
@@ -164,6 +177,18 @@ export default function SystemAdmin() {
     setTenantModalOpen(true);
   };
 
+  const openUserModal = (user?: SecurityUser) => {
+    setEditingUser(user ?? null);
+    userForm.setFieldsValue({
+      tenantId: user?.tenantId ?? tenants[0]?.id ?? 'demo',
+      username: user?.username ?? '',
+      displayName: user?.displayName ?? '',
+      salesRepId: user?.salesRepId ?? 1,
+      roles: user?.roles?.length ? user.roles : ['sales']
+    });
+    setUserModalOpen(true);
+  };
+
   const saveTenant = async () => {
     const values = await tenantForm.validateFields();
     setLoading(true);
@@ -201,6 +226,64 @@ export default function SystemAdmin() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveUser = async () => {
+    const values = await userForm.validateFields();
+    setLoading(true);
+    try {
+      if (editingUser) {
+        await updateSecurityUser(editingUser.userId, values);
+        antdMessage.success('用户权限已更新');
+      } else {
+        const result = await createSecurityUser(values);
+        setIssuedToken({ displayName: result.profile.displayName, apiToken: result.apiToken });
+        antdMessage.success('用户已开通，请立即保存一次性 token');
+      }
+      setUserModalOpen(false);
+      setEditingUser(null);
+      await load();
+    } catch (err) {
+      const detail = describeApiError(err);
+      antdMessage.error(`用户保存失败：${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeUserStatus = async (user: SecurityUser, status: 'ACTIVE' | 'DISABLED') => {
+    setLoading(true);
+    try {
+      await updateSecurityUserStatus(user.userId, status);
+      antdMessage.success(status === 'ACTIVE' ? '用户已启用' : '用户已停用');
+      await load();
+    } catch (err) {
+      antdMessage.error(describeApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const regenerateUserToken = async (user: SecurityUser) => {
+    setLoading(true);
+    try {
+      const result = await regenerateSecurityUserToken(user.userId);
+      setIssuedToken({ displayName: result.profile.displayName, apiToken: result.apiToken });
+      antdMessage.success('Token 已重置，请立即保存新 token');
+      await load();
+    } catch (err) {
+      antdMessage.error(describeApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyIssuedToken = async () => {
+    if (!issuedToken?.apiToken) {
+      return;
+    }
+    await navigator.clipboard.writeText(issuedToken.apiToken);
+    antdMessage.success('Token 已复制');
   };
 
   const retryOutboxEvent = async (id: number) => {
@@ -549,7 +632,15 @@ export default function SystemAdmin() {
         />
       </Card>
 
-      <Card className="command-card" title="用户与权限范围">
+      <Card
+        className="command-card"
+        title="用户与权限范围"
+        extra={
+          <Button type="primary" icon={<UserAddOutlined />} onClick={() => openUserModal()}>
+            开通用户
+          </Button>
+        }
+      >
         <Table
           rowKey="userId"
           loading={loading}
@@ -583,7 +674,43 @@ export default function SystemAdmin() {
             { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
             { title: '最近认证', dataIndex: 'lastAuthenticatedAt', render: (value) => <Text>{formatTime(value)}</Text> },
             { title: '来源 IP', dataIndex: 'lastAuthenticatedIp', render: (value) => <Text type="secondary">{value || '-'}</Text> },
-            { title: '权限数', dataIndex: 'permissions', render: (permissions: string[]) => permissions.length }
+            { title: '权限数', dataIndex: 'permissions', render: (permissions: string[]) => permissions.length },
+            {
+              title: '操作',
+              width: 240,
+              render: (_, record: SecurityUser) => {
+                const nextStatus = record.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+                return (
+                  <Space>
+                    <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openUserModal(record)}>
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title="确认重置该用户 token？"
+                      description="旧 token 会立即失效，新 token 只展示一次。"
+                      okText="确认重置"
+                      cancelText="取消"
+                      onConfirm={() => regenerateUserToken(record)}
+                    >
+                      <Button size="small" type="link" icon={<KeyOutlined />}>
+                        重置
+                      </Button>
+                    </Popconfirm>
+                    <Popconfirm
+                      title={nextStatus === 'DISABLED' ? '确认停用该用户？' : '确认启用该用户？'}
+                      description={nextStatus === 'DISABLED' ? '停用后该用户 token 将无法继续访问业务接口。' : '启用后该用户可按角色权限访问系统。'}
+                      okText="确认"
+                      cancelText="取消"
+                      onConfirm={() => changeUserStatus(record, nextStatus)}
+                    >
+                      <Button size="small" type="link" danger={nextStatus === 'DISABLED'} icon={<PoweroffOutlined />}>
+                        {nextStatus === 'DISABLED' ? '停用' : '启用'}
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                );
+              }
+            }
           ]}
         />
       </Card>
@@ -863,6 +990,84 @@ export default function SystemAdmin() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      <Modal
+        title={editingUser ? '编辑用户权限' : '开通 RBAC 用户'}
+        open={userModalOpen}
+        okText={editingUser ? '保存变更' : '开通并生成 token'}
+        cancelText="取消"
+        confirmLoading={loading}
+        onOk={saveUser}
+        onCancel={() => {
+          setUserModalOpen(false);
+          setEditingUser(null);
+        }}
+      >
+        <Form form={userForm} layout="vertical" initialValues={{ tenantId: 'demo', salesRepId: 1, roles: ['sales'] }}>
+          <Form.Item name="tenantId" label="租户" rules={[{ required: true, message: '请选择租户' }]}>
+            <Select
+              disabled={Boolean(editingUser)}
+              options={(tenants.length ? tenants : [{ id: 'demo', name: 'Demo Tenant', status: 'ACTIVE', planCode: 'standard' }]).map((tenant) => ({
+                label: `${tenant.name} (${tenant.id})`,
+                value: tenant.id
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="username"
+            label="登录用户名"
+            rules={[
+              { required: !editingUser, message: '请输入用户名' },
+              { pattern: /^[a-zA-Z0-9][a-zA-Z0-9._-]{1,63}$/, message: '2-64 位，支持字母、数字、点、下划线和短横线' }
+            ]}
+          >
+            <Input disabled={Boolean(editingUser)} placeholder="例如 sales_wang" />
+          </Form.Item>
+          <Form.Item name="displayName" label="显示名称" rules={[{ required: true, message: '请输入显示名称' }]}>
+            <Input placeholder="例如 王敏" />
+          </Form.Item>
+          <Form.Item name="salesRepId" label="销售范围 ID" rules={[{ required: true, message: '请输入销售范围 ID' }]}>
+            <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="roles" label="角色" rules={[{ required: true, message: '请选择至少一个角色' }]}>
+            <Select
+              mode="multiple"
+              options={[
+                { label: '销售', value: 'sales' },
+                { label: '销售主管', value: 'sales_manager' },
+                { label: '系统管理员', value: 'system_admin' }
+              ]}
+            />
+          </Form.Item>
+          <Alert
+            type="warning"
+            showIcon
+            message="Token 只展示一次"
+            description="创建或重置后请立即保存 token。系统只存储 SHA-256 哈希，无法再次查看明文 token。"
+          />
+        </Form>
+      </Modal>
+
+      <Modal
+        title="一次性访问 token"
+        open={Boolean(issuedToken)}
+        okText="复制 token"
+        cancelText="关闭"
+        onOk={copyIssuedToken}
+        onCancel={() => setIssuedToken(null)}
+      >
+        <Alert
+          type="success"
+          showIcon
+          message={`${issuedToken?.displayName ?? '用户'} 的 token 已生成`}
+          description="请立即保存到安全的密码管理器或企业密钥系统。关闭弹窗后无法再次查看，只能重新生成。"
+          style={{ marginBottom: 12 }}
+        />
+        <Input.TextArea value={issuedToken?.apiToken ?? ''} autoSize={{ minRows: 3 }} readOnly />
+        <Button icon={<CopyOutlined />} style={{ marginTop: 12 }} onClick={copyIssuedToken}>
+          复制
+        </Button>
+      </Modal>
 
       <Modal
         title={editingTenant ? '编辑租户' : '开通租户'}

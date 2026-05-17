@@ -172,6 +172,19 @@ export interface SecurityUser {
   permissions: string[];
 }
 
+export interface SecurityUserUpsertPayload {
+  tenantId?: string;
+  username?: string;
+  displayName: string;
+  salesRepId?: number;
+  roles: string[];
+}
+
+export interface SecurityUserProvisioningResponse {
+  profile: SecurityUser;
+  apiToken: string;
+}
+
 export interface Tenant {
   id: string;
   name: string;
@@ -682,6 +695,26 @@ export async function fetchSecurityStatus() {
 
 export async function fetchSecurityUsers() {
   const response = await apiClient.get<ApiResponse<SecurityUser[]>>('/security/users');
+  return response.data.data;
+}
+
+export async function createSecurityUser(payload: SecurityUserUpsertPayload) {
+  const response = await apiClient.post<ApiResponse<SecurityUserProvisioningResponse>>('/security/users', payload);
+  return response.data.data;
+}
+
+export async function updateSecurityUser(userId: number, payload: SecurityUserUpsertPayload) {
+  const response = await apiClient.put<ApiResponse<SecurityUser>>(`/security/users/${userId}`, payload);
+  return response.data.data;
+}
+
+export async function updateSecurityUserStatus(userId: number, status: 'ACTIVE' | 'DISABLED') {
+  const response = await apiClient.patch<ApiResponse<SecurityUser>>(`/security/users/${userId}/status`, { status });
+  return response.data.data;
+}
+
+export async function regenerateSecurityUserToken(userId: number) {
+  const response = await apiClient.post<ApiResponse<SecurityUserProvisioningResponse>>(`/security/users/${userId}/token`);
   return response.data.data;
 }
 

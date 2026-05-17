@@ -4,16 +4,24 @@ import com.agentpilot.security.config.AgentPilotSecurityProperties;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.Base64;
 
 @Service
 public class RbacPrincipalService {
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final JdbcTemplate jdbcTemplate;
     private final AgentPilotSecurityProperties securityProperties;
 
@@ -29,6 +37,9 @@ public class RbacPrincipalService {
             List<String> roles,
             List<String> permissions
     ) {
+    }
+
+    public record UserProvisioningResult(UserProfile profile, String apiToken) {
     }
 
     public RbacPrincipalService(JdbcTemplate jdbcTemplate, AgentPilotSecurityProperties securityProperties) {
@@ -215,6 +226,116 @@ public class RbacPrincipalService {
         );
     }
 
+    @Transactional
+    public UserProvisioningResult createUser(
+            String tenantId,
+            String username,
+            String displayName,
+            Long salesRepId,
+            List<String> roleCodes
+    ) {
+        String normalizedTenantId = requireText(tenantId, "tenantId");
+        requireActiveTenant(normalizedTenantId);
+        String normalizedUsername = requireText(username, "username");
+        String normalizedDisplayName = requireText(displayName, "displayName");
+        Long normalizedSalesRepId = salesRepId == null ? 1L : salesRepId;
+        List<Long> roleIds = resolveRoleIds(roleCodes);
+        Long userId = nextUserId();
+        String apiToken = newApiToken();
+        jdbcTemplate.update(
+                """
+                        INSERT INTO agentpilot_user (
+                            id, tenant_id, username, display_name, api_token_sha256, sales_rep_id, status, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """,
+                userId,
+                normalizedTenantId,
+                normalizedUsername,
+                normalizedDisplayName,
+                sha256(apiToken),
+                normalizedSalesRepId
+        );
+        replaceRoles(userId, roleIds);
+        return new UserProvisioningResult(findProfileByUserId(userId).orElseThrow(), apiToken);
+    }
+
+    @Transactional
+    public UserProfile updateUser(
+            Long userId,
+            String tenantId,
+            String displayName,
+            Long salesRepId,
+            List<String> roleCodes
+    ) {
+        requireUserInTenant(userId, tenantId);
+        int updated = jdbcTemplate.update(
+                """
+                        UPDATE agentpilot_user
+                        SET display_name = ?,
+                            sales_rep_id = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                          AND tenant_id = ?
+                        """,
+                requireText(displayName, "displayName"),
+                salesRepId == null ? 1L : salesRepId,
+                userId,
+                tenantId
+        );
+        if (updated != 1) {
+            throw new IllegalArgumentException("User not found or outside current tenant");
+        }
+        replaceRoles(userId, resolveRoleIds(roleCodes));
+        return findProfileByUserId(userId).orElseThrow();
+    }
+
+    @Transactional
+    public UserProfile changeUserStatus(Long userId, String tenantId, String status) {
+        requireUserInTenant(userId, tenantId);
+        String normalizedStatus = requireText(status, "status").toUpperCase();
+        if (!Set.of("ACTIVE", "DISABLED").contains(normalizedStatus)) {
+            throw new IllegalArgumentException("Unsupported user status: " + status);
+        }
+        int updated = jdbcTemplate.update(
+                """
+                        UPDATE agentpilot_user
+                        SET status = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                          AND tenant_id = ?
+                        """,
+                normalizedStatus,
+                userId,
+                tenantId
+        );
+        if (updated != 1) {
+            throw new IllegalArgumentException("User not found or outside current tenant");
+        }
+        return findProfileByUserId(userId).orElseThrow();
+    }
+
+    @Transactional
+    public UserProvisioningResult regenerateToken(Long userId, String tenantId) {
+        requireUserInTenant(userId, tenantId);
+        String apiToken = newApiToken();
+        int updated = jdbcTemplate.update(
+                """
+                        UPDATE agentpilot_user
+                        SET api_token_sha256 = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                          AND tenant_id = ?
+                        """,
+                sha256(apiToken),
+                userId,
+                tenantId
+        );
+        if (updated != 1) {
+            throw new IllegalArgumentException("User not found or outside current tenant");
+        }
+        return new UserProvisioningResult(findProfileByUserId(userId).orElseThrow(), apiToken);
+    }
+
     private List<String> roleCodes(Long userId) {
         return jdbcTemplate.queryForList(
                 """
@@ -242,6 +363,87 @@ public class RbacPrincipalService {
                 String.class,
                 userId
         );
+    }
+
+    private Long nextUserId() {
+        Long next = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) + 1 FROM agentpilot_user", Long.class);
+        return next == null ? 1L : next;
+    }
+
+    private void replaceRoles(Long userId, List<Long> roleIds) {
+        jdbcTemplate.update("DELETE FROM agentpilot_user_role WHERE user_id = ?", userId);
+        for (Long roleId : roleIds) {
+            jdbcTemplate.update(
+                    "INSERT INTO agentpilot_user_role (user_id, role_id) VALUES (?, ?)",
+                    userId,
+                    roleId
+            );
+        }
+    }
+
+    private List<Long> resolveRoleIds(List<String> requestedRoles) {
+        List<String> normalizedRoles = normalizeRoles(requestedRoles);
+        List<Long> roleIds = new ArrayList<>();
+        for (String roleCode : normalizedRoles) {
+            try {
+                roleIds.add(jdbcTemplate.queryForObject(
+                        "SELECT id FROM agentpilot_role WHERE code = ?",
+                        Long.class,
+                        roleCode
+                ));
+            } catch (EmptyResultDataAccessException ex) {
+                throw new IllegalArgumentException("Unknown role: " + roleCode);
+            }
+        }
+        return roleIds;
+    }
+
+    private List<String> normalizeRoles(List<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of("sales");
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String role : roles) {
+            if (StringUtils.hasText(role)) {
+                normalized.add(role.trim());
+            }
+        }
+        return normalized.isEmpty() ? List.of("sales") : List.copyOf(normalized);
+    }
+
+    private void requireActiveTenant(String tenantId) {
+        if (!tenantActive(tenantId)) {
+            throw new IllegalArgumentException("Tenant is not active: " + tenantId);
+        }
+    }
+
+    private void requireUserInTenant(Long userId, String tenantId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required");
+        }
+        requireText(tenantId, "tenantId");
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agentpilot_user WHERE id = ? AND tenant_id = ?",
+                Long.class,
+                userId,
+                tenantId
+        );
+        if (count == null || count == 0) {
+            throw new IllegalArgumentException("User not found or outside current tenant");
+        }
+    }
+
+    private String requireText(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        return value.trim();
+    }
+
+    private String newApiToken() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return "ap_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private String sha256(String value) {

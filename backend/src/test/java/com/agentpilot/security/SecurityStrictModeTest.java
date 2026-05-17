@@ -1,6 +1,7 @@
 package com.agentpilot.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -251,9 +252,71 @@ class SecurityStrictModeTest {
 
         mockMvc.perform(get("/api/security/users")
                         .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/security/users")
+                        .header("X-AgentPilot-Token", "agentpilot-admin"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data[0].username", is("linxiaofeng")));
+    }
+
+    @Test
+    void adminCanProvisionRbacUserAndRotateToken() throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/api/security/users")
+                        .header("X-AgentPilot-Token", "agentpilot-admin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tenantId": "demo",
+                                  "username": "sales_runtime_user",
+                                  "displayName": "Runtime Sales User",
+                                  "salesRepId": 1,
+                                  "roles": ["sales"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.profile.username", is("sales_runtime_user")))
+                .andReturn();
+
+        JsonNode createBody = objectMapper.readTree(createResult.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        Long userId = createBody.at("/data/profile/userId").asLong();
+        String firstToken = createBody.at("/data/apiToken").asText();
+        assertThat(firstToken).startsWith("ap_");
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("X-AgentPilot-Token", firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username", is("sales_runtime_user")));
+
+        MvcResult rotateResult = mockMvc.perform(post("/api/security/users/" + userId + "/token")
+                        .header("X-AgentPilot-Token", "agentpilot-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.profile.userId", is(userId.intValue())))
+                .andReturn();
+        JsonNode rotateBody = objectMapper.readTree(rotateResult.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        String rotatedToken = rotateBody.at("/data/apiToken").asText();
+        assertThat(rotatedToken).startsWith("ap_").isNotEqualTo(firstToken);
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("X-AgentPilot-Token", firstToken))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/auth/me")
+                        .header("X-AgentPilot-Token", rotatedToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId", is(userId.intValue())));
+
+        mockMvc.perform(patch("/api/security/users/" + userId + "/status")
+                        .header("X-AgentPilot-Token", "agentpilot-admin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DISABLED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("DISABLED")));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("X-AgentPilot-Token", rotatedToken))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
