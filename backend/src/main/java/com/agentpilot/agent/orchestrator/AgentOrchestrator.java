@@ -80,6 +80,7 @@ public class AgentOrchestrator {
     private final ChatModelClient chatModelClient;
     private final AgentPilotEventPublisher eventPublisher;
     private final ConfirmationGateway confirmationGateway;
+    private final LlmToolRouter llmToolRouter;
     private final ObjectMapper objectMapper;
 
     public AgentOrchestrator(
@@ -99,6 +100,7 @@ public class AgentOrchestrator {
             ChatModelClient chatModelClient,
             AgentPilotEventPublisher eventPublisher,
             ConfirmationGateway confirmationGateway,
+            LlmToolRouter llmToolRouter,
             ObjectMapper objectMapper
     ) {
         this.sessionService = sessionService;
@@ -117,6 +119,7 @@ public class AgentOrchestrator {
         this.chatModelClient = chatModelClient;
         this.eventPublisher = eventPublisher;
         this.confirmationGateway = confirmationGateway;
+        this.llmToolRouter = llmToolRouter;
         this.objectMapper = objectMapper;
     }
 
@@ -140,11 +143,8 @@ public class AgentOrchestrator {
     }
 
     private Optional<AgentChatResponse> tryLlmToolCalling(AgentChatRequest request, AgentSession session, AgentRun run) {
-        if (!chatModelClient.configured()) {
-            return Optional.empty();
-        }
-        Optional<ModelToolCall> decision = chatModelClient.chooseTool(toolRoutingSystemPrompt(), request.message(), toolRegistry.openAiTools());
-        if (decision.isEmpty() || toolRegistry.find(decision.get().name()).isEmpty()) {
+        Optional<ModelToolCall> decision = llmToolRouter.choose(request.message());
+        if (decision.isEmpty()) {
             return Optional.empty();
         }
         run.setIntent("LLM_TOOL:" + decision.get().name());
@@ -837,19 +837,6 @@ public class AgentOrchestrator {
                 || !Objects.equals(run.getSalesRepId(), salesRepId))) {
             throw new AccessDeniedException("confirmation is outside current data scope");
         }
-    }
-
-    private String toolRoutingSystemPrompt() {
-        return """
-                你是 CRM-AgentPilot 的 LLM Tool Calling 路由器。
-                你的任务是根据用户请求选择一个最合适的工具，并填入可确定的参数。
-                客户分析、客户画像、跟进策略类问题优先选择 analyzeCustomer。
-                商机优先级、今天跟进谁选择 rankLeads。
-                销售 SOP、政策、质检、话术问题选择 searchKnowledge。
-                创建任务、写联系记录、更新商机阶段属于 CRM 写操作，也要选择对应写工具；系统会生成人工确认，不会直接落库。
-                如果只知道客户名称不知道 customerId，请填 customerName。
-                当前时间：%s。
-                """.formatted(LocalDateTime.now());
     }
 
     private String routeIntent(String message) {

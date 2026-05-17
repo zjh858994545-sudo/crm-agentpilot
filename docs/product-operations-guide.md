@@ -305,15 +305,30 @@ Operationally this means confirmation is not only an audit record. It is also a 
 - When Agent or Call Center creates a CRM write confirmation, the backend creates an `agentpilot_notification` row for the responsible user.
 - The frontend header shows unread confirmation reminders so sales reps do not need to actively search for pending writes.
 - Confirming or rejecting the confirmation marks the related notification as read.
-- Delivery mode is log-only by default. Set `AGENTPILOT_NOTIFICATION_WEBHOOK_ENABLED=true` and `AGENTPILOT_NOTIFICATION_WEBHOOK_URL=...` to forward confirmation reminders to a WeCom/DingTalk/SMS gateway.
+- Delivery mode is log-only by default. Set `AGENTPILOT_NOTIFICATION_WEBHOOK_ENABLED=true`, `AGENTPILOT_NOTIFICATION_DELIVERY_CHANNEL=generic|wecom|dingtalk`, `AGENTPILOT_APP_BASE_URL=https://...`, and `AGENTPILOT_NOTIFICATION_WEBHOOK_URL=...` to forward confirmation reminders to an enterprise chat bot or gateway.
 - `POST /api/callcenter/call-ended-events` is the productized call-end entry point. A telephony provider can send `callId`, `recordingUrl`, `transcript`, `customerId`, and `leadId`; the system returns summary, quality-check result, and a contact-log confirmation draft.
 
 Production integration notes:
 
 - The telephony system should own call recording and speech-to-text; CRM-AgentPilot owns analysis, confirmation, and CRM write safety.
 - The call-end endpoint must be protected by tenant identity, request signature validation, and replay protection before being exposed to third-party callbacks.
-- WeCom/DingTalk/SMS push should subscribe to `CONFIRMATION_REQUIRED` notifications and deliver them to the sales rep's phone.
+- WeCom and DingTalk bots are built-in delivery formats. `generic` sends a neutral JSON payload for SMS, custom gateways, or middleware; `wecom` and `dingtalk` send markdown payloads with an action link back to the confirmation detail.
 - Notification and confirmation remain intentionally separate: notification is for reachability, confirmation is the write-safety boundary.
+
+Recommended production notification setup:
+
+| Channel | Environment | Payload shape | When to use |
+|---|---|---|---|
+| `generic` | `AGENTPILOT_NOTIFICATION_DELIVERY_CHANNEL=generic` | CRM-AgentPilot JSON | Internal notification gateway, SMS platform, custom middleware |
+| `wecom` | `AGENTPILOT_NOTIFICATION_DELIVERY_CHANNEL=wecom` | Enterprise WeChat bot markdown | Sales teams already working in WeCom groups |
+| `dingtalk` | `AGENTPILOT_NOTIFICATION_DELIVERY_CHANNEL=dingtalk` | DingTalk bot markdown | Sales teams already working in DingTalk |
+
+Validation checklist:
+
+- Trigger a CRM write confirmation from Agent or Call Center.
+- Check `/api/system/status` or the System Admin page for notification mode and channel.
+- Confirm `agentpilot_notification_webhook_delivery_total{channel="...",result="success"}` increases.
+- Open the pushed link and verify it lands on the exact confirmation/customer context.
 
 ## 15. Inbound Webhook Security
 
@@ -354,4 +369,26 @@ Prometheus metrics:
 
 - `agentpilot_webhook_accepted_total{endpoint="call-ended-events"}`
 - `agentpilot_webhook_rejected_total{endpoint="call-ended-events",reason="..."}`
-- `agentpilot_notification_webhook_delivery_total{result="success|failed|log_only"}`
+- `agentpilot_notification_webhook_delivery_total{channel="generic|wecom|dingtalk",result="success|failed|log_only"}`
+
+## 16. Lightweight Load Testing
+
+Use `scripts/load-test.ps1` after deployment, configuration changes, or rate-limit tuning. The script uses built-in PowerShell jobs and writes a Markdown report to `ops/reports`.
+
+```powershell
+# Public health endpoint
+.\scripts\load-test.ps1 -Scenario health -Requests 100 -Concurrency 10
+
+# Business dashboard endpoint. In strict mode pass a real RBAC token.
+.\scripts\load-test.ps1 -Scenario dashboard -Requests 100 -Concurrency 10 -Token "agentpilot-sales-1"
+
+# Agent path. Keep request count small when a real model provider is enabled.
+.\scripts\load-test.ps1 -Scenario agent -Requests 20 -Concurrency 3 -Token "agentpilot-sales-1"
+```
+
+Interpretation:
+
+- `health` validates basic service availability and reverse proxy routing.
+- `dashboard` validates tenant/sales-rep scoped aggregation and database query latency.
+- `agent` validates rate limiting, tool routing, and model provider stability. Use mock mode for frequent load tests; use real model mode only for small confirmation tests to control cost.
+- P95 latency and non-2xx status codes should be reviewed before each production release.

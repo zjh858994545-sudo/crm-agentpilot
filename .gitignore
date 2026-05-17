@@ -10,6 +10,7 @@ logs/
 .demo-logs/
 backups/
 .tmp/
+ops/reports/
 
 # Environment
 .env

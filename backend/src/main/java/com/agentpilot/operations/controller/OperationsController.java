@@ -4,10 +4,12 @@ import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.operations.service.LaunchReadinessService;
 import com.agentpilot.operations.service.RetentionMaintenanceService;
+import com.agentpilot.operations.service.UsageMetricsService;
 import com.agentpilot.operations.vo.LaunchReadinessStatus;
 import com.agentpilot.operations.vo.RetentionCleanupRequest;
 import com.agentpilot.operations.vo.RetentionCleanupResult;
 import com.agentpilot.operations.vo.RetentionStatus;
+import com.agentpilot.operations.vo.UsageSnapshot;
 import com.agentpilot.security.CurrentUser;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,15 +27,18 @@ public class OperationsController {
     private final AdminAuditService adminAuditService;
     private final RetentionMaintenanceService retentionMaintenanceService;
     private final LaunchReadinessService launchReadinessService;
+    private final UsageMetricsService usageMetricsService;
 
     public OperationsController(
             AdminAuditService adminAuditService,
             RetentionMaintenanceService retentionMaintenanceService,
-            LaunchReadinessService launchReadinessService
+            LaunchReadinessService launchReadinessService,
+            UsageMetricsService usageMetricsService
     ) {
         this.adminAuditService = adminAuditService;
         this.retentionMaintenanceService = retentionMaintenanceService;
         this.launchReadinessService = launchReadinessService;
+        this.usageMetricsService = usageMetricsService;
     }
 
     @GetMapping("/readiness")
@@ -44,6 +49,11 @@ public class OperationsController {
     @GetMapping("/retention")
     public ApiResponse<RetentionStatus> retentionStatus() {
         return ApiResponse.ok(retentionMaintenanceService.status());
+    }
+
+    @GetMapping("/usage")
+    public ApiResponse<UsageSnapshot> usage() {
+        return ApiResponse.ok(usageMetricsService.snapshot(CurrentUser.tenantId()));
     }
 
     @PostMapping("/retention/run")

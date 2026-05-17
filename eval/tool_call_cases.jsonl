@@ -1,4 +1,12 @@
 {"input":"帮我查一下美家房产的客户情况","expectedTools":["queryCustomerProfile"]}
+{"input":"分析一下美家房产，重点看续费风险和下一步动作","expectedTools":["analyzeCustomer"]}
 {"input":"今天我应该优先跟进哪些客户？","expectedTools":["rankLeads"]}
+{"input":"帮我推荐销售代表 1 今天最值得跟进的商机","expectedTools":["rankLeads"]}
+{"input":"客户嫌套餐贵并担心续费效果时，销售应该怎么回复？","expectedTools":["searchKnowledge"]}
+{"input":"房产客户续费时应该准备哪些材料？","expectedTools":["searchKnowledge"]}
 {"input":"帮我创建明天上午十点跟进美家房产的任务","expectedTools":["createFollowupTask"],"mustRequireConfirmation":true}
-
+{"input":"给美家房产写一条联系记录，内容是客户关注曝光和续费优惠","expectedTools":["writeContactLog"],"mustRequireConfirmation":true}
+{"input":"把美家房产的商机阶段更新为 NEGOTIATING","expectedTools":["updateLeadStage"],"mustRequireConfirmation":true}
+{"input":"帮我看一下橙子口腔的合规风险","expectedTools":["analyzeCustomer"]}
+{"input":"招聘旺季客户应该怎么做套餐对比？","expectedTools":["searchKnowledge"]}
+{"input":"帮我创建后天下午三点回访老街火锅的任务","expectedTools":["createFollowupTask"],"mustRequireConfirmation":true}

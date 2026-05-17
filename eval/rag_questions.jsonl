@@ -1,3 +1,10 @@
-{"question":"商户觉得套餐价格贵时应该怎么沟通？","expectedDocType":"OBJECTION_HANDLING","expectedKeywords":["价格异议","ROI","曝光","案例"]}
+{"question":"商户觉得套餐价格贵时应该怎么沟通？","expectedDocType":"OBJECTION_HANDLING","expectedKeywords":["价格异议","ROI","曝光","同行案例"]}
 {"question":"客户 30 天内套餐到期应该如何跟进？","expectedDocType":"RENEWAL_SOP","expectedKeywords":["续费","到期","复盘","优惠"]}
-
+{"question":"如果客户担心曝光效果不足，销售应该先看哪些数据？","expectedDocType":"ROI_PLAYBOOK","expectedKeywords":["曝光","电话点击","漏斗","转化"]}
+{"question":"销售通话里哪些承诺属于高风险表达？","expectedDocType":"QUALITY_CHECK","expectedKeywords":["保证收益","保证排名","高风险","违规承诺"]}
+{"question":"房产客户续费时应该展示哪些材料？","expectedDocType":"INDUSTRY_PLAYBOOK","expectedKeywords":["房产","电话线索","同行案例","续费"]}
+{"question":"招聘旺季客户应该怎么设计跟进动作？","expectedDocType":"INDUSTRY_PLAYBOOK","expectedKeywords":["招聘","旺季","岗位曝光","简历线索"]}
+{"question":"基础版套餐适合什么类型的客户？","expectedDocType":"PRODUCT_POLICY","expectedKeywords":["基础版","曝光","数据看板","预算"]}
+{"question":"沉默客户召回时第一句话应该怎么切入？","expectedDocType":"FOLLOWUP_SOP","expectedKeywords":["沉默客户","经营情况","历史问题","优化建议"]}
+{"question":"Agent 回答价格和权益问题时为什么要给引用？","expectedDocType":"PRODUCT_POLICY","expectedKeywords":["价格","权益","引用","拒答"]}
+{"question":"通话摘要写入 CRM 前需要记录哪些要点？","expectedDocType":"QUALITY_CHECK","expectedKeywords":["通话摘要","客户关注点","异议","人工确认"]}

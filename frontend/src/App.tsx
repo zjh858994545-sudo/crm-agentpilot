@@ -173,17 +173,17 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
   '/system': {
     title: '系统管理',
     subtitle: '集中查看限流、RBAC、Outbox、模型工具和向量检索状态',
-    role: '系统管理'
+    role: '系统管理员'
   },
   '/runs': {
     title: '运行审计',
     subtitle: '排查每一次 AI 处理、工具调用和确认链路',
-    role: '系统管理'
+    role: '系统管理员'
   },
   '/evaluation': {
     title: '质量评测',
     subtitle: '查看评测用例、知识引用、工具命中和延迟指标',
-    role: '系统管理'
+    role: '系统管理员'
   }
 };
 
@@ -269,8 +269,7 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
           <Text className="eyebrow">CRM-AgentPilot</Text>
           <Title level={2}>登录销售作业平台</Title>
           <Paragraph>
-            输入系统管理员分配的内部访问令牌，或企业身份系统签发的 Bearer JWT。系统会识别销售、主管或管理员身份，
-            并自动加载对应菜单和数据范围。
+            输入系统管理员分配的内部访问令牌，或企业身份系统签发的 Bearer JWT。系统会识别销售、主管或管理员身份，并自动加载对应菜单和数据范围。
           </Paragraph>
         </Space>
         <Card className="login-role-card login-token-card">
@@ -348,7 +347,11 @@ function NotificationBell() {
     }
     await load();
     if (item.actionUrl) {
-      navigate(item.actionUrl);
+      if (item.actionUrl.startsWith('http://') || item.actionUrl.startsWith('https://')) {
+        window.location.href = item.actionUrl;
+      } else {
+        navigate(item.actionUrl);
+      }
     }
   };
 
@@ -362,7 +365,7 @@ function NotificationBell() {
       <div className="notification-head">
         <div>
           <Text strong>AI 写入确认</Text>
-          <div className="notification-subtitle">需要你背书后才会进入 CRM</div>
+          <div className="notification-subtitle">需要你确认后才会写入 CRM</div>
         </div>
         <Button size="small" type="link" disabled={!unreadCount} onClick={markAll}>
           全部已读

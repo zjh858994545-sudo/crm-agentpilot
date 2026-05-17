@@ -94,6 +94,8 @@ agentpilot:
     model-capacity: ${AGENTPILOT_RATE_LIMIT_MODEL_CAPACITY:30}
     model-refill-per-minute: ${AGENTPILOT_RATE_LIMIT_MODEL_REFILL_PER_MINUTE:30}
   notifications:
+    delivery-channel: ${AGENTPILOT_NOTIFICATION_DELIVERY_CHANNEL:generic}
+    app-base-url: ${AGENTPILOT_APP_BASE_URL:}
     webhook-enabled: ${AGENTPILOT_NOTIFICATION_WEBHOOK_ENABLED:false}
     webhook-url: ${AGENTPILOT_NOTIFICATION_WEBHOOK_URL:}
     webhook-timeout-seconds: ${AGENTPILOT_NOTIFICATION_WEBHOOK_TIMEOUT_SECONDS:5}

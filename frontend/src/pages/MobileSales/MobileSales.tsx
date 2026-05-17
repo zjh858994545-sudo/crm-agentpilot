@@ -3,6 +3,7 @@ import {
   ClockCircleOutlined,
   CustomerServiceOutlined,
   MessageOutlined,
+  PhoneOutlined,
   RightOutlined,
   SafetyCertificateOutlined,
   ThunderboltOutlined
@@ -25,7 +26,13 @@ import {
 const { Paragraph, Text, Title } = Typography;
 
 function agentPrompt(lead: LeadRecommendation) {
-  return `请帮我分析${lead.customerName}这个客户，重点解释为什么现在要跟进，并给出电话沟通话术和下一步任务建议。`;
+  return `请帮我分析 ${lead.customerName} 这个客户，重点解释为什么现在要跟进，并给出电话沟通话术和下一步任务建议。`;
+}
+
+function priorityTag(priority?: string) {
+  const color = priority === 'HIGH' ? 'red' : priority === 'MEDIUM' ? 'orange' : 'green';
+  const label = priority === 'HIGH' ? '高优先级' : priority === 'MEDIUM' ? '中优先级' : '可跟进';
+  return <Tag color={color}>{label}</Tag>;
 }
 
 export default function MobileSales() {
@@ -126,9 +133,7 @@ export default function MobileSales() {
                 <Title level={4} style={{ margin: 0 }}>{topLead.customerName}</Title>
                 <Text type="secondary">{topLead.industry} · 预计 {topLead.estimatedAmount.toLocaleString()} 元</Text>
               </div>
-              <Tag color={topLead.priority === 'HIGH' ? 'red' : topLead.priority === 'MEDIUM' ? 'orange' : 'green'}>
-                {topLead.priority}
-              </Tag>
+              {priorityTag(topLead.priority)}
             </Space>
             <div className="mobile-score-strip">
               <ThunderboltOutlined />
@@ -169,7 +174,7 @@ export default function MobileSales() {
         )}
       </Card>
 
-      <Card title="待你背书的 CRM 写入" extra={<Link to="/agent">进入 AI 助手</Link>}>
+      <Card title="待你确认的 CRM 写入" extra={<Link to="/agent">进入 AI 助手</Link>}>
         {pendingConfirmations.length ? (
           <List
             itemLayout="vertical"
@@ -228,6 +233,11 @@ export default function MobileSales() {
           <Link to="/agent">
             <SafetyCertificateOutlined />
             <strong>AI 建议确认</strong>
+            <RightOutlined />
+          </Link>
+          <Link to={topLead ? `/agent?customerId=${topLead.customerId}&prompt=${encodeURIComponent(agentPrompt(topLead))}&source=mobile-call` : '/agent'}>
+            <PhoneOutlined />
+            <strong>拨打前准备</strong>
             <RightOutlined />
           </Link>
         </div>

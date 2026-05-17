@@ -71,12 +71,18 @@ function Get-AvailablePort($preferred, $fallbackStart) {
 
 function Show-DockerPullHelp {
     Write-Host ""
-    Write-Host "Docker could not pull build images from Docker Hub."
-    Write-Host "If you are using a local proxy, configure Docker Desktop:"
-    Write-Host "Settings -> Resources -> Proxies -> Manual proxy"
-    Write-Host "HTTP proxy:  http://127.0.0.1:7890"
-    Write-Host "HTTPS proxy: http://127.0.0.1:7890"
-    Write-Host "Then Apply & Restart Docker Desktop and run this script again."
+    Write-Host "Docker full stack did not start successfully."
+    Write-Host "Run this diagnostic command for a precise reason:"
+    Write-Host ".\scripts\diagnose-docker.ps1"
+    Write-Host ""
+    Write-Host "Common fixes:"
+    Write-Host "1. Open Docker Desktop and wait until the engine is running."
+    Write-Host "2. If docker commands hang, restart Docker Desktop or Windows."
+    Write-Host "3. If image pull fails in China network, configure Docker Desktop proxy:"
+    Write-Host "   Settings -> Resources -> Proxies -> Manual proxy"
+    Write-Host "   HTTP proxy:  http://127.0.0.1:7890"
+    Write-Host "   HTTPS proxy: http://127.0.0.1:7890"
+    Write-Host "4. Keep at least 5GB free space on C: and F:."
     Write-Host ""
 }
 

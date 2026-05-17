@@ -1,2 +1,5 @@
 {"task":"分析客户美家房产并给出明天跟进策略","expectedTools":["queryCustomerProfile","queryContactHistory","searchKnowledge"],"expectedOutputFields":["客户现状","风险","推荐动作","话术"]}
-
+{"task":"为老街火锅处理价格异议并建议下一步","expectedTools":["queryCustomerProfile","searchKnowledge"],"expectedOutputFields":["价格异议","ROI","同行案例","下一步"]}
+{"task":"根据橙子口腔的合规风险生成沟通建议","expectedTools":["queryCustomerProfile","searchKnowledge"],"expectedOutputFields":["合规","风险","话术","禁止承诺"]}
+{"task":"从商机列表中推荐今天优先跟进的客户","expectedTools":["rankLeads"],"expectedOutputFields":["优先级","原因","建议动作"]}
+{"task":"客户认可续费方案后创建跟进任务","expectedTools":["createFollowupTask"],"expectedOutputFields":["confirmation","任务","人工确认"]}

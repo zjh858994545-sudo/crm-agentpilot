@@ -611,8 +611,39 @@ cd "F:\后端开发新项目\crm-agentpilot"
 - 顶部提醒入口显示待确认数量，解决“销售不主动打开工作台就看不到 confirmation”的问题。
 - 呼叫中心新增通话结束事件入口，模拟真实云通信回调：电话挂断后带入转写文本，系统自动生成摘要、质检和联系记录确认草稿。
 
-需要诚实说明：当前已经有站内通知和通话事件入口，企微/钉钉推送、云通信 SDK、回调签名验真和原生移动推送是下一步商业化对接。
-## 12. Webhook 签名和移动作业怎么讲
+需要诚实说明：当前已经有站内通知、企微/钉钉/通用 webhook 推送格式、通话事件入口和回调签名验真；云通信 SDK、短信网关、原生 App 推送仍是按企业客户现场系统继续对接的部分。
+
+通知渠道你可以这样讲：
+
+- 站内通知解决“用户在系统里能看到待确认事项”的问题。
+- 企微/钉钉 webhook 解决“销售不主动打开系统也能收到提醒”的问题。
+- `generic` webhook 留给企业自己的消息网关或短信平台，避免把系统绑死在某一个办公软件上。
+- 通知只是触达，真正写 CRM 仍然必须回到 confirmation 流程里点确认，所以“AI 建议、人来决策”的安全边界没有被绕过。
+
+对应配置：
+
+```bash
+AGENTPILOT_NOTIFICATION_WEBHOOK_ENABLED=true
+AGENTPILOT_NOTIFICATION_DELIVERY_CHANNEL=wecom   # generic / wecom / dingtalk
+AGENTPILOT_APP_BASE_URL=https://crm.example.com
+AGENTPILOT_NOTIFICATION_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...
+```
+
+如果面试官问“为什么不直接让 Agent 发企微消息就结束”，回答：因为企微只是提醒渠道，不是业务写入凭证。写操作必须回 CRM-AgentPilot 的确认页完成，这样才能记录确认人、确认时间、payload、审计链路和幂等结果。
+
+## 12. 产品化新增能力怎么讲
+
+这一批不是为了“多几个按钮”，而是把系统往可上线方向补齐：
+
+- Docker 诊断：`scripts/diagnose-docker.ps1` 用来检查 Docker Desktop、磁盘、代理、端口和镜像拉取问题。它解决的是“部署失败时不知道卡在哪里”的问题。
+- 生产部署：`docker-compose.prod.yml`、`deploy/nginx/agentpilot.conf.template` 和 `scripts/deploy-prod.ps1` 给出 HTTPS 反向代理、严格鉴权、Redis 限流、Kafka、数据目录和健康检查的标准模板。
+- 通知渠道：`generic / wecom / dingtalk` 三种格式把 confirmation 提醒推到企业工作软件；但写 CRM 仍然必须回系统确认，通知不等于写入。
+- 压测脚本：`scripts/load-test.ps1` 可以压 `health / dashboard / agent` 三类场景，输出 P50/P95/P99 和错误样例。它验证限流、聚合查询、Agent 链路在压力下是否稳定。
+- 用量统计：`/api/operations/usage` 聚合今日和近 7 天 Agent 会话、工具调用、确认单、通知、Outbox 和平均耗时。它不是完整计费系统，但已经是成本/容量治理的底座。
+- Orchestrator 拆分：`LlmToolRouter` 专门负责 LLM Tool Calling 选择工具，`ConfirmationGateway` 专门负责写入确认单和通知。`AgentOrchestrator` 仍然偏重，但已经开始按“路由、确认、执行”拆开。
+
+你可以用一句话概括：我不是只做了一个能演示的 Agent 页面，而是补了部署、诊断、触达、压测、用量、权限和审计这些真实上线会遇到的问题。
+## 13. Webhook 签名和移动作业怎么讲
 
 外部电话系统接入时，不能只靠登录态。因为电话平台是机器回调，不是销售在浏览器里点按钮。它需要一条专门的安全边界：
 

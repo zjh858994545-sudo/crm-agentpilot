@@ -155,6 +155,15 @@ export interface CallCenterWebhookStatus {
   replayProtection: boolean;
 }
 
+export interface NotificationDeliveryStatus {
+  mode: string;
+  deliveryChannel: 'generic' | 'wecom' | 'dingtalk' | string;
+  webhookEnabled: boolean;
+  webhookConfigured: boolean;
+  appBaseUrlConfigured: boolean;
+  webhookTimeoutSeconds: number;
+}
+
 export interface AuthProfile {
   userId: number;
   tenantId: string;
@@ -225,6 +234,22 @@ export interface RetentionStatus {
   checkedAt: string;
   totalEligibleRows: number;
   categories: RetentionCategoryStatus[];
+}
+
+export interface UsageMetric {
+  key: string;
+  name: string;
+  today: number;
+  sevenDays: number;
+  unit: string;
+  note: string;
+}
+
+export interface UsageSnapshot {
+  tenantId: string;
+  businessDate: string;
+  generatedAt: string;
+  metrics: UsageMetric[];
 }
 
 export interface RetentionCategoryResult {
@@ -753,6 +778,11 @@ export async function fetchCallCenterWebhookStatus() {
   return response.data.data;
 }
 
+export async function fetchNotificationDeliveryStatus() {
+  const response = await apiClient.get<ApiResponse<NotificationDeliveryStatus>>('/notifications/status');
+  return response.data.data;
+}
+
 export async function fetchSecurityUsers() {
   const response = await apiClient.get<ApiResponse<SecurityUser[]>>('/security/users');
   return response.data.data;
@@ -800,6 +830,11 @@ export async function updateTenantStatus(id: string, status: 'ACTIVE' | 'DISABLE
 
 export async function fetchRetentionStatus() {
   const response = await apiClient.get<ApiResponse<RetentionStatus>>('/operations/retention');
+  return response.data.data;
+}
+
+export async function fetchUsageSnapshot() {
+  const response = await apiClient.get<ApiResponse<UsageSnapshot>>('/operations/usage');
   return response.data.data;
 }
 

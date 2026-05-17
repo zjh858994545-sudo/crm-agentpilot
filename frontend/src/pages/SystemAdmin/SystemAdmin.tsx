@@ -45,6 +45,7 @@ import {
   KnowledgeStatus,
   LaunchReadinessStatus,
   ModelStatus,
+  NotificationDeliveryStatus,
   OpenAiToolDefinition,
   OutboxEvent,
   RetentionStatus,
@@ -53,6 +54,7 @@ import {
   SecurityUserUpsertPayload,
   Tenant,
   TenantUpsertPayload,
+  UsageSnapshot,
   createTenant,
   createSecurityUser,
   describeApiError,
@@ -63,11 +65,13 @@ import {
   fetchKnowledgeStatus,
   fetchLaunchReadiness,
   fetchModelStatus,
+  fetchNotificationDeliveryStatus,
   fetchOpenAiTools,
   fetchRetentionStatus,
   fetchSecurityStatus,
   fetchSecurityUsers,
   fetchTenants,
+  fetchUsageSnapshot,
   rebuildKnowledgeVectors,
   regenerateSecurityUserToken,
   retryDeadLetter,
@@ -135,6 +139,8 @@ export default function SystemAdmin() {
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<CallCenterWebhookStatus | null>(null);
+  const [notificationStatus, setNotificationStatus] = useState<NotificationDeliveryStatus | null>(null);
+  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -153,7 +159,9 @@ export default function SystemAdmin() {
       fetchRetentionStatus(),
       fetchLaunchReadiness(),
       fetchAdminAuditLogs(),
-      fetchCallCenterWebhookStatus()
+      fetchCallCenterWebhookStatus(),
+      fetchNotificationDeliveryStatus(),
+      fetchUsageSnapshot()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -167,6 +175,8 @@ export default function SystemAdmin() {
     if (results[9].status === 'fulfilled') setReadinessStatus(results[9].value);
     if (results[10].status === 'fulfilled') setAdminAuditLogs(results[10].value);
     if (results[11].status === 'fulfilled') setWebhookStatus(results[11].value);
+    if (results[12].status === 'fulfilled') setNotificationStatus(results[12].value);
+    if (results[13].status === 'fulfilled') setUsageSnapshot(results[13].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
     }
@@ -446,6 +456,14 @@ export default function SystemAdmin() {
         : '外部电话系统接入前需开启签名'
     },
     {
+      title: '通知触达',
+      value: notificationStatus?.webhookConfigured ? '外部推送' : '站内提醒',
+      color: notificationStatus?.webhookConfigured ? 'green' : 'blue',
+      detail: notificationStatus?.webhookConfigured
+        ? `${notificationStatus.deliveryChannel} / ${notificationStatus.webhookTimeoutSeconds}s 超时`
+        : '未配置 webhook 时仍保留站内待确认提醒'
+    },
+    {
       title: '事件可靠性',
       value: deadLetterCount > 0 ? '需处理' : '正常',
       color: deadLetterCount > 0 ? 'red' : 'green',
@@ -629,6 +647,31 @@ export default function SystemAdmin() {
           </Card>
         </Col>
       </Row>
+
+      <Card className="command-card" title="用量与成本观察">
+        <Table
+          rowKey="key"
+          pagination={false}
+          size="small"
+          dataSource={usageSnapshot?.metrics ?? []}
+          columns={[
+            { title: '指标', dataIndex: 'name', width: 160 },
+            {
+              title: '今日',
+              dataIndex: 'today',
+              width: 120,
+              render: (value, record) => <Text strong>{value} {record.unit}</Text>
+            },
+            {
+              title: '近 7 天',
+              dataIndex: 'sevenDays',
+              width: 120,
+              render: (value, record) => <Text>{value} {record.unit}</Text>
+            },
+            { title: '说明', dataIndex: 'note', render: (value) => <Text type="secondary">{value}</Text> }
+          ]}
+        />
+      </Card>
 
       <Card className="command-card" title="上线检查清单" extra={<Tag color={readinessColor}>{readinessStatus?.overallStatus ?? 'LOADING'}</Tag>}>
         <Table
@@ -927,6 +970,17 @@ export default function SystemAdmin() {
                 </Descriptions.Item>
                 <Descriptions.Item label="Agent Chat">{securityStatus?.rateLimit?.agentCapacity ?? '-'} / min</Descriptions.Item>
                 <Descriptions.Item label="Model Chat">{securityStatus?.rateLimit?.modelCapacity ?? '-'} / min</Descriptions.Item>
+                <Descriptions.Item label="确认提醒触达">
+                  <Space wrap>
+                    {notificationStatus?.webhookConfigured ? <Tag color="green">外部推送</Tag> : <Tag>站内提醒</Tag>}
+                    <Tag color="blue">{notificationStatus?.deliveryChannel ?? 'generic'}</Tag>
+                    <Text type="secondary">
+                      {notificationStatus?.webhookConfigured
+                        ? `${notificationStatus.webhookTimeoutSeconds}s timeout`
+                        : '未配置 webhook，保留站内通知'}
+                    </Text>
+                  </Space>
+                </Descriptions.Item>
                 <Descriptions.Item label="普通 API">{securityStatus?.rateLimit?.defaultCapacity ?? '-'} / min</Descriptions.Item>
                 <Descriptions.Item label="电话回调签名">
                   <Space wrap>
