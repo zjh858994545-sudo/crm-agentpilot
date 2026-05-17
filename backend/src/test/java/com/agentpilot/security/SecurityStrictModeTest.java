@@ -1,5 +1,6 @@
 package com.agentpilot.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +38,9 @@ class SecurityStrictModeTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void strictModeRequiresAgentPilotTokenForApi() throws Exception {
@@ -146,14 +150,26 @@ class SecurityStrictModeTest {
     @Test
     void salesManagerCanUseCallCenterForTeamMemberButSalesCannotCrossScope() throws Exception {
         String callText = "\\u5ba2\\u6237\\u8981\\u6c42\\u53d1\\u9001\\u5957\\u9910\\u5bf9\\u6bd4\\u548c\\u4f18\\u60e0\\u5ba1\\u6279\\u65b9\\u6848";
-        mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
+        MvcResult confirmationResult = mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
                         .header("X-AgentPilot-Token", "agentpilot-manager")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":1002,\"salesRepId\":2,\"leadId\":3002,\"text\":\"" + callText + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.payload.customerId", is(1002)))
                 .andExpect(jsonPath("$.data.payload.salesRepId", is(2)))
-                .andExpect(jsonPath("$.data.payload.leadId", is(3002)));
+                .andExpect(jsonPath("$.data.payload.leadId", is(3002)))
+                .andReturn();
+
+        long confirmationId = objectMapper.readTree(confirmationResult.getResponse().getContentAsString())
+                .at("/data/confirmationId")
+                .asLong();
+        mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
+                        .header("X-AgentPilot-Token", "agentpilot-manager")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":100}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
+                .andExpect(jsonPath("$.data.result.salesRepId", is(2)));
 
         mockMvc.perform(get("/api/callcenter/customers/1002/memory")
                         .header("X-AgentPilot-Token", "agentpilot-manager"))

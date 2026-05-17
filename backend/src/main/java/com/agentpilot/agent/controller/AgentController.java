@@ -106,7 +106,13 @@ public class AgentController {
         if (!request.userId().equals(currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        return ApiResponse.ok(orchestrator.confirm(id, currentUserId, CurrentUser.tenantId(), CurrentUser.salesRepId()));
+        return ApiResponse.ok(orchestrator.confirm(
+                id,
+                currentUserId,
+                CurrentUser.tenantId(),
+                CurrentUser.salesRepId(),
+                CurrentUser.isManagerOrAdmin()
+        ));
     }
 
     @PostMapping("/confirmations/{id}/reject")
@@ -119,7 +125,13 @@ public class AgentController {
         if (!request.userId().equals(currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        return ApiResponse.ok(orchestrator.reject(id, currentUserId, CurrentUser.tenantId(), CurrentUser.salesRepId()));
+        return ApiResponse.ok(orchestrator.reject(
+                id,
+                currentUserId,
+                CurrentUser.tenantId(),
+                CurrentUser.salesRepId(),
+                CurrentUser.isManagerOrAdmin()
+        ));
     }
 
     @GetMapping("/confirmations")

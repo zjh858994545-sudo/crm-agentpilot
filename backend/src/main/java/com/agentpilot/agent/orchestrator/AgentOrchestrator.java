@@ -168,13 +168,13 @@ public class AgentOrchestrator {
     }
 
     @Transactional
-    public Map<String, Object> confirm(Long confirmationId, Long userId, String tenantId, Long salesRepId) {
+    public Map<String, Object> confirm(Long confirmationId, Long userId, String tenantId, Long salesRepId, boolean managerOrAdmin) {
         requireUserId(userId);
         AgentConfirmation confirmation = confirmationService.getById(confirmationId);
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
         }
-        requireConfirmationOwner(confirmation, userId, tenantId, salesRepId);
+        requireConfirmationOwner(confirmation, userId, tenantId, salesRepId, managerOrAdmin);
         if (!Objects.equals(confirmation.getStatus(), "PENDING")) {
             return Map.of("status", confirmation.getStatus(), "confirmationId", confirmationId);
         }
@@ -207,13 +207,13 @@ public class AgentOrchestrator {
     }
 
     @Transactional
-    public Map<String, Object> reject(Long confirmationId, Long userId, String tenantId, Long salesRepId) {
+    public Map<String, Object> reject(Long confirmationId, Long userId, String tenantId, Long salesRepId, boolean managerOrAdmin) {
         requireUserId(userId);
         AgentConfirmation confirmation = confirmationService.getById(confirmationId);
         if (confirmation == null) {
             return Map.of("status", "NOT_FOUND");
         }
-        requireConfirmationOwner(confirmation, userId, tenantId, salesRepId);
+        requireConfirmationOwner(confirmation, userId, tenantId, salesRepId, managerOrAdmin);
         if (!Objects.equals(confirmation.getStatus(), "PENDING")) {
             return Map.of("status", confirmation.getStatus(), "confirmationId", confirmationId);
         }
@@ -797,12 +797,14 @@ public class AgentOrchestrator {
         }
     }
 
-    private void requireConfirmationOwner(AgentConfirmation confirmation, Long userId, String tenantId, Long salesRepId) {
+    private void requireConfirmationOwner(AgentConfirmation confirmation, Long userId, String tenantId, Long salesRepId, boolean managerOrAdmin) {
         AgentRun run = runService.getById(confirmation.getRunId());
-        if (run == null
-                || !Objects.equals(run.getTenantId(), tenantId)
-                || !Objects.equals(run.getUserId(), userId)
-                || !Objects.equals(run.getSalesRepId(), salesRepId)) {
+        if (run == null || !Objects.equals(run.getTenantId(), tenantId)) {
+            throw new AccessDeniedException("confirmation is outside current data scope");
+        }
+        if (!managerOrAdmin
+                && (!Objects.equals(run.getUserId(), userId)
+                || !Objects.equals(run.getSalesRepId(), salesRepId))) {
             throw new AccessDeniedException("confirmation is outside current data scope");
         }
     }
