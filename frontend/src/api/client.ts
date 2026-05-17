@@ -205,6 +205,7 @@ export interface CallCenterProviderStatus {
   asrProvider: string;
   asrModel?: string;
   asrEnabled: boolean;
+  configSources?: Record<string, string>;
 }
 
 export interface NotificationDeliveryStatus {
@@ -272,6 +273,14 @@ export interface TenantConfig {
   updatedAt?: string;
 }
 
+export interface ResolvedTenantConfig {
+  tenantId: string;
+  configKey: string;
+  value: string;
+  valueType: string;
+  source: 'TENANT' | 'GLOBAL' | 'DEFAULT' | string;
+}
+
 export interface TenantConfigUpsertPayload {
   configKey: string;
   configValue?: string;
@@ -294,6 +303,11 @@ export interface ExportRequest {
   status: string;
   approverUserId?: number;
   approvalComment?: string;
+  fileName?: string;
+  fileSizeBytes?: number;
+  expiresAt?: string;
+  downloadedAt?: string;
+  downloadCount?: number;
   requestedAt?: string;
   decidedAt?: string;
 }
@@ -918,6 +932,11 @@ export async function fetchTenantConfigs(tenantId: string) {
   return response.data.data;
 }
 
+export async function fetchEffectiveTenantConfigs(tenantId: string) {
+  const response = await apiClient.get<ApiResponse<ResolvedTenantConfig[]>>(`/tenants/${tenantId}/configs/effective`);
+  return response.data.data;
+}
+
 export async function upsertTenantConfig(tenantId: string, payload: TenantConfigUpsertPayload) {
   const response = await apiClient.put<ApiResponse<TenantConfig>>(`/tenants/${tenantId}/configs`, payload);
   return response.data.data;
@@ -946,6 +965,16 @@ export async function approveExportRequest(id: number, comment = '') {
 export async function rejectExportRequest(id: number, comment = '') {
   const response = await apiClient.patch<ApiResponse<ExportRequest>>(`/export-requests/${id}/reject`, { comment });
   return response.data.data;
+}
+
+export async function downloadExportRequest(id: number) {
+  const response = await apiClient.get<Blob>(`/export-requests/${id}/download`, { responseType: 'blob' });
+  const disposition = response.headers['content-disposition'] || '';
+  const match = /filename="([^"]+)"/i.exec(disposition);
+  return {
+    blob: response.data,
+    fileName: match?.[1] ?? `agentpilot-export-${id}.csv`
+  };
 }
 
 export async function createTenant(payload: TenantUpsertPayload) {

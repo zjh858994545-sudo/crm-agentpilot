@@ -174,16 +174,25 @@ Agent run 和 tool call 是审计事件，使用同一张 outbox 表做 at-least
 当前客户手机号接口层已做展示脱敏，但生产环境仍需要继续完善：
 
 - 日志禁止输出 API key、token、手机号、客户备注等敏感信息。
-- 导出报表需要按角色和数据范围授权；当前系统已经提供 `agentpilot_export_request` 审批表，记录导出类型、原因、申请人、审批人和审批意见，后续真实导出文件应绑定水印、下载过期时间和审批单 ID。
+- 导出报表需要按角色和数据范围授权；当前系统已经提供 `agentpilot_export_request` 审批表，记录导出类型、原因、申请人、审批人和审批意见。审批通过后系统会生成 CSV 导出文件，默认 3 天过期，下载动作会写入管理员审计日志。
 - 联系记录、通话摘要和质检结果属于业务敏感数据，需要保留审计。
 - 当前后端已在 CRM 客户/商机/任务、Agent run/confirmation、呼叫中心、知识库文档、检索日志等核心链路中使用 `tenantId` 做租户隔离。
 - `sales` 角色只能访问自己的 `salesRepId` 数据；`sales_manager` 和 `system_admin` 可以访问同一租户内的团队数据，但不能跨租户。
 - 前端不能传入或决定 `tenantId`；后端必须从认证后的 `AgentPilotPrincipal` 读取租户、角色和数据范围。
-- 生产环境还需要补充更完整的数据分级、字段级权限、审计导出审批和租户级备份恢复演练。
+- 生产环境还需要补充更完整的数据分级、字段级权限、租户级备份恢复演练，以及大文件对象存储归档。
+
+导出闭环当前规则：
+
+- `PENDING`：申请已提交，等待具备 `export:approve` 权限的用户审批。
+- `APPROVED`：审批通过并生成 CSV 文件，申请人或审批管理员可下载。
+- `REJECTED`：审批拒绝，不能下载。
+- `EXPIRED`：审批文件超过过期时间，不能下载。
+- 客户导出会对手机号脱敏，例如 `139****1001`。
+- 导出内容保存在审批记录中，适合 Demo 和私有化小规模场景；生产大文件建议迁移到对象存储，并在数据库只保存文件 key、水印、过期时间和下载审计。
 
 ## 8.1 租户配置中心
 
-`agentpilot_tenant_config` 是商业化 SaaS 的控制面，不替代代码配置，而是让同一套系统可以按企业覆盖部分运行策略。
+`agentpilot_tenant_config` 是商业化 SaaS 的控制面，不替代代码配置，而是让同一套系统可以按企业覆盖部分运行策略。后端通过 `TenantConfigResolver` 读取配置，优先级为：租户覆盖值 > 全局环境变量 > 安全默认值。
 
 建议配置命名：
 
@@ -194,7 +203,11 @@ notification.webhook.url
 rateLimit.agentChat.capacity
 retention.agentRun.days
 callcenter.provider
+callcenter.provider.enabled
+callcenter.provider.endpoint
 callcenter.asr.provider
+callcenter.asr.enabled
+callcenter.asr.model
 ```
 
 读取顺序建议为：
@@ -203,7 +216,7 @@ callcenter.asr.provider
 2. 没有租户覆盖值时读全局环境变量。
 3. 仍没有配置时使用安全默认值或拒绝启动。
 
-管理员每次新增、修改、删除租户配置都会写入管理员审计日志，方便追踪“谁改了哪个租户的运行策略”。
+管理员每次新增、修改、删除租户配置都会写入管理员审计日志，方便追踪“谁改了哪个租户的运行策略”。系统管理页同时展示“覆盖配置”和“生效配置来源”：`TENANT` 表示租户覆盖，`GLOBAL` 表示来自环境变量，`DEFAULT` 表示使用安全默认值。
 
 ## 8.2 电话与语音供应商
 

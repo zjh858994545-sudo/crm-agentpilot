@@ -53,6 +53,7 @@ import {
   OpenAiToolDefinition,
   OutboxEvent,
   RetentionStatus,
+  ResolvedTenantConfig,
   SecurityStatus,
   SecurityUser,
   SecurityUserUpsertPayload,
@@ -68,6 +69,7 @@ import {
   clearClientErrorLogs,
   deleteTenantConfig,
   describeApiError,
+  downloadExportRequest,
   downloadDiagnosticsBundle,
   fetchAdminAuditLogs,
   fetchCallCenterWebhookStatus,
@@ -76,6 +78,7 @@ import {
   fetchDeadLetters,
   fetchEventStatus,
   fetchExportRequests,
+  fetchEffectiveTenantConfigs,
   fetchKnowledgeStatus,
   fetchLaunchReadiness,
   fetchModelStatus,
@@ -150,6 +153,7 @@ export default function SystemAdmin() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState('demo');
   const [tenantConfigs, setTenantConfigs] = useState<TenantConfig[]>([]);
+  const [effectiveTenantConfigs, setEffectiveTenantConfigs] = useState<ResolvedTenantConfig[]>([]);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -211,9 +215,15 @@ export default function SystemAdmin() {
     const tenantId = selectedTenantId || (results[6].status === 'fulfilled' ? results[6].value[0]?.id : '') || 'demo';
     setSelectedTenantId(tenantId);
     try {
-      setTenantConfigs(await fetchTenantConfigs(tenantId));
+      const [configs, effectiveConfigs] = await Promise.all([
+        fetchTenantConfigs(tenantId),
+        fetchEffectiveTenantConfigs(tenantId)
+      ]);
+      setTenantConfigs(configs);
+      setEffectiveTenantConfigs(effectiveConfigs);
     } catch {
       setTenantConfigs([]);
+      setEffectiveTenantConfigs([]);
     }
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
@@ -290,6 +300,7 @@ export default function SystemAdmin() {
       antdMessage.success('租户配置已保存');
       setConfigModalOpen(false);
       setTenantConfigs(await fetchTenantConfigs(selectedTenantId));
+      setEffectiveTenantConfigs(await fetchEffectiveTenantConfigs(selectedTenantId));
       await load();
     } catch (err) {
       antdMessage.error(`租户配置保存失败：${describeApiError(err)}`);
@@ -304,6 +315,7 @@ export default function SystemAdmin() {
       await deleteTenantConfig(config.tenantId, config.configKey);
       antdMessage.success('租户配置已删除');
       setTenantConfigs(await fetchTenantConfigs(selectedTenantId));
+      setEffectiveTenantConfigs(await fetchEffectiveTenantConfigs(selectedTenantId));
       await load();
     } catch (err) {
       antdMessage.error(`租户配置删除失败：${describeApiError(err)}`);
@@ -342,6 +354,27 @@ export default function SystemAdmin() {
       await load();
     } catch (err) {
       antdMessage.error(`导出审批失败：${describeApiError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadExport = async (request: ExportRequest) => {
+    setLoading(true);
+    try {
+      const result = await downloadExportRequest(request.id);
+      const url = window.URL.createObjectURL(result.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      antdMessage.success('导出文件已下载，下载动作已写入审计');
+      await load();
+    } catch (err) {
+      antdMessage.error(`导出下载失败：${describeApiError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -1046,7 +1079,12 @@ export default function SystemAdmin() {
               value={selectedTenantId}
               onChange={async (value) => {
                 setSelectedTenantId(value);
-                setTenantConfigs(await fetchTenantConfigs(value));
+                const [configs, effectiveConfigs] = await Promise.all([
+                  fetchTenantConfigs(value),
+                  fetchEffectiveTenantConfigs(value)
+                ]);
+                setTenantConfigs(configs);
+                setEffectiveTenantConfigs(effectiveConfigs);
               }}
               options={tenants.map((tenant) => ({ label: `${tenant.name} (${tenant.id})`, value: tenant.id }))}
             />
@@ -1092,6 +1130,26 @@ export default function SystemAdmin() {
             }
           ]}
         />
+        <Title level={5} style={{ marginTop: 18 }}>
+          生效配置来源
+        </Title>
+        <Table
+          rowKey={(record) => `${record.tenantId}:${record.configKey}:effective`}
+          size="small"
+          pagination={false}
+          dataSource={effectiveTenantConfigs}
+          columns={[
+            { title: '配置项', dataIndex: 'configKey', width: 220, render: (value) => <Text code>{value}</Text> },
+            { title: '生效值', dataIndex: 'value', ellipsis: true, render: (value) => <Text>{value || '-'}</Text> },
+            { title: '类型', dataIndex: 'valueType', width: 90, render: (value) => <Tag>{value}</Tag> },
+            {
+              title: '来源',
+              dataIndex: 'source',
+              width: 100,
+              render: (value) => <Tag color={value === 'TENANT' ? 'green' : value === 'GLOBAL' ? 'blue' : 'default'}>{value}</Tag>
+            }
+          ]}
+        />
       </Card>
 
       <Card
@@ -1115,12 +1173,21 @@ export default function SystemAdmin() {
             { title: '申请人', dataIndex: 'requesterUserId', width: 110, render: (value) => <Tag>user #{value}</Tag> },
             { title: '原因', dataIndex: 'reason', ellipsis: true },
             { title: '状态', dataIndex: 'status', width: 110, render: (value) => statusTag(value) },
+            { title: '文件', dataIndex: 'fileName', ellipsis: true, render: (value) => <Text type="secondary">{value || '-'}</Text> },
+            {
+              title: '过期时间',
+              dataIndex: 'expiresAt',
+              width: 180,
+              render: (value) => <Text type={value ? undefined : 'secondary'}>{value ? formatTime(value) : '-'}</Text>
+            },
+            { title: '下载次数', dataIndex: 'downloadCount', width: 90, render: (value) => value ?? 0 },
             { title: '申请时间', dataIndex: 'requestedAt', width: 180, render: (value) => <Text>{formatTime(value)}</Text> },
             {
               title: '审批',
-              width: 150,
-              render: (_, record: ExportRequest) =>
-                record.status === 'PENDING' ? (
+              width: 210,
+              render: (_, record: ExportRequest) => {
+                if (record.status === 'PENDING') {
+                  return (
                   <Space>
                     <Button size="small" type="link" onClick={() => decideExportRequest(record, 'approve')}>
                       批准
@@ -1129,9 +1196,22 @@ export default function SystemAdmin() {
                       拒绝
                     </Button>
                   </Space>
-                ) : (
+                  );
+                }
+                if (record.status === 'APPROVED') {
+                  return (
+                    <Space>
+                      <Button size="small" type="link" icon={<DownloadOutlined />} onClick={() => downloadExport(record)}>
+                        下载
+                      </Button>
+                      <Text type="secondary">{record.approvalComment || '-'}</Text>
+                    </Space>
+                  );
+                }
+                return (
                   <Text type="secondary">{record.approvalComment || '-'}</Text>
-                )
+                );
+              }
             }
           ]}
         />

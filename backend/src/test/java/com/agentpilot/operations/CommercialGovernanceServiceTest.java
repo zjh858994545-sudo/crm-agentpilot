@@ -65,6 +65,13 @@ class CommercialGovernanceServiceTest {
 
         assertThat(approved.getStatus()).isEqualTo("APPROVED");
         assertThat(approved.getApproverUserId()).isEqualTo(100L);
+        assertThat(approved.getFileName()).endsWith(".csv");
+        assertThat(approved.getFileSizeBytes()).isPositive();
+        assertThat(approved.getExpiresAt()).isNotNull();
+        ExportRequestService.ExportDownload download = exportRequestService.download(request.getId(), "demo", 1L, false);
+        assertThat(download.fileName()).isEqualTo(approved.getFileName());
+        assertThat(new String(download.content())).contains("contact_mobile_masked");
+        assertThat(new String(download.content())).doesNotContain("13910001001");
         assertThat(exportRequestService.listByTenant("demo", "APPROVED", 10))
                 .extracting(ExportRequest::getId)
                 .contains(request.getId());

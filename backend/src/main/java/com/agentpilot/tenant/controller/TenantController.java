@@ -4,6 +4,7 @@ import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.tenant.entity.AgentPilotTenant;
 import com.agentpilot.tenant.entity.TenantConfig;
+import com.agentpilot.tenant.service.TenantConfigResolver;
 import com.agentpilot.tenant.service.TenantConfigService;
 import com.agentpilot.tenant.service.TenantService;
 import com.agentpilot.tenant.vo.TenantConfigUpsertRequest;
@@ -29,15 +30,18 @@ import java.util.List;
 public class TenantController {
     private final TenantService tenantService;
     private final TenantConfigService tenantConfigService;
+    private final TenantConfigResolver tenantConfigResolver;
     private final AdminAuditService adminAuditService;
 
     public TenantController(
             TenantService tenantService,
             TenantConfigService tenantConfigService,
+            TenantConfigResolver tenantConfigResolver,
             AdminAuditService adminAuditService
     ) {
         this.tenantService = tenantService;
         this.tenantConfigService = tenantConfigService;
+        this.tenantConfigResolver = tenantConfigResolver;
         this.adminAuditService = adminAuditService;
     }
 
@@ -79,6 +83,11 @@ public class TenantController {
     @GetMapping("/{tenantId}/configs")
     public ApiResponse<List<TenantConfig>> configs(@PathVariable String tenantId) {
         return ApiResponse.ok(tenantConfigService.listByTenant(tenantId));
+    }
+
+    @GetMapping("/{tenantId}/configs/effective")
+    public ApiResponse<List<TenantConfigResolver.ResolvedTenantConfig>> effectiveConfigs(@PathVariable String tenantId) {
+        return ApiResponse.ok(tenantConfigResolver.resolveCommon(tenantId));
     }
 
     @PutMapping("/{tenantId}/configs")

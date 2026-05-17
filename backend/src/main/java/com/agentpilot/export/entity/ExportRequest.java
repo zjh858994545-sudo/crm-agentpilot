@@ -3,6 +3,7 @@ package com.agentpilot.export.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -17,6 +18,12 @@ public class ExportRequest {
     private String status;
     private Long approverUserId;
     private String approvalComment;
+    private String fileName;
+    private String fileContent;
+    private Long fileSizeBytes;
+    private LocalDateTime expiresAt;
+    private LocalDateTime downloadedAt;
+    private Integer downloadCount;
     private LocalDateTime requestedAt;
     private LocalDateTime decidedAt;
 
@@ -82,6 +89,55 @@ public class ExportRequest {
 
     public void setApprovalComment(String approvalComment) {
         this.approvalComment = approvalComment;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    @JsonIgnore
+    public String getFileContent() {
+        return fileContent;
+    }
+
+    public void setFileContent(String fileContent) {
+        this.fileContent = fileContent;
+    }
+
+    public Long getFileSizeBytes() {
+        return fileSizeBytes;
+    }
+
+    public void setFileSizeBytes(Long fileSizeBytes) {
+        this.fileSizeBytes = fileSizeBytes;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public LocalDateTime getDownloadedAt() {
+        return downloadedAt;
+    }
+
+    public void setDownloadedAt(LocalDateTime downloadedAt) {
+        this.downloadedAt = downloadedAt;
+    }
+
+    public Integer getDownloadCount() {
+        return downloadCount;
+    }
+
+    public void setDownloadCount(Integer downloadCount) {
+        this.downloadCount = downloadCount;
     }
 
     public LocalDateTime getRequestedAt() {

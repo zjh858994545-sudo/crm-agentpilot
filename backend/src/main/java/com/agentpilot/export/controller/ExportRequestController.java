@@ -7,6 +7,8 @@ import com.agentpilot.export.vo.ExportDecisionRequest;
 import com.agentpilot.export.vo.ExportRequestCreateRequest;
 import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.security.CurrentUser;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -94,5 +96,25 @@ public class ExportRequestController {
                 "Rejected export " + exportRequest.getExportType()
         );
         return ApiResponse.ok(exportRequest);
+    }
+
+    @GetMapping("/{id}/download")
+    public ResponseEntity<byte[]> download(@PathVariable Long id) {
+        ExportRequestService.ExportDownload download = exportRequestService.download(
+                id,
+                CurrentUser.tenantId(),
+                CurrentUser.userId(),
+                CurrentUser.require().permissions().contains("export:approve")
+        );
+        adminAuditService.record(
+                "export.download",
+                "export_request",
+                String.valueOf(id),
+                "Downloaded export file " + download.fileName()
+        );
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, download.contentType())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + download.fileName() + "\"")
+                .body(download.content());
     }
 }

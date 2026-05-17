@@ -17,6 +17,7 @@ import com.agentpilot.crm.entity.Lead;
 import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.crm.service.LeadService;
 import com.agentpilot.security.CurrentUser;
+import com.agentpilot.tenant.service.TenantConfigResolver;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.ConstraintViolation;
@@ -48,6 +49,7 @@ public class CallCenterController {
     private final LeadService leadService;
     private final WebhookSecurityService webhookSecurityService;
     private final CallProviderProperties callProviderProperties;
+    private final TenantConfigResolver tenantConfigResolver;
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
@@ -58,6 +60,7 @@ public class CallCenterController {
             LeadService leadService,
             WebhookSecurityService webhookSecurityService,
             CallProviderProperties callProviderProperties,
+            TenantConfigResolver tenantConfigResolver,
             ObjectMapper objectMapper,
             Validator validator
     ) {
@@ -67,6 +70,7 @@ public class CallCenterController {
         this.leadService = leadService;
         this.webhookSecurityService = webhookSecurityService;
         this.callProviderProperties = callProviderProperties;
+        this.tenantConfigResolver = tenantConfigResolver;
         this.objectMapper = objectMapper;
         this.validator = validator;
     }
@@ -131,13 +135,54 @@ public class CallCenterController {
     @GetMapping("/provider/status")
     @PreAuthorize("hasAuthority('ops:read')")
     public ApiResponse<Map<String, Object>> providerStatus() {
+        String tenantId = CurrentUser.tenantId();
+        TenantConfigResolver.ResolvedTenantConfig provider = tenantConfigResolver.resolve(
+                tenantId,
+                "callcenter.provider",
+                callProviderProperties.getProvider(),
+                "string"
+        );
+        TenantConfigResolver.ResolvedTenantConfig endpoint = tenantConfigResolver.resolve(
+                tenantId,
+                "callcenter.provider.endpoint",
+                callProviderProperties.getEndpoint(),
+                "string"
+        );
+        TenantConfigResolver.ResolvedTenantConfig asrProvider = tenantConfigResolver.resolve(
+                tenantId,
+                "callcenter.asr.provider",
+                callProviderProperties.getAsrProvider(),
+                "string"
+        );
+        TenantConfigResolver.ResolvedTenantConfig asrModel = tenantConfigResolver.resolve(
+                tenantId,
+                "callcenter.asr.model",
+                callProviderProperties.getAsrModel(),
+                "string"
+        );
+        boolean enabled = tenantConfigResolver.resolveBoolean(
+                tenantId,
+                "callcenter.provider.enabled",
+                callProviderProperties.isEnabled()
+        );
+        boolean asrEnabled = tenantConfigResolver.resolveBoolean(
+                tenantId,
+                "callcenter.asr.enabled",
+                callProviderProperties.isAsrEnabled()
+        );
         return ApiResponse.ok(Map.of(
-                "provider", callProviderProperties.getProvider(),
-                "enabled", callProviderProperties.isEnabled(),
-                "endpointConfigured", callProviderProperties.endpointConfigured(),
-                "asrProvider", callProviderProperties.getAsrProvider(),
-                "asrModel", callProviderProperties.getAsrModel(),
-                "asrEnabled", callProviderProperties.isAsrEnabled()
+                "provider", provider.value(),
+                "enabled", enabled,
+                "endpointConfigured", endpoint.value() != null && !endpoint.value().isBlank(),
+                "asrProvider", asrProvider.value(),
+                "asrModel", asrModel.value(),
+                "asrEnabled", asrEnabled,
+                "configSources", Map.of(
+                        "provider", provider.source(),
+                        "endpoint", endpoint.source(),
+                        "asrProvider", asrProvider.source(),
+                        "asrModel", asrModel.source()
+                )
         ));
     }
 
