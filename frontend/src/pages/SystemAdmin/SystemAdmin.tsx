@@ -4,7 +4,10 @@ import {
   ClearOutlined,
   ClusterOutlined,
   DatabaseOutlined,
+  EditOutlined,
   LockOutlined,
+  PlusOutlined,
+  PoweroffOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   ThunderboltOutlined
@@ -16,8 +19,12 @@ import {
   Col,
   Descriptions,
   Empty,
+  Form,
+  Input,
+  Modal,
   Popconfirm,
   Row,
+  Select,
   Space,
   Statistic,
   Table,
@@ -37,6 +44,9 @@ import {
   RetentionStatus,
   SecurityStatus,
   SecurityUser,
+  Tenant,
+  TenantUpsertPayload,
+  createTenant,
   fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
@@ -46,9 +56,12 @@ import {
   fetchRetentionStatus,
   fetchSecurityStatus,
   fetchSecurityUsers,
+  fetchTenants,
   rebuildKnowledgeVectors,
   retryDeadLetter,
-  runRetentionCleanup
+  runRetentionCleanup,
+  updateTenant,
+  updateTenantStatus
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
@@ -88,12 +101,16 @@ function formatTime(value?: string) {
 }
 
 export default function SystemAdmin() {
+  const [tenantForm] = Form.useForm<TenantUpsertPayload>();
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
   const [tools, setTools] = useState<OpenAiToolDefinition[]>([]);
   const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantModalOpen, setTenantModalOpen] = useState(false);
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [deadLetters, setDeadLetters] = useState<OutboxEvent[]>([]);
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
@@ -110,6 +127,7 @@ export default function SystemAdmin() {
       fetchModelStatus(),
       fetchOpenAiTools(),
       fetchSecurityUsers(),
+      fetchTenants(),
       fetchDeadLetters(),
       fetchRetentionStatus(),
       fetchLaunchReadiness()
@@ -120,9 +138,10 @@ export default function SystemAdmin() {
     if (results[3].status === 'fulfilled') setModelStatus(results[3].value);
     if (results[4].status === 'fulfilled') setTools(results[4].value);
     if (results[5].status === 'fulfilled') setSecurityUsers(results[5].value);
-    if (results[6].status === 'fulfilled') setDeadLetters(results[6].value);
-    if (results[7].status === 'fulfilled') setRetentionStatus(results[7].value);
-    if (results[8].status === 'fulfilled') setReadinessStatus(results[8].value);
+    if (results[6].status === 'fulfilled') setTenants(results[6].value);
+    if (results[7].status === 'fulfilled') setDeadLetters(results[7].value);
+    if (results[8].status === 'fulfilled') setRetentionStatus(results[8].value);
+    if (results[9].status === 'fulfilled') setReadinessStatus(results[9].value);
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
     }
@@ -132,6 +151,55 @@ export default function SystemAdmin() {
   useEffect(() => {
     load();
   }, []);
+
+  const openTenantModal = (tenant?: Tenant) => {
+    setEditingTenant(tenant ?? null);
+    tenantForm.setFieldsValue({
+      id: tenant?.id ?? '',
+      name: tenant?.name ?? '',
+      planCode: tenant?.planCode ?? 'standard'
+    });
+    setTenantModalOpen(true);
+  };
+
+  const saveTenant = async () => {
+    const values = await tenantForm.validateFields();
+    setLoading(true);
+    try {
+      if (editingTenant) {
+        await updateTenant(editingTenant.id, {
+          name: values.name,
+          planCode: values.planCode
+        });
+        antdMessage.success('租户资料已更新');
+      } else {
+        await createTenant(values);
+        antdMessage.success('租户已开通');
+      }
+      setTenantModalOpen(false);
+      setEditingTenant(null);
+      await load();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : '请检查租户 ID、名称、套餐和管理员权限。';
+      antdMessage.error(`租户保存失败：${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeTenantStatus = async (tenant: Tenant, status: 'ACTIVE' | 'DISABLED') => {
+    setLoading(true);
+    try {
+      await updateTenantStatus(tenant.id, status);
+      antdMessage.success(status === 'ACTIVE' ? '租户已启用' : '租户已停用');
+      await load();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : '请确认不会停用最后一个活跃租户。';
+      antdMessage.error(`租户状态更新失败：${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const retryOutboxEvent = async (id: number) => {
     setLoading(true);
@@ -518,6 +586,67 @@ export default function SystemAdmin() {
         />
       </Card>
 
+      <Card
+        className="command-card"
+        title="租户运营"
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openTenantModal()}>
+            开通租户
+          </Button>
+        }
+      >
+        <Table
+          rowKey="id"
+          loading={loading}
+          pagination={tenants.length > 8 ? { pageSize: 8 } : false}
+          dataSource={tenants}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无租户数据" /> }}
+          columns={[
+            {
+              title: '租户',
+              render: (_, record: Tenant) => (
+                <Space direction="vertical" size={0}>
+                  <Text strong>{record.name}</Text>
+                  <Text type="secondary">{record.id}</Text>
+                </Space>
+              )
+            },
+            { title: '套餐', dataIndex: 'planCode', width: 120, render: (value) => <Tag color="blue">{value || 'standard'}</Tag> },
+            { title: '状态', dataIndex: 'status', width: 120, render: (value) => statusTag(value) },
+            { title: '更新时间', dataIndex: 'updatedAt', width: 180, render: (value) => <Text>{formatTime(value)}</Text> },
+            {
+              title: '操作',
+              width: 220,
+              render: (_, record: Tenant) => {
+                const nextStatus = record.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+                return (
+                  <Space>
+                    <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openTenantModal(record)}>
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title={nextStatus === 'DISABLED' ? '确认停用该租户？' : '确认启用该租户？'}
+                      description={
+                        nextStatus === 'DISABLED'
+                          ? '停用后该企业用户将无法通过 RBAC / JWT 访问业务数据。'
+                          : '启用后该企业用户可按权限访问业务数据。'
+                      }
+                      okText="确认"
+                      cancelText="取消"
+                      onConfirm={() => changeTenantStatus(record, nextStatus)}
+                    >
+                      <Button size="small" type="link" danger={nextStatus === 'DISABLED'} icon={<PoweroffOutlined />}>
+                        {nextStatus === 'DISABLED' ? '停用' : '启用'}
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                );
+              }
+            }
+          ]}
+        />
+      </Card>
+
       <Card className="command-card" title="Outbox 死信处理">
         <Table
           rowKey="id"
@@ -732,6 +861,51 @@ export default function SystemAdmin() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      <Modal
+        title={editingTenant ? '编辑租户' : '开通租户'}
+        open={tenantModalOpen}
+        okText={editingTenant ? '保存变更' : '开通'}
+        cancelText="取消"
+        confirmLoading={loading}
+        onOk={saveTenant}
+        onCancel={() => {
+          setTenantModalOpen(false);
+          setEditingTenant(null);
+        }}
+      >
+        <Form form={tenantForm} layout="vertical" initialValues={{ planCode: 'standard' }}>
+          <Form.Item
+            name="id"
+            label="租户 ID"
+            tooltip="用于数据隔离、JWT tenant claim 和审计追踪。创建后不建议修改。"
+            rules={[
+              { required: !editingTenant, message: '请输入租户 ID' },
+              { pattern: /^[a-zA-Z0-9][a-zA-Z0-9_-]{1,63}$/, message: '2-64 位，只能包含字母、数字、下划线和短横线' }
+            ]}
+          >
+            <Input disabled={Boolean(editingTenant)} placeholder="例如 tenant_demo" />
+          </Form.Item>
+          <Form.Item name="name" label="企业名称" rules={[{ required: true, message: '请输入企业名称' }]}>
+            <Input placeholder="例如 智享生活演示企业" />
+          </Form.Item>
+          <Form.Item name="planCode" label="套餐版本" rules={[{ required: true, message: '请选择套餐版本' }]}>
+            <Select
+              options={[
+                { label: 'Standard', value: 'standard' },
+                { label: 'Professional', value: 'professional' },
+                { label: 'Enterprise', value: 'enterprise' }
+              ]}
+            />
+          </Form.Item>
+          <Alert
+            type="info"
+            showIcon
+            message="租户是商业化部署的数据边界"
+            description="RBAC 用户、JWT 登录、CRM 数据和审计记录都会挂在租户维度下。停用租户后，该企业用户无法继续访问业务接口。"
+          />
+        </Form>
+      </Modal>
     </Space>
   );
 }

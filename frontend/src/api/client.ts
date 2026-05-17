@@ -172,6 +172,21 @@ export interface SecurityUser {
   permissions: string[];
 }
 
+export interface Tenant {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'DISABLED' | string;
+  planCode: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TenantUpsertPayload {
+  id?: string;
+  name: string;
+  planCode?: string;
+}
+
 export interface RetentionCategoryStatus {
   key: string;
   name: string;
@@ -660,6 +675,26 @@ export async function fetchSecurityStatus() {
 
 export async function fetchSecurityUsers() {
   const response = await apiClient.get<ApiResponse<SecurityUser[]>>('/security/users');
+  return response.data.data;
+}
+
+export async function fetchTenants() {
+  const response = await apiClient.get<ApiResponse<Tenant[]>>('/tenants');
+  return response.data.data;
+}
+
+export async function createTenant(payload: TenantUpsertPayload) {
+  const response = await apiClient.post<ApiResponse<Tenant>>('/tenants', payload);
+  return response.data.data;
+}
+
+export async function updateTenant(id: string, payload: TenantUpsertPayload) {
+  const response = await apiClient.put<ApiResponse<Tenant>>(`/tenants/${id}`, payload);
+  return response.data.data;
+}
+
+export async function updateTenantStatus(id: string, status: 'ACTIVE' | 'DISABLED') {
+  const response = await apiClient.patch<ApiResponse<Tenant>>(`/tenants/${id}/status`, { status });
   return response.data.data;
 }
 
