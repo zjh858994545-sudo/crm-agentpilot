@@ -56,9 +56,10 @@ public class SecurityConfig {
     public JwtSsoAuthenticationFilter jwtSsoAuthenticationFilter(
             JwtSsoProperties properties,
             JwtDecoder jwtDecoder,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RbacPrincipalService rbacPrincipalService
     ) {
-        return new JwtSsoAuthenticationFilter(properties, jwtDecoder, objectMapper);
+        return new JwtSsoAuthenticationFilter(properties, jwtDecoder, objectMapper, rbacPrincipalService::tenantActive);
     }
 
     @Bean

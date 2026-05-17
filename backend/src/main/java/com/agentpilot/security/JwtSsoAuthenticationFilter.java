@@ -25,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Predicate;
 
 public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
     private static final List<String> ADMIN_PERMISSIONS = List.of(
@@ -60,15 +61,26 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
     private final JwtSsoProperties properties;
     private final JwtDecoder jwtDecoder;
     private final ObjectMapper objectMapper;
+    private final Predicate<String> activeTenantValidator;
 
     public JwtSsoAuthenticationFilter(
             JwtSsoProperties properties,
             JwtDecoder jwtDecoder,
             ObjectMapper objectMapper
     ) {
+        this(properties, jwtDecoder, objectMapper, tenantId -> true);
+    }
+
+    public JwtSsoAuthenticationFilter(
+            JwtSsoProperties properties,
+            JwtDecoder jwtDecoder,
+            ObjectMapper objectMapper,
+            Predicate<String> activeTenantValidator
+    ) {
         this.properties = properties;
         this.jwtDecoder = jwtDecoder;
         this.objectMapper = objectMapper;
+        this.activeTenantValidator = activeTenantValidator;
     }
 
     @Override
@@ -95,6 +107,7 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
             Long userId = requireLong(jwt, properties.getUserIdClaim(), "user id");
             String tenantId = requireString(jwt, properties.getTenantClaim(), "tenant id");
             validateTenantAllowed(tenantId);
+            validateTenantActive(tenantId);
             Long salesRepId = requireLong(jwt, properties.getSalesRepClaim(), "sales rep id");
             List<String> roles = claimAsStrings(jwt, properties.getRolesClaim());
             List<String> permissions = resolvePermissions(jwt, roles);
@@ -143,6 +156,12 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
         }
         if (!allowedTenants.contains(tenantId)) {
             throw new IllegalArgumentException("JWT tenant is not allowed for this deployment");
+        }
+    }
+
+    private void validateTenantActive(String tenantId) {
+        if (!activeTenantValidator.test(tenantId)) {
+            throw new IllegalArgumentException("JWT tenant is not active in CRM-AgentPilot tenant registry");
         }
     }
 

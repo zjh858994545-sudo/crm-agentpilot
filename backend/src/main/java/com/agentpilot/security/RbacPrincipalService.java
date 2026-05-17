@@ -102,6 +102,18 @@ public class RbacPrincipalService {
         );
     }
 
+    public boolean tenantActive(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return false;
+        }
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agentpilot_tenant WHERE id = ? AND status = 'ACTIVE'",
+                Long.class,
+                tenantId
+        );
+        return count != null && count > 0;
+    }
+
     public void recordTokenUse(Long userId, String clientIp) {
         if (userId == null) {
             return;
