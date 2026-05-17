@@ -8,7 +8,6 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -28,6 +27,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   askKnowledge,
+  describeApiError,
   fetchKnowledgeChunks,
   fetchKnowledgeDocs,
   fetchKnowledgeStatus,
@@ -40,6 +40,7 @@ import {
   rebuildKnowledgeVectors,
   searchKnowledge
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 const { TextArea } = Input;
@@ -119,7 +120,7 @@ export default function KnowledgeBase() {
   };
 
   useEffect(() => {
-    Promise.all([loadDocs(), loadStatus()]).catch(() => setError('知识库接口暂不可用，请先启动后端服务。'));
+    Promise.all([loadDocs(), loadStatus()]).catch((err) => setError(describeApiError(err)));
   }, []);
 
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function KnowledgeBase() {
     }
     fetchKnowledgeChunks(selectedDocId)
       .then(setChunks)
-      .catch(() => setError('读取知识分块失败，请检查后端服务。'));
+      .catch((err) => setError(describeApiError(err)));
   }, [selectedDocId]);
 
   const runSearch = async () => {
@@ -143,8 +144,8 @@ export default function KnowledgeBase() {
       setSearchResult(result.items);
       setSelectedEvidence(result.items[0] ?? null);
       message.success(`检索完成，改写查询：${result.rewrittenQuery}`);
-    } catch {
-      setError('检索失败，请确认后端和数据库已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -159,8 +160,8 @@ export default function KnowledgeBase() {
     try {
       const result = await askKnowledge(question.trim(), 5);
       setAnswer(result);
-    } catch {
-      setError('问答失败，请确认后端和数据库已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -187,8 +188,8 @@ export default function KnowledgeBase() {
       await loadStatus();
       setSelectedDocId(created.id);
       message.success('文档已导入并自动分块');
-    } catch {
-      setError('导入失败，请确认后端和数据库已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -205,8 +206,8 @@ export default function KnowledgeBase() {
       const result = await rebuildKnowledgeVectors();
       await loadStatus();
       message.success(`向量补齐完成，更新 ${result.updatedChunks} 个分块`);
-    } catch {
-      setError('重建向量失败，请确认当前身份拥有知识库写权限，且后端服务已启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -214,7 +215,7 @@ export default function KnowledgeBase() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="知识库操作暂时无法完成" />}
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>

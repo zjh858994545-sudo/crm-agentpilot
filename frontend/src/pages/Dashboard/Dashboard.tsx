@@ -10,7 +10,6 @@ import {
   UserSwitchOutlined
 } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -45,8 +44,10 @@ import {
   LeadRecommendation,
   ModelStatus,
   rejectAgentAction,
-  SecurityStatus
+  SecurityStatus,
+  describeApiError
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -261,8 +262,8 @@ export default function Dashboard() {
       await confirmAgentAction(confirmationId);
       antdMessage.success('已确认，CRM 写操作已执行');
       await refreshConfirmations();
-    } catch {
-      antdMessage.error('确认失败，请进入 AI 助手重试');
+    } catch (err) {
+      antdMessage.error(describeApiError(err));
     } finally {
       setConfirmingId(null);
     }
@@ -274,8 +275,8 @@ export default function Dashboard() {
       await rejectAgentAction(confirmationId);
       antdMessage.info('已拒绝，本次写操作未执行');
       await refreshConfirmations();
-    } catch {
-      antdMessage.error('拒绝失败，请进入 AI 助手重试');
+    } catch (err) {
+      antdMessage.error(describeApiError(err));
     } finally {
       setConfirmingId(null);
     }
@@ -376,7 +377,7 @@ export default function Dashboard() {
 
   return (
     <Space direction="vertical" size={18} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="今日工作台数据未完整加载" />}
 
       <div className="business-hero">
         <div className="business-hero-main">

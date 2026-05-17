@@ -28,10 +28,12 @@ import {
   ContactLogConfirmationResponse,
   createContactLogConfirmation,
   CustomerMemory,
+  describeApiError,
   fetchCustomerMemory,
   QualityCheckResponse,
   summarizeCall
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -90,8 +92,8 @@ export default function CallCenter() {
     setError('');
     try {
       setSummary(await summarizeCall(payload));
-    } catch {
-      setError('通话摘要失败，请确认后端服务已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -102,8 +104,8 @@ export default function CallCenter() {
     setError('');
     try {
       setQuality(await checkCallQuality(payload));
-    } catch {
-      setError('质检失败，请确认后端服务已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -116,8 +118,8 @@ export default function CallCenter() {
       const result = await createContactLogConfirmation(payload);
       setConfirmation(result);
       message.info('已生成联系记录写入确认，请确认后再写入 CRM。');
-    } catch {
-      setError('生成联系记录确认失败，请确认后端服务已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -134,8 +136,8 @@ export default function CallCenter() {
       message.success('联系记录已写入 CRM');
       setConfirmation(null);
       await loadMemory();
-    } catch {
-      setError('确认写入失败，请检查后端服务。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -143,7 +145,7 @@ export default function CallCenter() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="通话处理暂时无法完成" />}
 
       <Card className="command-card" title="通话质检工作台">
         <Space direction="vertical" size={12} style={{ width: '100%' }}>

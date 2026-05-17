@@ -10,7 +10,6 @@ import {
   WarningOutlined
 } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -31,10 +30,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   ContactLog,
   Customer,
+  describeApiError,
   fetchCustomerContactLogs,
   fetchCustomerDetail,
   fetchCustomerPage
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text } = Typography;
 
@@ -117,11 +118,11 @@ export default function Customers() {
       setPage(result.page);
       setPageSize(result.pageSize);
       setDataMode('connected');
-    } catch {
+    } catch (err) {
       setData([]);
       setTotal(0);
       setDataMode('unavailable');
-      setError('CRM 服务暂不可用，客户列表未加载。请稍后重试或联系系统管理员。');
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -156,8 +157,9 @@ export default function Customers() {
       ]);
       setSelectedCustomer(detail ?? customer);
       setContactLogs(logs);
-    } catch {
+    } catch (err) {
       setContactLogs([]);
+      setError(describeApiError(err));
     }
   };
 
@@ -170,9 +172,10 @@ export default function Customers() {
       ]);
       setSelectedCustomer(detail);
       setContactLogs(logs);
-    } catch {
+    } catch (err) {
       setSelectedCustomer(null);
       setContactLogs([]);
+      setError(describeApiError(err));
     }
   };
 
@@ -198,7 +201,7 @@ export default function Customers() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="客户数据暂时无法加载" onRetry={() => loadCustomers()} />}
 
       <div className="workflow-hero compact">
         <div>

@@ -41,8 +41,10 @@ import {
   fetchAgentExecutionTrace,
   rejectAgentAction,
   sendAgentMessage,
-  ToolCallView
+  ToolCallView,
+  describeApiError
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 const { TextArea } = Input;
@@ -497,8 +499,8 @@ export default function AgentChat() {
       setLastResponse(response);
       setMessages((items) => [...items, { role: 'agent', content: response.answer }]);
       await Promise.all([refreshConfirmations(), loadExecutionTrace(response.runId)]);
-    } catch {
-      setError('后端未连接，无法发送 AI 助手请求。请确认服务已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -517,8 +519,8 @@ export default function AgentChat() {
       setMessages((items) => [...items, { role: 'agent', content: '已确认并完成 CRM 写入。' }]);
       setPending(null);
       await Promise.all([refreshConfirmations(), loadExecutionTrace(runId)]);
-    } catch {
-      setError('确认失败，请检查后端服务。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -537,8 +539,8 @@ export default function AgentChat() {
       setMessages((items) => [...items, { role: 'agent', content: '已取消写入，CRM 数据没有变化。' }]);
       setPending(null);
       await Promise.all([refreshConfirmations(), loadExecutionTrace(runId)]);
-    } catch {
-      setError('拒绝确认失败，请检查后端服务。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -554,8 +556,8 @@ export default function AgentChat() {
         setPending(null);
       }
       await Promise.all([refreshConfirmations(), loadExecutionTrace(confirmation.runId)]);
-    } catch {
-      setError('确认失败，请检查后端服务。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -571,8 +573,8 @@ export default function AgentChat() {
         setPending(null);
       }
       await Promise.all([refreshConfirmations(), loadExecutionTrace(confirmation.runId)]);
-    } catch {
-      setError('拒绝确认失败，请检查后端服务。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -688,7 +690,7 @@ export default function AgentChat() {
             </Space>
           }
         >
-          {error && <Alert type="warning" showIcon message={error} style={{ marginBottom: 12 }} />}
+          {error && <ApiErrorNotice error={error} title="AI 助手暂时无法完成操作" />}
           <div className="agent-session-strip">
             <div>
               <span>Session</span>

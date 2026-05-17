@@ -9,7 +9,6 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -29,11 +28,13 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  describeApiError,
   fetchLeadDetail,
   fetchLeadRecommendations,
   Lead,
   LeadRecommendation
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -95,11 +96,11 @@ export default function Leads() {
         setRecommendations(nextRecommendations);
         setDataMode('connected');
       })
-      .catch(() => {
+      .catch((err) => {
         setRecommendations([]);
         setSelectedLead(null);
         setDataMode('unavailable');
-        setError('商机服务暂不可用，优先级看板未加载。请稍后重试或联系系统管理员。');
+        setError(describeApiError(err));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -139,8 +140,9 @@ export default function Leads() {
     setSelectedLead(null);
     try {
       setSelectedLead(await fetchLeadDetail(lead.leadId));
-    } catch {
+    } catch (err) {
       setSelectedLead(null);
+      setError(describeApiError(err));
     }
   };
 
@@ -167,7 +169,7 @@ export default function Leads() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="商机优先级暂时无法加载" />}
 
       <div className="workflow-hero compact">
         <div>

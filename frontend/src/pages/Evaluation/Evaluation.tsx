@@ -6,7 +6,6 @@ import {
   WarningOutlined
 } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -21,7 +20,8 @@ import {
   Typography
 } from 'antd';
 import { useMemo, useState } from 'react';
-import { EvaluationMetric, EvaluationReport, runEvaluation } from '../../api/client';
+import { EvaluationMetric, EvaluationReport, describeApiError, runEvaluation } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -128,8 +128,8 @@ export default function Evaluation() {
     try {
       const nextReport = await runEvaluation();
       setReport(nextReport);
-    } catch {
-      setError('评测运行失败，请确认后端服务已启动，并且 eval JSONL 文件存在。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -137,7 +137,7 @@ export default function Evaluation() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="评测运行失败" onRetry={run} />}
 
       <Card
         className="command-card"

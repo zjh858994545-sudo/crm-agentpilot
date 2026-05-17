@@ -47,6 +47,7 @@ import {
   Tenant,
   TenantUpsertPayload,
   createTenant,
+  describeApiError,
   fetchDeadLetters,
   fetchEventStatus,
   fetchKnowledgeStatus,
@@ -63,6 +64,7 @@ import {
   updateTenant,
   updateTenantStatus
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -180,7 +182,7 @@ export default function SystemAdmin() {
       setEditingTenant(null);
       await load();
     } catch (err) {
-      const detail = err instanceof Error ? err.message : '请检查租户 ID、名称、套餐和管理员权限。';
+      const detail = describeApiError(err);
       antdMessage.error(`租户保存失败：${detail}`);
     } finally {
       setLoading(false);
@@ -194,7 +196,7 @@ export default function SystemAdmin() {
       antdMessage.success(status === 'ACTIVE' ? '租户已启用' : '租户已停用');
       await load();
     } catch (err) {
-      const detail = err instanceof Error ? err.message : '请确认不会停用最后一个活跃租户。';
+      const detail = describeApiError(err);
       antdMessage.error(`租户状态更新失败：${detail}`);
     } finally {
       setLoading(false);
@@ -211,8 +213,8 @@ export default function SystemAdmin() {
         antdMessage.warning('事件当前状态不可重试');
       }
       await load();
-    } catch {
-      antdMessage.error('重试事件失败，请检查后端服务或权限。');
+    } catch (err) {
+      antdMessage.error(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -224,8 +226,8 @@ export default function SystemAdmin() {
       const result = await rebuildKnowledgeVectors();
       antdMessage.success(`知识索引已重建，更新 ${result.updatedChunks} 个片段`);
       await load();
-    } catch {
-      antdMessage.error('重建知识索引失败，请检查模型、Embedding 和 pgvector 状态。');
+    } catch (err) {
+      antdMessage.error(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -242,7 +244,7 @@ export default function SystemAdmin() {
       }
       await load();
     } catch (err) {
-      const detail = err instanceof Error ? err.message : '请检查保留策略开关、权限和后端日志。';
+      const detail = describeApiError(err);
       antdMessage.error(`数据生命周期操作失败：${detail}`);
     } finally {
       setLoading(false);
@@ -431,7 +433,7 @@ export default function SystemAdmin() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="系统管理状态未完整加载" onRetry={load} />}
 
       <Card
         className="command-card"

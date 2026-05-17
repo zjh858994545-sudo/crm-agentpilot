@@ -14,12 +14,13 @@ import {
   ThunderboltOutlined,
   UserOutlined
 } from '@ant-design/icons';
-import { Alert, Badge, Button, Card, Form, Input, Layout, Menu, Space, Spin, Tag, Typography } from 'antd';
+import { Badge, Button, Card, Form, Input, Layout, Menu, Space, Spin, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { fetchCurrentUser, type AuthProfile } from './api/client';
+import { describeApiError, fetchCurrentUser, type AuthProfile } from './api/client';
+import ApiErrorNotice from './components/ApiErrorNotice';
 
 const AgentChat = lazy(() => import('./pages/AgentChat/AgentChat'));
 const AgentRuns = lazy(() => import('./pages/AgentRuns/AgentRuns'));
@@ -226,9 +227,9 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
       const profile = await fetchCurrentUser();
       persistUser(profile);
       onLogin(profile);
-    } catch {
+    } catch (err) {
       clearSession();
-      setError('访问令牌无效，或系统暂时不可用。请确认令牌后重试。');
+      setError(describeApiError(err));
     } finally {
       setSubmitting(false);
     }
@@ -254,7 +255,7 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
                 placeholder="请输入 X-AgentPilot-Token"
               />
             </Form.Item>
-            {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+            {error ? <ApiErrorNotice error={error} title="登录失败" /> : null}
             <Button
               block
               size="large"

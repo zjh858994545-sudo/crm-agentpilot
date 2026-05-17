@@ -7,7 +7,6 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Descriptions,
@@ -29,11 +28,13 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AgentRun,
   AgentToolCall,
+  describeApiError,
   exportAgentRunsCsv,
   fetchAgentRunPage,
   fetchAgentRunToolCalls,
   sendAgentMessage
 } from '../../api/client';
+import ApiErrorNotice from '../../components/ApiErrorNotice';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -105,8 +106,8 @@ export default function AgentRuns() {
       setTotal(data.total);
       setPage(data.page);
       setPageSize(data.pageSize);
-    } catch {
-      setError('读取 Agent 运行记录失败，请确认后端服务已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -124,8 +125,8 @@ export default function AgentRuns() {
     try {
       const data = await fetchAgentRunToolCalls(run.id);
       setToolCalls(data);
-    } catch {
-      setError('读取工具调用轨迹失败。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -138,8 +139,8 @@ export default function AgentRuns() {
       await sendAgentMessage('今天我应该优先跟进哪些客户？请给出推荐理由和下一步动作。');
       await loadRuns(1);
       message.success('已生成一条运行记录');
-    } catch {
-      setError('生成运行记录失败，请确认后端服务已经启动。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -161,8 +162,8 @@ export default function AgentRuns() {
       anchor.click();
       window.URL.revokeObjectURL(url);
       message.success('已导出当前筛选条件下的审计记录');
-    } catch {
-      setError('导出审计记录失败，请确认当前账号具备运营审计权限。');
+    } catch (err) {
+      setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
@@ -170,7 +171,7 @@ export default function AgentRuns() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {error && <Alert type="warning" showIcon message={error} />}
+      {error && <ApiErrorNotice error={error} title="运行审计暂时无法加载" onRetry={() => loadRuns()} />}
 
       <Space className="toolbar-line" wrap>
         <Button icon={<ThunderboltOutlined />} loading={loading} onClick={createSampleRun}>
