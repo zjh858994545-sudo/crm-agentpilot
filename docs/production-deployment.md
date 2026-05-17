@@ -87,6 +87,7 @@ Production code must follow these rules:
 - Frontend never decides `tenantId`; it only displays it.
 - Backend derives `tenantId` from `AgentPilotPrincipal`.
 - Enterprise JWT deployments should configure `AGENTPILOT_JWT_ALLOWED_TENANTS`; unknown tenants are rejected before a principal is created.
+- `agentpilot_tenant` is the tenant registry. Tenant onboarding, disablement, backup scope, and incident response should reference this table rather than ad-hoc tenant strings.
 - CRM customer, lead, task, contact log, agent session, agent run, confirmation, knowledge document, retrieval log, and call-center operations include `tenant_id`.
 - Sales users can only access their own `salesRepId`; `sales_manager` and `system_admin` can access other sales reps in the same tenant.
 - Call-center write proposals must keep `customerId`, `leadId`, and `salesRepId` aligned before creating a confirmation.

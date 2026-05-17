@@ -91,6 +91,14 @@ public class LaunchReadinessService {
                 "活跃 RBAC 用户数：" + rbacPrincipalService.activeUserCount(),
                 "至少保留一个系统管理员账号，并为销售/主管分配真实 token"
         ));
+        checks.add(check(
+                "security.tenant-registry",
+                "租户注册表",
+                rbacPrincipalService.activeTenantCount() > 0,
+                "FAIL",
+                "活跃租户数：" + rbacPrincipalService.activeTenantCount(),
+                "至少保留一个 ACTIVE 租户；企业客户开通、停用和备份恢复都应以租户注册表为准"
+        ));
         checks.add(jwtTenantAllowListCheck(productionPhase));
         checks.add(check(
                 "rate-limit.enabled",

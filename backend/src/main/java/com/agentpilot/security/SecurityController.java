@@ -41,6 +41,7 @@ public class SecurityController {
         boolean tokenConfigured = StringUtils.hasText(properties.getApiToken());
         long rbacUserCount = rbacPrincipalService.activeUserCount();
         long rbacRoleCount = rbacPrincipalService.roleCount();
+        long activeTenantCount = rbacPrincipalService.activeTenantCount();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("mode", properties.getMode());
         body.put("strict", properties.strict());
@@ -51,6 +52,7 @@ public class SecurityController {
         body.put("rbacEnabled", rbacUserCount > 0);
         body.put("rbacUserCount", rbacUserCount);
         body.put("rbacRoleCount", rbacRoleCount);
+        body.put("activeTenantCount", activeTenantCount);
         body.put("tokenConfigured", tokenConfigured);
         body.put("seedUsersEnabled", properties.isSeedUsersEnabled());
         body.put("strictWithoutToken", properties.strict() && !tokenConfigured && rbacUserCount == 0);

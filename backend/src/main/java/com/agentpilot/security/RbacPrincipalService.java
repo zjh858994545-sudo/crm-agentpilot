@@ -89,6 +89,13 @@ public class RbacPrincipalService {
         return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agentpilot_role", Long.class);
     }
 
+    public long activeTenantCount() {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agentpilot_tenant WHERE status = 'ACTIVE'",
+                Long.class
+        );
+    }
+
     public void recordTokenUse(Long userId, String clientIp) {
         if (userId == null) {
             return;

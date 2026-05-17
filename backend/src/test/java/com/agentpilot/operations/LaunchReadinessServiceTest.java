@@ -26,6 +26,7 @@ class LaunchReadinessServiceTest {
                 .contains(
                         "security.strict",
                         "security.rbac",
+                        "security.tenant-registry",
                         "security.jwt-tenant-allow-list",
                         "rate-limit.enabled",
                         "model.chat",

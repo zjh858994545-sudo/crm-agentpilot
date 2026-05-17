@@ -307,7 +307,7 @@ export default function SystemAdmin() {
       key: 'tenant-scope',
       name: '租户数据隔离',
       status: securityStatus?.rbacEnabled ? 'ACTIVE' : 'LOCAL_PROFILE',
-      owner: 'CurrentUser / tenant_id / salesRepId',
+      owner: `CurrentUser / ${securityStatus?.activeTenantCount ?? 0} active tenants`,
       why: '商业化部署必须保证不同企业、不同销售团队之间不会串看客户、商机、知识库和审计数据。',
       operatingLine: '后端从认证主体读取 tenantId 和 salesRepId，CRM、Agent、RAG、呼叫中心接口统一做数据范围校验。'
     },
