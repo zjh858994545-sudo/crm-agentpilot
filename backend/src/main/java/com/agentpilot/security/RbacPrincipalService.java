@@ -140,12 +140,19 @@ public class RbacPrincipalService {
     }
 
     public List<UserProfile> listProfiles() {
+        return listProfiles(null);
+    }
+
+    public List<UserProfile> listProfiles(String tenantId) {
+        Object[] args = tenantId == null || tenantId.isBlank() ? new Object[]{} : new Object[]{tenantId};
+        String whereClause = tenantId == null || tenantId.isBlank() ? "" : "WHERE tenant_id = ?\n";
         return jdbcTemplate.query(
-                """
+                ("""
                         SELECT id, tenant_id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
                         FROM agentpilot_user
+                        %s
                         ORDER BY tenant_id, id
-                        """,
+                        """).formatted(whereClause),
                 (rs, rowNum) -> {
                     Long id = rs.getLong("id");
                     return new UserProfile(
@@ -160,7 +167,8 @@ public class RbacPrincipalService {
                             roleCodes(id),
                             permissionCodes(id)
                     );
-                }
+                },
+                args
         );
     }
 

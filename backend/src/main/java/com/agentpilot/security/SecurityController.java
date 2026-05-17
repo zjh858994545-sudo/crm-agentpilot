@@ -77,6 +77,6 @@ public class SecurityController {
     @GetMapping("/users")
     @PreAuthorize("hasAuthority('events:read')")
     public ApiResponse<List<RbacPrincipalService.UserProfile>> users() {
-        return ApiResponse.ok(rbacPrincipalService.listProfiles());
+        return ApiResponse.ok(rbacPrincipalService.listProfiles(CurrentUser.tenantId()));
     }
 }
