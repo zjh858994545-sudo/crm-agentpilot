@@ -599,9 +599,16 @@ function currentSalesRepId(fallback?: number) {
 }
 
 apiClient.interceptors.request.use((config) => {
+  const bearerToken =
+    import.meta.env.VITE_AGENTPILOT_BEARER_TOKEN ||
+    window.localStorage.getItem('agentpilot.bearerToken');
   const token =
     import.meta.env.VITE_AGENTPILOT_API_TOKEN ||
     window.localStorage.getItem('agentpilot.apiToken');
+  if (bearerToken) {
+    config.headers.set('Authorization', `Bearer ${bearerToken}`);
+    return config;
+  }
   if (token) {
     config.headers.set('X-AgentPilot-Token', token);
   }

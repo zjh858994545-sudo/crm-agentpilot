@@ -72,6 +72,14 @@ Still recommended before external production rollout:
 
 ## Frontend Implementation Plan
 
+Already implemented:
+
+1. The API client sends `Authorization: Bearer <jwt>` when `agentpilot.bearerToken` or `VITE_AGENTPILOT_BEARER_TOKEN` is present.
+2. The login screen accepts either an internal `X-AgentPilot-Token`, a raw JWT, or a `Bearer <jwt>` value.
+3. The workspace profile is still loaded from `/api/auth/me`, so menu visibility and data scope are derived from the backend principal rather than frontend guesses.
+
+Recommended for external enterprise rollout:
+
 1. Add an OIDC client such as `oidc-client-ts`.
 2. Login redirects to enterprise IdP.
 3. Store only short-lived access token in memory when possible.

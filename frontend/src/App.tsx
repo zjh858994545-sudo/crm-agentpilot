@@ -177,6 +177,7 @@ function persistUser(profile: AuthProfile) {
 function clearSession() {
   window.localStorage.removeItem('agentpilot.currentUser');
   window.localStorage.removeItem('agentpilot.apiToken');
+  window.localStorage.removeItem('agentpilot.bearerToken');
 }
 
 function visibleNavFor(user: AuthProfile) {
@@ -223,7 +224,16 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
     setSubmitting(true);
     setError(null);
     try {
-      window.localStorage.setItem('agentpilot.apiToken', token.trim());
+      const normalized = token.trim();
+      window.localStorage.removeItem('agentpilot.apiToken');
+      window.localStorage.removeItem('agentpilot.bearerToken');
+      if (normalized.startsWith('Bearer ')) {
+        window.localStorage.setItem('agentpilot.bearerToken', normalized.slice('Bearer '.length).trim());
+      } else if (normalized.split('.').length === 3) {
+        window.localStorage.setItem('agentpilot.bearerToken', normalized);
+      } else {
+        window.localStorage.setItem('agentpilot.apiToken', normalized);
+      }
       const profile = await fetchCurrentUser();
       persistUser(profile);
       onLogin(profile);
@@ -242,17 +252,18 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
           <Text className="eyebrow">CRM-AgentPilot</Text>
           <Title level={2}>登录销售作业平台</Title>
           <Paragraph>
-            输入系统管理员分配的访问令牌。系统会根据令牌识别销售、主管或管理员身份，并自动加载对应菜单和数据范围。
+            输入系统管理员分配的内部访问令牌，或企业身份系统签发的 Bearer JWT。系统会识别销售、主管或管理员身份，
+            并自动加载对应菜单和数据范围。
           </Paragraph>
         </Space>
         <Card className="login-role-card login-token-card">
           <Form layout="vertical" onFinish={submit}>
-            <Form.Item label="访问令牌" name="token" rules={[{ required: true, message: '请输入访问令牌' }]}>
+            <Form.Item label="访问令牌 / 企业 JWT" name="token" rules={[{ required: true, message: '请输入访问令牌或企业 JWT' }]}>
               <Input.Password
                 size="large"
                 autoFocus
                 data-testid="token-login-input"
-                placeholder="请输入 X-AgentPilot-Token"
+                placeholder="X-AgentPilot-Token 或 Bearer JWT"
               />
             </Form.Item>
             {error ? <ApiErrorNotice error={error} title="登录失败" /> : null}
