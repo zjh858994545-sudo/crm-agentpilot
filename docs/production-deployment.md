@@ -25,9 +25,11 @@ Use this when one AgentPilot cluster serves multiple companies.
 ## Required Environment Variables
 
 ```powershell
+AGENTPILOT_APP_PHASE=production
 AGENTPILOT_SECURITY_MODE=strict
 AGENTPILOT_SEED_USERS_ENABLED=false
 AGENTPILOT_API_TOKEN=
+AGENTPILOT_RATE_LIMIT_ENABLED=true
 AGENTPILOT_DEMO_TENANT_ID=demo
 AGENTPILOT_JWT_ENABLED=false
 AGENTPILOT_JWT_ISSUER_URI=
