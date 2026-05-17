@@ -119,6 +119,20 @@ CRM data contains business contact information and conversation details. Product
 7. Run readiness and ops healthcheck.
 8. Tag release and keep rollback artifacts.
 
+For a single workstation or staging server, use the release gate script to make the same checks repeatable:
+
+```powershell
+.\scripts\release-gate.ps1 -SkipDockerCheck
+```
+
+The release gate runs backend tests, frontend production build, static production preflight, and runtime operations healthcheck. In CI, keep all steps enabled. During local UI-only work, you can skip the slower or unavailable steps explicitly:
+
+```powershell
+.\scripts\release-gate.ps1 -SkipBackendTests -SkipPreflight -SkipRuntimeHealthcheck
+```
+
+Do not treat a manual browser check as a release gate replacement. Browser checks prove the happy path; the release gate proves build correctness, security preconditions, and runtime health.
+
 ## Rollback
 
 Application rollback is safe when database migrations are backward compatible. Destructive migrations, vector dimension changes, and tenant schema changes require a planned migration window.
