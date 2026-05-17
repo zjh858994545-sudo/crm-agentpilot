@@ -103,6 +103,7 @@ public class RetentionMaintenanceService {
         LocalDateTime agentCutoff = now.minusDays(properties.getAgentAuditDays());
         LocalDateTime retrievalCutoff = now.minusDays(properties.getRetrievalLogDays());
         LocalDateTime outboxCutoff = now.minusDays(properties.getOutboxPublishedDays());
+        LocalDateTime exportArtifactCutoff = now.minusDays(properties.getExportArtifactDays());
 
         return List.of(
                 new RetentionCategoryStatus(
@@ -131,6 +132,15 @@ public class RetentionMaintenanceService {
                         count("select count(*) from agent_outbox_event where status = 'PUBLISHED' and published_at < ?", outboxCutoff),
                         countOutboxProtected(outboxCutoff),
                         "保留 PENDING / FAILED / DISPATCHING / DEAD_LETTER，避免丢失待补偿事件"
+                ),
+                new RetentionCategoryStatus(
+                        "export-artifact",
+                        "导出文件正文",
+                        properties.getExportArtifactDays(),
+                        exportArtifactCutoff,
+                        countExpiredExportArtifacts(now),
+                        countActiveExportArtifacts(now),
+                        "审批记录长期保留；导出文件正文到期后清空，降低敏感数据滞留风险"
                 )
         );
     }
@@ -159,6 +169,26 @@ public class RetentionMaintenanceService {
                 """, cutoffAt);
     }
 
+    private long countExpiredExportArtifacts(LocalDateTime now) {
+        return count("""
+                select count(*)
+                from agentpilot_export_request
+                where status = 'APPROVED'
+                  and file_content is not null
+                  and expires_at < ?
+                """, now);
+    }
+
+    private long countActiveExportArtifacts(LocalDateTime now) {
+        return count("""
+                select count(*)
+                from agentpilot_export_request
+                where status = 'APPROVED'
+                  and file_content is not null
+                  and (expires_at is null or expires_at >= ?)
+                """, now);
+    }
+
     private long count(String sql, LocalDateTime cutoffAt) {
         Long value = jdbcTemplate.queryForObject(sql, Long.class, Timestamp.valueOf(cutoffAt));
         return value == null ? 0L : value;
@@ -175,8 +205,20 @@ public class RetentionMaintenanceService {
                     "delete from agent_outbox_event where status = 'PUBLISHED' and published_at < ?",
                     Timestamp.valueOf(cutoffAt)
             );
+            case "export-artifact" -> expireExportArtifacts(LocalDateTime.now());
             default -> 0;
         };
+    }
+
+    private long expireExportArtifacts(LocalDateTime now) {
+        return jdbcTemplate.update("""
+                update agentpilot_export_request
+                set status = 'EXPIRED',
+                    file_content = null
+                where status = 'APPROVED'
+                  and file_content is not null
+                  and expires_at < ?
+                """, Timestamp.valueOf(now));
     }
 
     private long deleteAgentWorkflow(LocalDateTime cutoffAt) {

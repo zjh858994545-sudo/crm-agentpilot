@@ -19,7 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         "agentpilot.retention.enabled=true",
         "agentpilot.retention.agent-audit-days=1",
         "agentpilot.retention.retrieval-log-days=1",
-        "agentpilot.retention.outbox-published-days=1"
+        "agentpilot.retention.outbox-published-days=1",
+        "agentpilot.retention.export-artifact-days=3"
 })
 @ActiveProfiles("test")
 @Transactional
@@ -70,6 +71,35 @@ class RetentionMaintenanceServiceTest {
                 .satisfies(category -> assertThat(category.protectedRows()).isGreaterThanOrEqualTo(1));
     }
 
+    @Test
+    void cleanupExpiresExportArtifactsWithoutDeletingApprovalRecord() {
+        LocalDateTime now = LocalDateTime.now();
+        jdbcTemplate.update("""
+                insert into agentpilot_export_request (
+                    id, tenant_id, requester_user_id, export_type, reason, status, approver_user_id,
+                    approval_comment, file_name, file_content, file_size_bytes, expires_at,
+                    download_count, requested_at, decided_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                991401L, "demo", 1L, "customers", "retention test", "APPROVED", 3L,
+                "approved", "customers.csv", "customer_name,mobile\n测试客户,139****0000\n", 43L,
+                Timestamp.valueOf(now.minusDays(1)), 0,
+                Timestamp.valueOf(now.minusDays(4)), Timestamp.valueOf(now.minusDays(4)));
+
+        RetentionCleanupResult result = retentionMaintenanceService.cleanup(false);
+
+        assertThat(result.categories())
+                .filteredOn(category -> category.key().equals("export-artifact"))
+                .singleElement()
+                .satisfies(category -> {
+                    assertThat(category.eligibleRows()).isEqualTo(1);
+                    assertThat(category.deletedRows()).isEqualTo(1);
+                });
+        assertThat(count("select count(*) from agentpilot_export_request where id = 991401")).isEqualTo(1);
+        assertThat(value("select status from agentpilot_export_request where id = 991401")).isEqualTo("EXPIRED");
+        assertThat(value("select file_content from agentpilot_export_request where id = 991401")).isNull();
+    }
+
     private void seedOldOperationalRows(long id, boolean pendingConfirmation) {
         LocalDateTime oldTime = LocalDateTime.now().minusDays(30);
         Timestamp oldTimestamp = Timestamp.valueOf(oldTime);
@@ -103,5 +133,9 @@ class RetentionMaintenanceServiceTest {
     private long count(String sql) {
         Long value = jdbcTemplate.queryForObject(sql, Long.class);
         return value == null ? 0L : value;
+    }
+
+    private String value(String sql) {
+        return jdbcTemplate.queryForObject(sql, String.class);
     }
 }

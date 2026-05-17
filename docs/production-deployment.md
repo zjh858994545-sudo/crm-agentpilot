@@ -115,6 +115,7 @@ CRM data contains business contact information and conversation details. Product
 - Contact log response text masks mobile numbers and email addresses.
 - Internal fields such as `tenantId` and write idempotency keys are not returned to sales pages.
 - Full raw records, if needed for compliance investigation, should be exported through a separate audited admin endpoint.
+- Approved export CSV artifacts have an expiry time. Retention cleanup keeps the approval record but clears expired CSV content so sensitive files do not remain in the database indefinitely.
 
 ## Release Steps
 
@@ -185,5 +186,6 @@ Minimum alerts:
 - Outbox pending/dead-letter growth.
 - Knowledge vectorized chunks lower than expected.
 - Retention eligible rows growing.
+- Expired export artifacts waiting for cleanup.
 - HTTP 401/403/429 spikes.
 - Model provider latency and error rate.

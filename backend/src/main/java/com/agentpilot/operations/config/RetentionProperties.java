@@ -10,6 +10,7 @@ public class RetentionProperties {
     private int agentAuditDays = 180;
     private int retrievalLogDays = 90;
     private int outboxPublishedDays = 30;
+    private int exportArtifactDays = 3;
     private int maxDeleteRowsPerRun = 10000;
 
     public boolean isEnabled() {
@@ -58,6 +59,14 @@ public class RetentionProperties {
 
     public void setOutboxPublishedDays(int outboxPublishedDays) {
         this.outboxPublishedDays = outboxPublishedDays;
+    }
+
+    public int getExportArtifactDays() {
+        return exportArtifactDays;
+    }
+
+    public void setExportArtifactDays(int exportArtifactDays) {
+        this.exportArtifactDays = exportArtifactDays;
     }
 
     public int getMaxDeleteRowsPerRun() {

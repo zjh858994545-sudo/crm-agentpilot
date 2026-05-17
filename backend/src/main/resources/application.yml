@@ -118,4 +118,5 @@ agentpilot:
     agent-audit-days: ${AGENTPILOT_RETENTION_AGENT_AUDIT_DAYS:180}
     retrieval-log-days: ${AGENTPILOT_RETENTION_RETRIEVAL_LOG_DAYS:90}
     outbox-published-days: ${AGENTPILOT_RETENTION_OUTBOX_PUBLISHED_DAYS:30}
+    export-artifact-days: ${AGENTPILOT_RETENTION_EXPORT_ARTIFACT_DAYS:3}
     max-delete-rows-per-run: ${AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN:10000}

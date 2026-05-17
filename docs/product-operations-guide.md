@@ -188,7 +188,8 @@ Agent run 和 tool call 是审计事件，使用同一张 outbox 表做 at-least
 - `REJECTED`：审批拒绝，不能下载。
 - `EXPIRED`：审批文件超过过期时间，不能下载。
 - 客户导出会对手机号脱敏，例如 `139****1001`。
-- 导出内容保存在审批记录中，适合 Demo 和私有化小规模场景；生产大文件建议迁移到对象存储，并在数据库只保存文件 key、水印、过期时间和下载审计。
+- 导出内容保存在审批记录中，适合 Demo 和私有化小规模场景；到期后保留审批记录但清空 CSV 正文，避免敏感数据长期滞留。
+- 生产大文件建议迁移到对象存储，并在数据库只保存文件 key、水印、过期时间和下载审计。
 
 ## 8.1 租户配置中心
 
@@ -290,6 +291,7 @@ AGENTPILOT_RETENTION_CLEANUP_CRON=0 30 3 * * *
 AGENTPILOT_RETENTION_AGENT_AUDIT_DAYS=180
 AGENTPILOT_RETENTION_RETRIEVAL_LOG_DAYS=90
 AGENTPILOT_RETENTION_OUTBOX_PUBLISHED_DAYS=30
+AGENTPILOT_RETENTION_EXPORT_ARTIFACT_DAYS=3
 AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN=10000
 ```
 
@@ -298,6 +300,7 @@ AGENTPILOT_RETENTION_MAX_DELETE_ROWS_PER_RUN=10000
 - Agent 运行审计：只清理已完成或失败的历史 run、tool call、confirmation；存在 `PENDING` 或 `PROCESSING` 确认单的 run 会被保护。
 - 知识检索日志：只清理 `crm_retrieval_log` 历史查询日志，不删除知识库文档和分块。
 - Outbox：只清理已发布的 `PUBLISHED` 事件；`PENDING`、`FAILED`、`DISPATCHING`、`DEAD_LETTER` 会被保护。
+- 导出文件正文：审批记录保留，`APPROVED` 且已过 `expires_at` 的 CSV 正文会被清空并标记为 `EXPIRED`。
 
 上线建议：
 
