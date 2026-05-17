@@ -44,11 +44,12 @@ public class RbacPrincipalService {
         try {
             AgentPilotPrincipal principal = jdbcTemplate.queryForObject(
                     """
-                            SELECT id, tenant_id, sales_rep_id
-                            FROM agentpilot_user
-                            WHERE api_token_sha256 = ?
-                              AND status = 'ACTIVE'
-                              AND (? = TRUE OR username NOT IN ('linxiaofeng', 'zhouyuqing', 'admin', 'chenming'))
+                            SELECT u.id AS id, u.tenant_id AS tenant_id, u.sales_rep_id AS sales_rep_id
+                            FROM agentpilot_user u
+                            JOIN agentpilot_tenant t ON t.id = u.tenant_id AND t.status = 'ACTIVE'
+                            WHERE u.api_token_sha256 = ?
+                              AND u.status = 'ACTIVE'
+                              AND (? = TRUE OR u.username NOT IN ('linxiaofeng', 'zhouyuqing', 'admin', 'chenming'))
                             """,
                     (rs, rowNum) -> {
                         Long userId = rs.getLong("id");
@@ -80,7 +81,12 @@ public class RbacPrincipalService {
 
     public long activeUserCount() {
         return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM agentpilot_user WHERE status = 'ACTIVE'",
+                """
+                        SELECT COUNT(*)
+                        FROM agentpilot_user u
+                        JOIN agentpilot_tenant t ON t.id = u.tenant_id AND t.status = 'ACTIVE'
+                        WHERE u.status = 'ACTIVE'
+                        """,
                 Long.class
         );
     }
@@ -120,9 +126,17 @@ public class RbacPrincipalService {
         try {
             UserProfile profile = jdbcTemplate.queryForObject(
                     """
-                            SELECT id, tenant_id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
-                            FROM agentpilot_user
-                            WHERE id = ?
+                            SELECT u.id AS id,
+                                   u.tenant_id AS tenant_id,
+                                   u.username AS username,
+                                   u.display_name AS display_name,
+                                   u.sales_rep_id AS sales_rep_id,
+                                   u.status AS status,
+                                   u.last_authenticated_at AS last_authenticated_at,
+                                   u.last_authenticated_ip AS last_authenticated_ip
+                            FROM agentpilot_user u
+                            JOIN agentpilot_tenant t ON t.id = u.tenant_id AND t.status = 'ACTIVE'
+                            WHERE u.id = ?
                             """,
                     (rs, rowNum) -> {
                         Long id = rs.getLong("id");
@@ -153,13 +167,22 @@ public class RbacPrincipalService {
 
     public List<UserProfile> listProfiles(String tenantId) {
         Object[] args = tenantId == null || tenantId.isBlank() ? new Object[]{} : new Object[]{tenantId};
-        String whereClause = tenantId == null || tenantId.isBlank() ? "" : "WHERE tenant_id = ?\n";
+        String whereClause = tenantId == null || tenantId.isBlank() ? "" : "AND u.tenant_id = ?\n";
         return jdbcTemplate.query(
                 ("""
-                        SELECT id, tenant_id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
-                        FROM agentpilot_user
+                        SELECT u.id AS id,
+                               u.tenant_id AS tenant_id,
+                               u.username AS username,
+                               u.display_name AS display_name,
+                               u.sales_rep_id AS sales_rep_id,
+                               u.status AS status,
+                               u.last_authenticated_at AS last_authenticated_at,
+                               u.last_authenticated_ip AS last_authenticated_ip
+                        FROM agentpilot_user u
+                        JOIN agentpilot_tenant t ON t.id = u.tenant_id AND t.status = 'ACTIVE'
+                        WHERE 1 = 1
                         %s
-                        ORDER BY tenant_id, id
+                        ORDER BY u.tenant_id, u.id
                         """).formatted(whereClause),
                 (rs, rowNum) -> {
                     Long id = rs.getLong("id");

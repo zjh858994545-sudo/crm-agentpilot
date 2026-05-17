@@ -88,6 +88,32 @@ class SecurityStrictModeTest {
     }
 
     @Test
+    void strictModeRejectsRbacUserFromDisabledTenant() throws Exception {
+        jdbcTemplate.update("""
+                        INSERT INTO agentpilot_tenant (id, name, status, plan_code)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                "tenant-disabled", "Disabled tenant", "DISABLED", "enterprise");
+        jdbcTemplate.update("""
+                        INSERT INTO agentpilot_user
+                        (id, tenant_id, username, display_name, api_token_sha256, sales_rep_id, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                99011L,
+                "tenant-disabled",
+                "disabledtenantuser",
+                "Disabled Tenant User",
+                "3501f66970122c1167074802c6e315f4ef13effb280c5c583533f8de4a01ecd1",
+                1L,
+                "ACTIVE");
+        jdbcTemplate.update("INSERT INTO agentpilot_user_role (user_id, role_id) VALUES (?, ?)", 99011L, 1L);
+
+        mockMvc.perform(get("/api/customers")
+                        .header("X-AgentPilot-Token", "disabled-tenant-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void strictModeCanAuthenticateSalesManagerRole() throws Exception {
         mockMvc.perform(get("/api/dashboard/metrics")
                         .header("X-AgentPilot-Token", "agentpilot-manager"))
