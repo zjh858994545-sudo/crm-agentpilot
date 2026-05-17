@@ -80,11 +80,7 @@ public class CustomerController {
     }
 
     private Long scopedSalesRepId(Long requestedSalesRepId) {
-        Long currentSalesRepId = CurrentUser.salesRepId();
-        if (requestedSalesRepId != null && !requestedSalesRepId.equals(currentSalesRepId)) {
-            throw new AccessDeniedException("salesRepId is outside current data scope");
-        }
-        return currentSalesRepId;
+        return CurrentUser.scopedSalesRepId(requestedSalesRepId);
     }
 
     private LambdaQueryWrapper<Customer> customerQuery(Long salesRepId, String keyword) {
@@ -110,7 +106,7 @@ public class CustomerController {
     private void requireCustomerVisible(Customer customer) {
         if (customer == null
                 || !CurrentUser.tenantId().equals(customer.getTenantId())
-                || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
+                || !CurrentUser.canAccessSalesRep(customer.getOwnerSalesRepId())) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
     }

@@ -138,6 +138,7 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
                 properties.getDemoUserId(),
                 properties.getDemoTenantId(),
                 properties.getDemoSalesRepId(),
+                List.of("sales"),
                 List.copyOf(properties.getPermissions())
         ));
     }

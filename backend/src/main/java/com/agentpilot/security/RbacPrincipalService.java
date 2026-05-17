@@ -54,6 +54,7 @@ public class RbacPrincipalService {
                         Long userId = rs.getLong("id");
                         String tenantId = rs.getString("tenant_id");
                         Long salesRepId = rs.getLong("sales_rep_id");
+                        List<String> roles = roleCodes(userId);
                         List<String> permissions = jdbcTemplate.queryForList(
                                 """
                                         SELECT DISTINCT p.code
@@ -66,7 +67,7 @@ public class RbacPrincipalService {
                                 String.class,
                                 userId
                         );
-                        return new AgentPilotPrincipal(userId, tenantId, salesRepId, permissions);
+                        return new AgentPilotPrincipal(userId, tenantId, salesRepId, roles, permissions);
                     },
                     tokenHash,
                     securityProperties.isSeedUsersEnabled()

@@ -55,17 +55,13 @@ public class LeadController {
     }
 
     private Long scopedSalesRepId(Long requestedSalesRepId) {
-        Long currentSalesRepId = CurrentUser.salesRepId();
-        if (requestedSalesRepId != null && !requestedSalesRepId.equals(currentSalesRepId)) {
-            throw new AccessDeniedException("salesRepId is outside current data scope");
-        }
-        return currentSalesRepId;
+        return CurrentUser.scopedSalesRepId(requestedSalesRepId);
     }
 
     private void requireLeadVisible(Lead lead) {
         if (lead == null
                 || !CurrentUser.tenantId().equals(lead.getTenantId())
-                || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
+                || !CurrentUser.canAccessSalesRep(lead.getSalesRepId())) {
             throw new AccessDeniedException("lead is outside current data scope");
         }
     }

@@ -5,7 +5,6 @@ import com.agentpilot.crm.entity.CrmTask;
 import com.agentpilot.crm.service.CrmTaskService;
 import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,10 +34,6 @@ public class TaskController {
     }
 
     private Long scopedSalesRepId(Long requestedSalesRepId) {
-        Long currentSalesRepId = CurrentUser.salesRepId();
-        if (requestedSalesRepId != null && !requestedSalesRepId.equals(currentSalesRepId)) {
-            throw new AccessDeniedException("salesRepId is outside current data scope");
-        }
-        return currentSalesRepId;
+        return CurrentUser.scopedSalesRepId(requestedSalesRepId);
     }
 }

@@ -83,6 +83,22 @@ class SecurityStrictModeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.salesRepId", is(1)));
+
+        mockMvc.perform(get("/api/customers").param("salesRepId", "2")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data[0].ownerSalesRepId", is(2)));
+
+        mockMvc.perform(get("/api/customers/1002")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ownerSalesRepId", is(2)));
+
+        mockMvc.perform(get("/api/leads/3002")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.salesRepId", is(2)));
     }
 
     @Test

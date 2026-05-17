@@ -32,16 +32,19 @@ public class AuthController {
                         profile.permissions(),
                         primaryRole(profile.roles())
                 ))
-                .orElseGet(() -> new AuthProfileView(
-                        principal.userId(),
-                        principal.tenantId(),
-                        "local-principal",
-                        "本地配置用户",
-                        principal.salesRepId(),
-                        List.of("local"),
-                        principal.permissions(),
-                        "admin"
-                )));
+                .orElseGet(() -> {
+                    List<String> roles = principal.roles().isEmpty() ? List.of("external") : principal.roles();
+                    return new AuthProfileView(
+                            principal.userId(),
+                            principal.tenantId(),
+                            "external-principal",
+                            "Enterprise SSO User",
+                            principal.salesRepId(),
+                            roles,
+                            principal.permissions(),
+                            primaryRole(roles)
+                    );
+                }));
     }
 
     private String primaryRole(List<String> roles) {

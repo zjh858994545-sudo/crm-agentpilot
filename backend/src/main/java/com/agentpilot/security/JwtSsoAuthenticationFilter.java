@@ -95,9 +95,16 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
             Long userId = requireLong(jwt, properties.getUserIdClaim(), "user id");
             String tenantId = requireString(jwt, properties.getTenantClaim(), "tenant id");
             Long salesRepId = requireLong(jwt, properties.getSalesRepClaim(), "sales rep id");
-            List<String> permissions = resolvePermissions(jwt);
+            List<String> roles = claimAsStrings(jwt, properties.getRolesClaim());
+            List<String> permissions = resolvePermissions(jwt, roles);
 
-            AgentPilotPrincipal principal = new AgentPilotPrincipal(userId, tenantId, salesRepId, permissions);
+            AgentPilotPrincipal principal = new AgentPilotPrincipal(
+                    userId,
+                    tenantId,
+                    salesRepId,
+                    roles.isEmpty() ? List.of("external") : roles,
+                    permissions
+            );
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     principal,
                     null,
@@ -153,11 +160,10 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
         throw new IllegalArgumentException("JWT " + label + " claim is required");
     }
 
-    private List<String> resolvePermissions(Jwt jwt) {
+    private List<String> resolvePermissions(Jwt jwt, List<String> roles) {
         List<String> directPermissions = claimAsStrings(jwt, properties.getPermissionsClaim());
         Set<String> permissions = new LinkedHashSet<>(directPermissions);
         if (permissions.isEmpty()) {
-            List<String> roles = claimAsStrings(jwt, properties.getRolesClaim());
             if (roles.isEmpty()) {
                 throw new IllegalArgumentException("JWT must include roles or permissions");
             }

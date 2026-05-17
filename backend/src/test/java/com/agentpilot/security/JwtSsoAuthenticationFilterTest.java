@@ -56,6 +56,7 @@ class JwtSsoAuthenticationFilterTest {
         assertThat(principal.userId()).isEqualTo(42L);
         assertThat(principal.tenantId()).isEqualTo("tenant-alpha");
         assertThat(principal.salesRepId()).isEqualTo(7L);
+        assertThat(principal.roles()).containsExactly("sales_manager");
         assertThat(principal.permissions()).contains("agent:use", "crm:read", "crm:write", "evaluation:run");
     }
 
