@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -44,6 +45,9 @@ class AgentOrchestratorTest {
 
     @Autowired
     private OutboxEventService outboxEventService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void toolRegistrySeparatesReadAndWriteTools() {
@@ -211,5 +215,59 @@ class AgentOrchestratorTest {
                         .content("{\"userId\":null}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")));
+    }
+
+    @Test
+    void failedWriteActionIsAuditedAsFailedInsteadOfConfirmed() throws Exception {
+        long sessionId = 991901L;
+        long runId = 991902L;
+        long toolCallId = 991903L;
+        long confirmationId = 991904L;
+        jdbcTemplate.update("""
+                        INSERT INTO crm_agent_session (id, tenant_id, user_id, sales_rep_id, title, status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                sessionId, "demo", 1L, 1L, "failed action test", "ACTIVE");
+        jdbcTemplate.update("""
+                        INSERT INTO crm_agent_run (id, tenant_id, session_id, user_id, sales_rep_id, user_input, status, model_name)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                runId, "demo", sessionId, 1L, 1L, "failed action test", "NEED_CONFIRMATION", "mock-router");
+        jdbcTemplate.update("""
+                        INSERT INTO crm_agent_tool_call
+                        (id, run_id, tool_name, tool_type, input_json, output_json, status, latency_ms, requires_confirmation, confirmation_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                toolCallId, runId, "updateLeadStage", "WRITE", "{}", "{}", "NEED_CONFIRMATION", 0L, true, confirmationId);
+        jdbcTemplate.update("""
+                        INSERT INTO crm_agent_confirmation
+                        (id, run_id, tool_call_id, action_type, action_summary, payload_json, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                confirmationId,
+                runId,
+                toolCallId,
+                "UPDATE_LEAD_STAGE",
+                "invalid lead stage update",
+                "{\"tenantId\":\"demo\",\"leadId\":999999,\"salesRepId\":1,\"stage\":\"NEGOTIATING\",\"reason\":\"test\"}",
+                "PENDING");
+
+        mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status", is("FAILED")))
+                .andExpect(jsonPath("$.data.actionStatus", is("NOT_FOUND")));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM crm_agent_confirmation WHERE id = ?",
+                String.class,
+                confirmationId
+        )).isEqualTo("FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM crm_agent_tool_call WHERE id = ?",
+                String.class,
+                toolCallId
+        )).isEqualTo("FAILED");
     }
 }

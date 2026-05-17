@@ -188,6 +188,28 @@ public class AgentOrchestrator {
         confirmation = confirmationService.getById(confirmationId);
 
         Object result = executeConfirmedAction(confirmation);
+        Optional<String> failureStatus = actionFailureStatus(result);
+        if (failureStatus.isPresent()) {
+            confirmation.setStatus("FAILED");
+            confirmation.setConfirmedBy(userId);
+            confirmation.setConfirmedAt(LocalDateTime.now());
+            confirmationService.updateById(confirmation);
+
+            AgentToolCall toolCall = toolCallService.getById(confirmation.getToolCallId());
+            if (toolCall != null) {
+                toolCall.setStatus("FAILED");
+                toolCall.setOutputJson(toJson(result));
+                toolCall.setErrorMessage(failureStatus.get());
+                toolCall.setCompletedAt(LocalDateTime.now());
+                toolCallService.updateById(toolCall);
+            }
+            return Map.of(
+                    "status", "FAILED",
+                    "actionStatus", failureStatus.get(),
+                    "confirmationId", confirmationId,
+                    "result", result
+            );
+        }
         if (result instanceof CrmTask task) {
             eventPublisher.publishCrmTaskCreated(task);
         }
@@ -204,6 +226,19 @@ public class AgentOrchestrator {
             toolCallService.updateById(toolCall);
         }
         return Map.of("status", "CONFIRMED", "confirmationId", confirmationId, "result", result);
+    }
+
+    private Optional<String> actionFailureStatus(Object result) {
+        if (result == null) {
+            return Optional.of("NULL_RESULT");
+        }
+        if (result instanceof Map<?, ?> map && map.containsKey("status")) {
+            String status = String.valueOf(map.get("status"));
+            if (!Set.of("OK", "SUCCESS", "CONFIRMED").contains(status)) {
+                return Optional.of(status);
+            }
+        }
+        return Optional.empty();
     }
 
     @Transactional
