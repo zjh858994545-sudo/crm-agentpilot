@@ -9,6 +9,30 @@ export interface ApiResponse<T> {
   traceId?: string;
 }
 
+export class AgentPilotApiError extends Error {
+  status?: number;
+  code?: string;
+  traceId?: string;
+
+  constructor(message: string, options: { status?: number; code?: string; traceId?: string } = {}) {
+    super(message);
+    this.name = 'AgentPilotApiError';
+    this.status = options.status;
+    this.code = options.code;
+    this.traceId = options.traceId;
+  }
+}
+
+export function describeApiError(error: unknown) {
+  if (error instanceof AgentPilotApiError) {
+    return error.traceId ? `${error.message}（Trace: ${error.traceId}）` : error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return '系统暂时无法完成请求，请稍后重试。';
+}
+
 export interface PageResponse<T> {
   items: T[];
   total: number;
@@ -113,6 +137,7 @@ export interface SecurityStatus {
 
 export interface AuthProfile {
   userId: number;
+  tenantId: string;
   username: string;
   displayName: string;
   salesRepId: number;
@@ -123,6 +148,7 @@ export interface AuthProfile {
 
 export interface SecurityUser {
   userId: number;
+  tenantId: string;
   username: string;
   displayName: string;
   salesRepId: number;
@@ -522,6 +548,7 @@ export const apiClient = axios.create({
 
 interface StoredWorkspaceUser {
   userId?: number;
+  tenantId?: string;
   salesRepId?: number;
   displayName?: string;
   primaryRole?: AuthProfile['primaryRole'];
@@ -552,6 +579,31 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError<ApiResponse<unknown>>(error)) {
+      const body = error.response?.data;
+      const status = error.response?.status;
+      const code = body?.code;
+      const traceId = body?.traceId || error.response?.headers?.['x-trace-id'];
+      const message =
+        body?.message ||
+        (status === 401
+          ? '登录已失效或 Token 不正确，请重新登录。'
+          : status === 403
+            ? '当前账号没有执行该操作的权限。'
+            : status === 429
+              ? '请求过于频繁，请稍后再试。'
+              : status && status >= 500
+                ? '服务端暂时异常，请联系管理员并提供 Trace ID。'
+                : '网络请求失败，请检查服务是否已启动。');
+      return Promise.reject(new AgentPilotApiError(message, { status, code, traceId }));
+    }
+    return Promise.reject(error);
+  }
+);
 
 export async function fetchHealth() {
   const response = await apiClient.get<ApiResponse<HealthView>>('/health');

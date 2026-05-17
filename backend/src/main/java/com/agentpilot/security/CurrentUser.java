@@ -20,6 +20,10 @@ public final class CurrentUser {
         return require().userId();
     }
 
+    public static String tenantId() {
+        return require().tenantId();
+    }
+
     public static Long salesRepId() {
         return require().salesRepId();
     }

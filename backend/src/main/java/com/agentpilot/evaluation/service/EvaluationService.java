@@ -69,6 +69,7 @@ public class EvaluationService {
             AgentChatResponse response = orchestrator.chat(new AgentChatRequest(
                     null,
                     1L,
+                    "demo",
                     1L,
                     null,
                     testCase.get("input").asText()

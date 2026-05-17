@@ -86,14 +86,18 @@ public class CallCenterController {
 
     private void requireCustomerVisible(Long customerId) {
         Customer customer = customerService.getById(customerId);
-        if (customer == null || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
+        if (customer == null
+                || !CurrentUser.tenantId().equals(customer.getTenantId())
+                || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
     }
 
     private void requireLeadVisible(Long leadId) {
         Lead lead = leadService.getById(leadId);
-        if (lead == null || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
+        if (lead == null
+                || !CurrentUser.tenantId().equals(lead.getTenantId())
+                || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
             throw new AccessDeniedException("lead is outside current data scope");
         }
     }

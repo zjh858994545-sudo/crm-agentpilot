@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,6 +23,9 @@ class CrmCoreControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void customersCanBeListedAndFetched() throws Exception {
@@ -110,5 +114,26 @@ class CrmCoreControllerTest {
                 .andExpect(jsonPath("$.data.leadTrend[0].date", matchesPattern("\\d{4}-\\d{2}-\\d{2}|unknown")))
                 .andExpect(jsonPath("$.data.riskHeatmap.industries", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.data.riskHeatmap.cells", hasSize(greaterThanOrEqualTo(1))));
+    }
+
+    @Test
+    void tenantScopedCustomerQueriesDoNotLeakSameSalesRepFromOtherTenant() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO crm_customer (
+                    id, tenant_id, name, industry, city, address, contact_name, contact_mobile,
+                    lifecycle_stage, value_level, risk_level, owner_sales_rep_id, tags, remark
+                ) VALUES (
+                    9901, 'other-tenant', 'Other Tenant Customer', '餐饮', '北京', 'other',
+                    'Other Contact', '13999999999', 'ACTIVE', 'A', 'HIGH', 1, '续费', 'cross tenant test'
+                )
+                """);
+
+        mockMvc.perform(get("/api/customers/9901"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/customers/page")
+                        .param("keyword", "Other Tenant Customer"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total", is(0)));
     }
 }

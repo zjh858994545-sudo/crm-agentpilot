@@ -40,6 +40,7 @@ public class SecurityController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("mode", properties.getMode());
         body.put("strict", properties.strict());
+        body.put("demoTenantId", properties.getDemoTenantId());
         body.put("demoUserId", properties.getDemoUserId());
         body.put("demoSalesRepId", properties.getDemoSalesRepId());
         body.put("permissionCount", properties.getPermissions().size());

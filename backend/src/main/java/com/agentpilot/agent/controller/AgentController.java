@@ -68,6 +68,7 @@ public class AgentController {
     @PostMapping("/chat")
     public ApiResponse<AgentChatResponse> chat(@Valid @RequestBody AgentChatRequest request) {
         Long currentUserId = CurrentUser.userId();
+        String currentTenantId = CurrentUser.tenantId();
         Long currentSalesRepId = CurrentUser.salesRepId();
         if (!Objects.equals(request.userId(), currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
@@ -81,6 +82,7 @@ public class AgentController {
         AgentChatRequest securedRequest = new AgentChatRequest(
                 request.sessionId(),
                 currentUserId,
+                currentTenantId,
                 currentSalesRepId,
                 request.customerId(),
                 request.message()
@@ -98,7 +100,7 @@ public class AgentController {
         if (!request.userId().equals(currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        return ApiResponse.ok(orchestrator.confirm(id, currentUserId, CurrentUser.salesRepId()));
+        return ApiResponse.ok(orchestrator.confirm(id, currentUserId, CurrentUser.tenantId(), CurrentUser.salesRepId()));
     }
 
     @PostMapping("/confirmations/{id}/reject")
@@ -111,7 +113,7 @@ public class AgentController {
         if (!request.userId().equals(currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        return ApiResponse.ok(orchestrator.reject(id, currentUserId, CurrentUser.salesRepId()));
+        return ApiResponse.ok(orchestrator.reject(id, currentUserId, CurrentUser.tenantId(), CurrentUser.salesRepId()));
     }
 
     @GetMapping("/confirmations")
@@ -163,6 +165,7 @@ public class AgentController {
     @GetMapping("/runs")
     public ApiResponse<List<AgentRun>> runs() {
         return ApiResponse.ok(runService.list(new LambdaQueryWrapper<AgentRun>()
+                .eq(AgentRun::getTenantId, CurrentUser.tenantId())
                 .eq(AgentRun::getUserId, CurrentUser.userId())
                 .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId())
                 .orderByDesc(AgentRun::getId)));
@@ -200,9 +203,10 @@ public class AgentController {
 
     private List<Long> visibleRunIds() {
         return runService.list(new LambdaQueryWrapper<AgentRun>()
-                        .select(AgentRun::getId)
-                        .eq(AgentRun::getUserId, CurrentUser.userId())
-                        .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId()))
+                .select(AgentRun::getId)
+                .eq(AgentRun::getTenantId, CurrentUser.tenantId())
+                .eq(AgentRun::getUserId, CurrentUser.userId())
+                .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId()))
                 .stream()
                 .map(AgentRun::getId)
                 .toList();
@@ -210,8 +214,10 @@ public class AgentController {
 
     private LambdaQueryWrapper<AgentConfirmation> confirmationQuery(String status, String keyword) {
         Long userId = CurrentUser.userId();
+        String tenantId = CurrentUser.tenantId().replace("'", "''");
         Long salesRepId = CurrentUser.salesRepId();
-        String visibleRunSql = "select id from crm_agent_run where user_id = " + userId + " and sales_rep_id = " + salesRepId;
+        String visibleRunSql = "select id from crm_agent_run where tenant_id = '" + tenantId
+                + "' and user_id = " + userId + " and sales_rep_id = " + salesRepId;
         LambdaQueryWrapper<AgentConfirmation> wrapper = new LambdaQueryWrapper<AgentConfirmation>()
                 .inSql(AgentConfirmation::getRunId, visibleRunSql);
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
@@ -231,6 +237,7 @@ public class AgentController {
 
     private LambdaQueryWrapper<AgentRun> runQuery(String status, String keyword) {
         LambdaQueryWrapper<AgentRun> wrapper = new LambdaQueryWrapper<AgentRun>()
+                .eq(AgentRun::getTenantId, CurrentUser.tenantId())
                 .eq(AgentRun::getUserId, CurrentUser.userId())
                 .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId());
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
@@ -251,6 +258,7 @@ public class AgentController {
     private void requireRunVisible(Long runId) {
         AgentRun run = runService.getById(runId);
         if (run == null
+                || !Objects.equals(run.getTenantId(), CurrentUser.tenantId())
                 || !Objects.equals(run.getUserId(), CurrentUser.userId())
                 || !Objects.equals(run.getSalesRepId(), CurrentUser.salesRepId())) {
             throw new AccessDeniedException("run is outside current data scope");
@@ -259,7 +267,9 @@ public class AgentController {
 
     private void requireCustomerVisible(Long customerId, Long currentSalesRepId) {
         Customer customer = customerService.getById(customerId);
-        if (customer == null || !Objects.equals(customer.getOwnerSalesRepId(), currentSalesRepId)) {
+        if (customer == null
+                || !Objects.equals(customer.getTenantId(), CurrentUser.tenantId())
+                || !Objects.equals(customer.getOwnerSalesRepId(), currentSalesRepId)) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
     }

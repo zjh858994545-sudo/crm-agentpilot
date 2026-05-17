@@ -12,9 +12,27 @@ import java.util.List;
 public class ContactLogService extends ServiceImpl<ContactLogMapper, ContactLog> {
 
     public List<ContactLog> listByCustomerId(Long customerId) {
-        return list(new LambdaQueryWrapper<ContactLog>()
-                .eq(ContactLog::getCustomerId, customerId)
-                .orderByDesc(ContactLog::getContactAt));
+        return listByCustomerId(customerId, null);
+    }
+
+    public List<ContactLog> listByCustomerId(Long customerId, String tenantId) {
+        LambdaQueryWrapper<ContactLog> wrapper = new LambdaQueryWrapper<ContactLog>()
+                .eq(ContactLog::getCustomerId, customerId);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(ContactLog::getTenantId, tenantId);
+        }
+        return list(wrapper.orderByDesc(ContactLog::getContactAt));
+    }
+
+    public List<ContactLog> listByCustomerIds(List<Long> customerIds, String tenantId) {
+        if (customerIds == null || customerIds.isEmpty()) {
+            return List.of();
+        }
+        LambdaQueryWrapper<ContactLog> wrapper = new LambdaQueryWrapper<ContactLog>()
+                .in(ContactLog::getCustomerId, customerIds);
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(ContactLog::getTenantId, tenantId);
+        }
+        return list(wrapper.orderByDesc(ContactLog::getContactAt));
     }
 }
-

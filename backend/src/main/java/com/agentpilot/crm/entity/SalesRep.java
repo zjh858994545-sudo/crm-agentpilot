@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class SalesRep {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String tenantId;
     private String name;
     private String mobile;
     private String teamName;
@@ -23,6 +24,14 @@ public class SalesRep {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getName() {
@@ -73,4 +82,3 @@ public class SalesRep {
         this.updatedAt = updatedAt;
     }
 }
-

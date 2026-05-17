@@ -28,6 +28,7 @@ public class TaskController {
     public ApiResponse<List<CrmTask>> list(@RequestParam(required = false) Long salesRepId) {
         Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<CrmTask> wrapper = new LambdaQueryWrapper<CrmTask>()
+                .eq(CrmTask::getTenantId, CurrentUser.tenantId())
                 .eq(CrmTask::getSalesRepId, scopedSalesRepId)
                 .orderByAsc(CrmTask::getDueTime);
         return ApiResponse.ok(taskService.list(wrapper));

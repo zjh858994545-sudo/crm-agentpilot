@@ -11,10 +11,14 @@ import java.util.Optional;
 @Service
 public class CustomerService extends ServiceImpl<CustomerMapper, Customer> {
     public Optional<Customer> findMentionedIn(String message) {
-        return findMentionedIn(message, null);
+        return findMentionedIn(message, null, null);
     }
 
     public Optional<Customer> findMentionedIn(String message, Long salesRepId) {
+        return findMentionedIn(message, null, salesRepId);
+    }
+
+    public Optional<Customer> findMentionedIn(String message, String tenantId, Long salesRepId) {
         if (message == null || message.isBlank()) {
             return Optional.empty();
         }
@@ -22,6 +26,9 @@ public class CustomerService extends ServiceImpl<CustomerMapper, Customer> {
                 .apply("{0} LIKE CONCAT('%', name, '%')", message)
                 .orderByAsc(Customer::getId)
                 .last("limit 1");
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(Customer::getTenantId, tenantId);
+        }
         if (salesRepId != null) {
             wrapper.eq(Customer::getOwnerSalesRepId, salesRepId);
         }

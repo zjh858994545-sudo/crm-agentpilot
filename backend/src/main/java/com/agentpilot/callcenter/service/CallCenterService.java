@@ -92,12 +92,14 @@ public class CallCenterService {
     public ContactLogConfirmationResponse proposeContactLog(CallTextRequest request) {
         CallSummaryResponse summary = summarize(request);
         Long currentUserId = CurrentUser.userId();
+        String tenantId = CurrentUser.tenantId();
         LocalDateTime contactAt = LocalDateTime.now();
         String idempotencyKey = "agent-contact-log-" + request.customerId() + "-"
                 + contactAt.toLocalDate() + "-"
                 + Integer.toHexString(Objects.hash(request.customerId(), request.leadId(), request.text(), contactAt.toLocalDate()));
 
         AgentSession session = new AgentSession();
+        session.setTenantId(tenantId);
         session.setUserId(currentUserId);
         session.setSalesRepId(request.salesRepId() == null ? 1L : request.salesRepId());
         session.setCustomerId(request.customerId());
@@ -106,6 +108,7 @@ public class CallCenterService {
         sessionService.save(session);
 
         AgentRun run = new AgentRun();
+        run.setTenantId(tenantId);
         run.setSessionId(session.getId());
         run.setUserId(currentUserId);
         run.setSalesRepId(session.getSalesRepId());
@@ -119,6 +122,7 @@ public class CallCenterService {
         runService.save(run);
 
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenantId", tenantId);
         payload.put("customerId", request.customerId());
         payload.put("salesRepId", session.getSalesRepId());
         payload.put("leadId", request.leadId());

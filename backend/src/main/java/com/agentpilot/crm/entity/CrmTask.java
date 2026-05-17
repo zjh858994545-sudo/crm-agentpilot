@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class CrmTask {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String tenantId;
     private Long customerId;
     private Long leadId;
     private Long salesRepId;
@@ -29,6 +30,14 @@ public class CrmTask {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public Long getCustomerId() {
@@ -127,4 +136,3 @@ public class CrmTask {
         this.updatedAt = updatedAt;
     }
 }
-

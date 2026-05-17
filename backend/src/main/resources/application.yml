@@ -69,6 +69,7 @@ agentpilot:
   security:
     mode: ${AGENTPILOT_SECURITY_MODE:permissive}
     api-token: ${AGENTPILOT_API_TOKEN:}
+    demo-tenant-id: ${AGENTPILOT_DEMO_TENANT_ID:demo}
     demo-user-id: ${AGENTPILOT_DEMO_USER_ID:1}
     demo-sales-rep-id: ${AGENTPILOT_DEMO_SALES_REP_ID:1}
     seed-users-enabled: ${AGENTPILOT_SEED_USERS_ENABLED:true}

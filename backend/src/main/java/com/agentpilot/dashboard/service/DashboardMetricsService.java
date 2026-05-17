@@ -29,13 +29,15 @@ public class DashboardMetricsService {
     private static final String HIGH_RISK_CUSTOMER_COUNT_SQL = """
             SELECT COUNT(*)
             FROM crm_customer
-            WHERE owner_sales_rep_id = ?
+            WHERE tenant_id = ?
+              AND owner_sales_rep_id = ?
               AND UPPER(COALESCE(risk_level, '')) = 'HIGH'
             """;
     private static final String RENEWAL_CUSTOMER_COUNT_SQL = """
             SELECT COUNT(*)
             FROM crm_customer
-            WHERE owner_sales_rep_id = ?
+            WHERE tenant_id = ?
+              AND owner_sales_rep_id = ?
               AND (
                   COALESCE(lifecycle_stage, '') LIKE ?
                   OR COALESCE(tags, '') LIKE ?
@@ -44,7 +46,8 @@ public class DashboardMetricsService {
     private static final String DUE_TASK_COUNT_SQL = """
             SELECT COUNT(*)
             FROM crm_task
-            WHERE sales_rep_id = ?
+            WHERE tenant_id = ?
+              AND sales_rep_id = ?
               AND UPPER(COALESCE(status, '')) IN ('TODO', 'PENDING', 'OPEN')
               AND due_time IS NOT NULL
               AND due_time <= ?
@@ -57,6 +60,7 @@ public class DashboardMetricsService {
                   SELECT 1
                   FROM crm_agent_run agent_run
                   WHERE agent_run.id = confirmation.run_id
+                    AND agent_run.tenant_id = ?
                     AND agent_run.sales_rep_id = ?
                     AND agent_run.user_id = ?
               )
@@ -71,7 +75,8 @@ public class DashboardMetricsService {
                 END AS risk_level,
                 COUNT(*) AS count_value
             FROM crm_customer
-            WHERE owner_sales_rep_id = ?
+            WHERE tenant_id = ?
+              AND owner_sales_rep_id = ?
             GROUP BY
                 COALESCE(NULLIF(industry, ''), 'Other'),
                 CASE
@@ -92,21 +97,22 @@ public class DashboardMetricsService {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public DashboardMetrics metrics(Long salesRepId, Long userId) {
-        List<LeadRecommendation> recommendations = leadScoringService.recommend(salesRepId, 20);
+    public DashboardMetrics metrics(String tenantId, Long salesRepId, Long userId) {
+        List<LeadRecommendation> recommendations = leadScoringService.recommend(tenantId, salesRepId, 20);
 
-        DashboardSummary summary = summary(recommendations, salesRepId, userId);
+        DashboardSummary summary = summary(recommendations, tenantId, salesRepId, userId);
         return new DashboardMetrics(
                 salesRepId,
                 OffsetDateTime.now(),
                 summary,
                 leadTrend(recommendations),
-                riskHeatmap(salesRepId)
+                riskHeatmap(tenantId, salesRepId)
         );
     }
 
     private DashboardSummary summary(
             List<LeadRecommendation> recommendations,
+            String tenantId,
             Long salesRepId,
             Long userId
     ) {
@@ -117,10 +123,10 @@ public class DashboardMetricsService {
                 .map(LeadRecommendation::estimatedAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int riskCustomerCount = intCount(HIGH_RISK_CUSTOMER_COUNT_SQL, salesRepId);
-        int dueTaskCount = intCount(DUE_TASK_COUNT_SQL, salesRepId, LocalDateTime.now().plusHours(48));
-        int renewalCustomerCount = intCount(RENEWAL_CUSTOMER_COUNT_SQL, salesRepId, "%续费%", "%续费%");
-        int pendingConfirmationCount = pendingConfirmationCount(salesRepId, userId);
+        int riskCustomerCount = intCount(HIGH_RISK_CUSTOMER_COUNT_SQL, tenantId, salesRepId);
+        int dueTaskCount = intCount(DUE_TASK_COUNT_SQL, tenantId, salesRepId, LocalDateTime.now().plusHours(48));
+        int renewalCustomerCount = intCount(RENEWAL_CUSTOMER_COUNT_SQL, tenantId, salesRepId, "%续费%", "%续费%");
+        int pendingConfirmationCount = pendingConfirmationCount(tenantId, salesRepId, userId);
 
         return new DashboardSummary(
                 highLeads.size(),
@@ -154,7 +160,7 @@ public class DashboardMetricsService {
                 .toList();
     }
 
-    private DashboardRiskHeatmap riskHeatmap(Long salesRepId) {
+    private DashboardRiskHeatmap riskHeatmap(String tenantId, Long salesRepId) {
         Map<String, Map<String, Long>> counts = new LinkedHashMap<>();
         jdbcTemplate.query(RISK_HEATMAP_SQL, rs -> {
             String industry = blankToOther(rs.getString("industry"));
@@ -162,7 +168,7 @@ public class DashboardMetricsService {
             long count = rs.getLong("count_value");
             counts.computeIfAbsent(industry, ignored -> new LinkedHashMap<>())
                     .put(riskLevel, count);
-        }, salesRepId);
+        }, tenantId, salesRepId);
         List<String> industries = counts.entrySet().stream()
                 .sorted(Comparator.comparingLong((Map.Entry<String, Map<String, Long>> entry) -> industryTotal(entry.getValue()))
                         .reversed()
@@ -188,8 +194,8 @@ public class DashboardMetricsService {
         return new DashboardRiskHeatmap(industries, RISK_LEVELS, max, cells);
     }
 
-    private int pendingConfirmationCount(Long salesRepId, Long userId) {
-        return intCount(PENDING_CONFIRMATION_COUNT_SQL, salesRepId, userId);
+    private int pendingConfirmationCount(String tenantId, Long salesRepId, Long userId) {
+        return intCount(PENDING_CONFIRMATION_COUNT_SQL, tenantId, salesRepId, userId);
     }
 
     private long industryTotal(Map<String, Long> riskCounts) {

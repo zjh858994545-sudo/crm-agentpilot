@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class AgentSession {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String tenantId;
     private Long userId;
     private Long salesRepId;
     private Long customerId;
@@ -24,6 +25,14 @@ public class AgentSession {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public Long getUserId() {
@@ -82,4 +91,3 @@ public class AgentSession {
         this.updatedAt = updatedAt;
     }
 }
-

@@ -21,6 +21,6 @@ public class DashboardController {
 
     @GetMapping("/metrics")
     public ApiResponse<DashboardMetrics> metrics() {
-        return ApiResponse.ok(metricsService.metrics(CurrentUser.salesRepId(), CurrentUser.userId()));
+        return ApiResponse.ok(metricsService.metrics(CurrentUser.tenantId(), CurrentUser.salesRepId(), CurrentUser.userId()));
     }
 }

@@ -33,6 +33,7 @@ public class LeadController {
     public ApiResponse<List<Lead>> list(@RequestParam(required = false) Long salesRepId) {
         Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<Lead> wrapper = new LambdaQueryWrapper<Lead>()
+                .eq(Lead::getTenantId, CurrentUser.tenantId())
                 .eq(Lead::getSalesRepId, scopedSalesRepId)
                 .orderByAsc(Lead::getId);
         return ApiResponse.ok(leadService.list(wrapper));
@@ -50,7 +51,7 @@ public class LeadController {
             @RequestParam(required = false) Long salesRepId,
             @RequestParam(defaultValue = "10") int topK
     ) {
-        return ApiResponse.ok(leadScoringService.recommend(scopedSalesRepId(salesRepId), topK));
+        return ApiResponse.ok(leadScoringService.recommend(CurrentUser.tenantId(), scopedSalesRepId(salesRepId), topK));
     }
 
     private Long scopedSalesRepId(Long requestedSalesRepId) {
@@ -62,7 +63,9 @@ public class LeadController {
     }
 
     private void requireLeadVisible(Lead lead) {
-        if (lead == null || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
+        if (lead == null
+                || !CurrentUser.tenantId().equals(lead.getTenantId())
+                || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
             throw new AccessDeniedException("lead is outside current data scope");
         }
     }

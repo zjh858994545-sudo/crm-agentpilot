@@ -35,6 +35,7 @@ public class CustomerController {
     public ApiResponse<List<CustomerView>> list(@RequestParam(required = false) Long salesRepId) {
         Long scopedSalesRepId = scopedSalesRepId(salesRepId);
         LambdaQueryWrapper<Customer> wrapper = new LambdaQueryWrapper<Customer>()
+                .eq(Customer::getTenantId, CurrentUser.tenantId())
                 .eq(Customer::getOwnerSalesRepId, scopedSalesRepId)
                 .orderByAsc(Customer::getId);
         return ApiResponse.ok(customerService.list(wrapper).stream().map(CustomerView::from).toList());
@@ -72,7 +73,7 @@ public class CustomerController {
     @GetMapping("/{id}/contact-logs")
     public ApiResponse<List<ContactLog>> contactLogs(@PathVariable Long id) {
         requireCustomerVisible(customerService.getById(id));
-        return ApiResponse.ok(contactLogService.listByCustomerId(id));
+        return ApiResponse.ok(contactLogService.listByCustomerId(id, CurrentUser.tenantId()));
     }
 
     private Long scopedSalesRepId(Long requestedSalesRepId) {
@@ -85,6 +86,7 @@ public class CustomerController {
 
     private LambdaQueryWrapper<Customer> customerQuery(Long salesRepId, String keyword) {
         LambdaQueryWrapper<Customer> wrapper = new LambdaQueryWrapper<Customer>()
+                .eq(Customer::getTenantId, CurrentUser.tenantId())
                 .eq(Customer::getOwnerSalesRepId, salesRepId);
         if (keyword != null && !keyword.isBlank()) {
             String value = keyword.trim();
@@ -103,7 +105,9 @@ public class CustomerController {
     }
 
     private void requireCustomerVisible(Customer customer) {
-        if (customer == null || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
+        if (customer == null
+                || !CurrentUser.tenantId().equals(customer.getTenantId())
+                || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
     }

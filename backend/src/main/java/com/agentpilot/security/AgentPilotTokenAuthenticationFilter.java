@@ -129,6 +129,7 @@ public class AgentPilotTokenAuthenticationFilter extends OncePerRequestFilter {
     private void authenticateDemoUser() {
         authenticate(new AgentPilotPrincipal(
                 properties.getDemoUserId(),
+                properties.getDemoTenantId(),
                 properties.getDemoSalesRepId(),
                 List.copyOf(properties.getPermissions())
         ));

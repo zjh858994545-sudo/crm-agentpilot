@@ -24,6 +24,7 @@ public class AuthController {
         return ApiResponse.ok(rbacPrincipalService.findProfileByUserId(principal.userId())
                 .map(profile -> new AuthProfileView(
                         profile.userId(),
+                        profile.tenantId(),
                         profile.username(),
                         profile.displayName(),
                         profile.salesRepId(),
@@ -33,6 +34,7 @@ public class AuthController {
                 ))
                 .orElseGet(() -> new AuthProfileView(
                         principal.userId(),
+                        principal.tenantId(),
                         "local-principal",
                         "本地配置用户",
                         principal.salesRepId(),
@@ -54,6 +56,7 @@ public class AuthController {
 
     public record AuthProfileView(
             Long userId,
+            String tenantId,
             String username,
             String displayName,
             Long salesRepId,

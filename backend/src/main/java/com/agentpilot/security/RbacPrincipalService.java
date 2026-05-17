@@ -19,6 +19,7 @@ public class RbacPrincipalService {
 
     public record UserProfile(
             Long userId,
+            String tenantId,
             String username,
             String displayName,
             Long salesRepId,
@@ -43,7 +44,7 @@ public class RbacPrincipalService {
         try {
             AgentPilotPrincipal principal = jdbcTemplate.queryForObject(
                     """
-                            SELECT id, sales_rep_id
+                            SELECT id, tenant_id, sales_rep_id
                             FROM agentpilot_user
                             WHERE api_token_sha256 = ?
                               AND status = 'ACTIVE'
@@ -51,6 +52,7 @@ public class RbacPrincipalService {
                             """,
                     (rs, rowNum) -> {
                         Long userId = rs.getLong("id");
+                        String tenantId = rs.getString("tenant_id");
                         Long salesRepId = rs.getLong("sales_rep_id");
                         List<String> permissions = jdbcTemplate.queryForList(
                                 """
@@ -64,7 +66,7 @@ public class RbacPrincipalService {
                                 String.class,
                                 userId
                         );
-                        return new AgentPilotPrincipal(userId, salesRepId, permissions);
+                        return new AgentPilotPrincipal(userId, tenantId, salesRepId, permissions);
                     },
                     tokenHash,
                     securityProperties.isSeedUsersEnabled()
@@ -110,7 +112,7 @@ public class RbacPrincipalService {
         try {
             UserProfile profile = jdbcTemplate.queryForObject(
                     """
-                            SELECT id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
+                            SELECT id, tenant_id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
                             FROM agentpilot_user
                             WHERE id = ?
                             """,
@@ -118,6 +120,7 @@ public class RbacPrincipalService {
                         Long id = rs.getLong("id");
                         return new UserProfile(
                                 id,
+                                rs.getString("tenant_id"),
                                 rs.getString("username"),
                                 rs.getString("display_name"),
                                 rs.getLong("sales_rep_id"),
@@ -139,14 +142,15 @@ public class RbacPrincipalService {
     public List<UserProfile> listProfiles() {
         return jdbcTemplate.query(
                 """
-                        SELECT id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
+                        SELECT id, tenant_id, username, display_name, sales_rep_id, status, last_authenticated_at, last_authenticated_ip
                         FROM agentpilot_user
-                        ORDER BY id
+                        ORDER BY tenant_id, id
                         """,
                 (rs, rowNum) -> {
                     Long id = rs.getLong("id");
                     return new UserProfile(
                             id,
+                            rs.getString("tenant_id"),
                             rs.getString("username"),
                             rs.getString("display_name"),
                             rs.getLong("sales_rep_id"),

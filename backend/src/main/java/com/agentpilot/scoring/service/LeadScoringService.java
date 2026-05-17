@@ -47,9 +47,16 @@ public class LeadScoringService {
     }
 
     public List<LeadRecommendation> recommend(Long salesRepId, int topK) {
+        return recommend(null, salesRepId, topK);
+    }
+
+    public List<LeadRecommendation> recommend(String tenantId, Long salesRepId, int topK) {
         int limit = Math.max(1, Math.min(topK, 20));
         LambdaQueryWrapper<Lead> wrapper = new LambdaQueryWrapper<Lead>()
                 .eq(Lead::getStatus, "OPEN");
+        if (tenantId != null && !tenantId.isBlank()) {
+            wrapper.eq(Lead::getTenantId, tenantId);
+        }
         if (salesRepId != null) {
             wrapper.eq(Lead::getSalesRepId, salesRepId);
         }
@@ -67,15 +74,23 @@ public class LeadScoringService {
         if (customerIds.isEmpty()) {
             return List.of();
         }
-        Map<Long, Customer> customersById = customerService.listByIds(customerIds)
+        LambdaQueryWrapper<Customer> customerWrapper = new LambdaQueryWrapper<Customer>()
+                .in(Customer::getId, customerIds);
+        if (tenantId != null && !tenantId.isBlank()) {
+            customerWrapper.eq(Customer::getTenantId, tenantId);
+        }
+        Map<Long, Customer> customersById = customerService.list(customerWrapper)
                 .stream()
                 .collect(Collectors.toMap(Customer::getId, Function.identity(), (left, right) -> left));
-        Map<Long, List<ContactLog>> logsByCustomerId = contactLogService.list(new LambdaQueryWrapper<ContactLog>()
-                        .in(ContactLog::getCustomerId, customerIds))
+        Map<Long, List<ContactLog>> logsByCustomerId = contactLogService.listByCustomerIds(customerIds, tenantId)
                 .stream()
                 .collect(Collectors.groupingBy(ContactLog::getCustomerId));
-        Map<Long, List<CrmTask>> tasksByCustomerId = taskService.list(new LambdaQueryWrapper<CrmTask>()
-                        .in(CrmTask::getCustomerId, customerIds))
+        LambdaQueryWrapper<CrmTask> taskWrapper = new LambdaQueryWrapper<CrmTask>()
+                .in(CrmTask::getCustomerId, customerIds);
+        if (tenantId != null && !tenantId.isBlank()) {
+            taskWrapper.eq(CrmTask::getTenantId, tenantId);
+        }
+        Map<Long, List<CrmTask>> tasksByCustomerId = taskService.list(taskWrapper)
                 .stream()
                 .collect(Collectors.groupingBy(CrmTask::getCustomerId));
 

@@ -498,6 +498,11 @@ export default function SystemAdmin() {
               )
             },
             {
+              title: '租户',
+              dataIndex: 'tenantId',
+              render: (value) => <Tag color="cyan">{value || '-'}</Tag>
+            },
+            {
               title: '角色',
               dataIndex: 'roles',
               render: (roles: string[]) => (
