@@ -123,6 +123,13 @@ export interface SecurityStatus {
   tokenConfigured: boolean;
   seedUsersEnabled?: boolean;
   strictWithoutToken: boolean;
+  jwt?: {
+    enabled: boolean;
+    issuerConfigured: boolean;
+    audience: string;
+    tenantClaim: string;
+    salesRepClaim: string;
+  };
   rateLimit?: {
     enabled: boolean;
     backend?: string;

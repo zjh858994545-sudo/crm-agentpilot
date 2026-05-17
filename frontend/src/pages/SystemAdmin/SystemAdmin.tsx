@@ -311,6 +311,14 @@ export default function SystemAdmin() {
       operatingLine: '真实 token 只存 SHA-256，登录后从数据库加载 userId、salesRepId 和权限。'
     },
     {
+      key: 'sso-jwt',
+      name: '企业 SSO / JWT',
+      status: securityStatus?.jwt?.enabled ? (securityStatus.jwt.issuerConfigured ? 'ACTIVE' : 'CONFIG_REQUIRED') : 'ROADMAP_READY',
+      owner: securityStatus?.jwt?.enabled ? `aud=${securityStatus.jwt.audience}` : 'OIDC / JWT claims',
+      why: '商业化部署需要接入企业身份源，由 IdP 管理 MFA、离职禁用、密码策略和审计。',
+      operatingLine: `tenant claim=${securityStatus?.jwt?.tenantClaim ?? 'tenant_id'}，sales claim=${securityStatus?.jwt?.salesRepClaim ?? 'sales_rep_id'}。`
+    },
+    {
       key: 'outbox-lock',
       name: 'Outbox CAS 分发锁',
       status: eventStatus ? 'READY' : 'UNKNOWN',

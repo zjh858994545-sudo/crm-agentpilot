@@ -3,6 +3,7 @@ package com.agentpilot.security;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.security.RbacPrincipalService;
 import com.agentpilot.security.config.AgentPilotSecurityProperties;
+import com.agentpilot.security.config.JwtSsoProperties;
 import com.agentpilot.security.ratelimit.ApiRateLimitProperties;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -19,15 +20,18 @@ import java.util.Map;
 @PreAuthorize("hasAuthority('agent:use')")
 public class SecurityController {
     private final AgentPilotSecurityProperties properties;
+    private final JwtSsoProperties jwtSsoProperties;
     private final RbacPrincipalService rbacPrincipalService;
     private final ApiRateLimitProperties rateLimitProperties;
 
     public SecurityController(
             AgentPilotSecurityProperties properties,
+            JwtSsoProperties jwtSsoProperties,
             RbacPrincipalService rbacPrincipalService,
             ApiRateLimitProperties rateLimitProperties
     ) {
         this.properties = properties;
+        this.jwtSsoProperties = jwtSsoProperties;
         this.rbacPrincipalService = rbacPrincipalService;
         this.rateLimitProperties = rateLimitProperties;
     }
@@ -50,6 +54,13 @@ public class SecurityController {
         body.put("tokenConfigured", tokenConfigured);
         body.put("seedUsersEnabled", properties.isSeedUsersEnabled());
         body.put("strictWithoutToken", properties.strict() && !tokenConfigured && rbacUserCount == 0);
+        body.put("jwt", Map.of(
+                "enabled", jwtSsoProperties.isEnabled(),
+                "issuerConfigured", StringUtils.hasText(jwtSsoProperties.getIssuerUri()),
+                "audience", jwtSsoProperties.getAudience(),
+                "tenantClaim", jwtSsoProperties.getTenantClaim(),
+                "salesRepClaim", jwtSsoProperties.getSalesRepClaim()
+        ));
         body.put("rateLimit", Map.of(
                 "enabled", rateLimitProperties.isEnabled(),
                 "backend", rateLimitProperties.getBackend(),

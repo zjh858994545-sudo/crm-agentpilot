@@ -74,6 +74,12 @@ agentpilot:
     demo-sales-rep-id: ${AGENTPILOT_DEMO_SALES_REP_ID:1}
     seed-users-enabled: ${AGENTPILOT_SEED_USERS_ENABLED:true}
     token-audit-min-interval-seconds: ${AGENTPILOT_TOKEN_AUDIT_MIN_INTERVAL_SECONDS:60}
+    jwt:
+      enabled: ${AGENTPILOT_JWT_ENABLED:false}
+      issuer-uri: ${AGENTPILOT_JWT_ISSUER_URI:}
+      audience: ${AGENTPILOT_JWT_AUDIENCE:crm-agentpilot}
+      tenant-claim: ${AGENTPILOT_JWT_TENANT_CLAIM:tenant_id}
+      sales-rep-claim: ${AGENTPILOT_JWT_SALES_REP_CLAIM:sales_rep_id}
   rate-limit:
     enabled: ${AGENTPILOT_RATE_LIMIT_ENABLED:true}
     backend: ${AGENTPILOT_RATE_LIMIT_BACKEND:auto}
