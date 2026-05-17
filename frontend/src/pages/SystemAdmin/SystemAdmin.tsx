@@ -9,7 +9,23 @@ import {
   SafetyCertificateOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Descriptions, Empty, Popconfirm, Row, Space, Statistic, Table, Tag, Timeline, Typography, message as antdMessage } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Empty,
+  Popconfirm,
+  Row,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Timeline,
+  Typography,
+  message as antdMessage
+} from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import {
   EventStatus,
@@ -31,8 +47,8 @@ import {
   fetchSecurityStatus,
   fetchSecurityUsers,
   rebuildKnowledgeVectors,
-  runRetentionCleanup,
-  retryDeadLetter
+  retryDeadLetter,
+  runRetentionCleanup
 } from '../../api/client';
 
 const { Paragraph, Text, Title } = Typography;
@@ -49,7 +65,7 @@ type CapabilityRow = {
 type RiskItem = {
   title: string;
   detail: string;
-  color: string;
+  color: 'red' | 'orange' | 'blue';
 };
 
 function statusTag(value?: string | boolean) {
@@ -108,7 +124,7 @@ export default function SystemAdmin() {
     if (results[7].status === 'fulfilled') setRetentionStatus(results[7].value);
     if (results[8].status === 'fulfilled') setReadinessStatus(results[8].value);
     if (results.some((result) => result.status === 'rejected')) {
-      setError('部分系统状态读取失败，请确认后端已经启动并且当前 token 具备系统管理权限。');
+      setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
     }
     setLoading(false);
   };
@@ -122,7 +138,7 @@ export default function SystemAdmin() {
     try {
       const result = await retryDeadLetter(id);
       if (result.accepted) {
-        antdMessage.success('已重新加入待分发队列');
+        antdMessage.success('事件已重新加入待分发队列');
       } else {
         antdMessage.warning('事件当前状态不可重试');
       }
@@ -157,8 +173,8 @@ export default function SystemAdmin() {
         antdMessage.success(`历史数据清理完成，已删除 ${result.totalDeletedRows} 行。`);
       }
       await load();
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : '请检查保留策略开关、权限和后端日志。';
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : '请检查保留策略开关、权限和后端日志。';
       antdMessage.error(`数据生命周期操作失败：${detail}`);
     } finally {
       setLoading(false);
@@ -183,17 +199,17 @@ export default function SystemAdmin() {
       ? [
           {
             title: '上线检查存在阻塞项',
-            detail: `当前 ${readinessStatus.failCount} 个阻塞项、${readinessStatus.warnCount} 个警告项。请先处理红色检查项。`,
-            color: 'red'
+            detail: `当前 ${readinessStatus.failCount} 个阻塞项、${readinessStatus.warnCount} 个警告项，请优先处理红色检查项。`,
+            color: 'red' as const
           }
         ]
       : []),
     ...(securityStatus?.strictWithoutToken
       ? [
           {
-            title: '严格模式缺少访问 token',
-            detail: '系统会拒绝所有受保护 API，请配置 AGENTPILOT_API_TOKEN 后再启动。',
-            color: 'red'
+            title: '严格模式缺少访问令牌',
+            detail: '系统会拒绝所有受保护 API，请配置 AGENTPILOT_API_TOKEN 或 RBAC 用户后再启动。',
+            color: 'red' as const
           }
         ]
       : []),
@@ -201,8 +217,8 @@ export default function SystemAdmin() {
       ? [
           {
             title: '接口限流未开启',
-            detail: '模型调用和 AI 助手接口缺少成本保护，建议生产环境开启。',
-            color: 'orange'
+            detail: '模型调用和 AI 助手缺少成本保护，生产环境建议开启。',
+            color: 'orange' as const
           }
         ]
       : []),
@@ -211,16 +227,7 @@ export default function SystemAdmin() {
           {
             title: '存在死信事件',
             detail: 'Outbox 有事件超过最大重试次数，需要管理员检查下游或人工重试。',
-            color: 'red'
-          }
-        ]
-      : []),
-    ...(retentionStatus && !retentionStatus.enabled && retentionEligibleRows > 0
-      ? [
-          {
-            title: '历史数据达到清理阈值',
-            detail: `当前有 ${retentionEligibleRows} 行日志/审计数据超过保留周期。建议先预演，再在备份完成后开启清理。`,
-            color: 'orange'
+            color: 'red' as const
           }
         ]
       : []),
@@ -229,7 +236,7 @@ export default function SystemAdmin() {
           {
             title: '知识索引覆盖不足',
             detail: `当前仅 ${vectorCoverage}% 知识片段完成向量索引，建议重建知识索引。`,
-            color: 'orange'
+            color: 'orange' as const
           }
         ]
       : []),
@@ -237,8 +244,8 @@ export default function SystemAdmin() {
       ? [
           {
             title: '模型处于规则模式',
-            detail: 'AI 助手会使用确定性规则流，接入模型服务后可启用真实工具选择。',
-            color: 'blue'
+            detail: 'AI 助手会使用确定性规则流；接入模型服务后可启用真实工具选择。',
+            color: 'blue' as const
           }
         ]
       : [])
@@ -257,14 +264,14 @@ export default function SystemAdmin() {
       color: securityStatus?.rbacEnabled ? 'green' : 'orange',
       detail: securityStatus?.rbacEnabled
         ? `${securityStatus.rbacUserCount ?? 0} 个用户 / ${securityStatus.rbacRoleCount ?? 0} 个角色`
-        : '使用本地身份上下文，适合单机部署'
+        : '使用本地身份上下文，适合单机演示'
     },
     {
       title: '调用保护',
       value: securityStatus?.rateLimit?.enabled ? '限流生效' : '未开启',
       color: securityStatus?.rateLimit?.enabled ? 'green' : 'orange',
       detail: securityStatus?.rateLimit?.enabled
-        ? `${securityStatus.rateLimit.backend ?? 'auto'} · AI 助手 ${securityStatus.rateLimit.agentCapacity}/min，模型 ${securityStatus.rateLimit.modelCapacity}/min`
+        ? `${securityStatus.rateLimit.backend ?? 'auto'} / AI ${securityStatus.rateLimit.agentCapacity}/min / Model ${securityStatus.rateLimit.modelCapacity}/min`
         : '生产环境建议开启'
     },
     {
@@ -283,13 +290,7 @@ export default function SystemAdmin() {
       title: '模型接入',
       value: modelStatus?.configured ? '真实模型' : '规则模式',
       color: modelStatus?.configured ? 'green' : 'orange',
-      detail: modelStatus?.configured ? `${modelStatus.vendor ?? modelStatus.provider} · ${modelStatus.model}` : '可回退规则路由'
-    },
-    {
-      title: '数据生命周期',
-      value: retentionStatus?.enabled ? '已启用' : '预演模式',
-      color: retentionStatus?.enabled ? 'green' : retentionEligibleRows > 0 ? 'orange' : 'blue',
-      detail: `${retentionEligibleRows} 行可清理，单次上限 ${retentionStatus?.maxDeleteRowsPerRun ?? '-'}`
+      detail: modelStatus?.configured ? `${modelStatus.vendor ?? modelStatus.provider} / ${modelStatus.model}` : '可回退规则路由'
     }
   ];
 
@@ -298,25 +299,25 @@ export default function SystemAdmin() {
       key: 'rate-limit',
       name: '接口限流',
       status: securityStatus?.rateLimit?.enabled ? 'ACTIVE' : 'DISABLED',
-      owner: `Spring Security Filter · ${securityStatus?.rateLimit?.backend ?? 'auto'}`,
-      why: '防止 Agent Chat 和模型接口被刷爆，控制模型调用费用和数据库压力。',
-      operatingLine: '优先使用 Redis 做分布式限流；Redis 不可用时回退本机 token bucket，超限返回 429。'
+      owner: `Spring Security Filter / ${securityStatus?.rateLimit?.backend ?? 'auto'}`,
+      why: '防止 Agent Chat 和模型接口被刷爆，控制模型费用和数据库压力。',
+      operatingLine: '优先使用 Redis 做分布式限流；Redis 不可用时回退本机 token bucket；超限返回 429。'
     },
     {
       key: 'rbac',
       name: 'RBAC Token',
       status: securityStatus?.rbacEnabled ? 'ACTIVE' : 'LOCAL_PROFILE',
       owner: 'agentpilot_user / role / permission',
-      why: '让不同销售拿到不同 salesRepId 和权限集，避免 A 销售看到 B 销售客户。',
-      operatingLine: '真实 token 只存 SHA-256，登录后从数据库加载 userId、salesRepId 和权限。'
+      why: '让不同销售拿到不同 salesRepId、tenantId 和权限集，避免越权访问客户数据。',
+      operatingLine: '真实 token 只存 SHA-256；认证后加载用户、租户、销售归属、角色和权限。'
     },
     {
       key: 'sso-jwt',
       name: '企业 SSO / JWT',
-      status: securityStatus?.jwt?.enabled ? (securityStatus.jwt.issuerConfigured ? 'ACTIVE' : 'CONFIG_REQUIRED') : 'ROADMAP_READY',
+      status: securityStatus?.jwt?.enabled ? (securityStatus.jwt.issuerConfigured ? 'ACTIVE' : 'CONFIG_REQUIRED') : 'READY_TO_ENABLE',
       owner: securityStatus?.jwt?.enabled ? `aud=${securityStatus.jwt.audience}` : 'OIDC / JWT claims',
-      why: '商业化部署需要接入企业身份源，由 IdP 管理 MFA、离职禁用、密码策略和审计。',
-      operatingLine: `tenant claim=${securityStatus?.jwt?.tenantClaim ?? 'tenant_id'}，sales claim=${securityStatus?.jwt?.salesRepClaim ?? 'sales_rep_id'}。`
+      why: '商业化部署需要接入企业身份源，由 IdP 管理 MFA、离职禁用、密码策略和登录审计。',
+      operatingLine: `user=${securityStatus?.jwt?.userIdClaim ?? 'user_id'} / tenant=${securityStatus?.jwt?.tenantClaim ?? 'tenant_id'} / sales=${securityStatus?.jwt?.salesRepClaim ?? 'sales_rep_id'}`
     },
     {
       key: 'outbox-lock',
@@ -324,15 +325,15 @@ export default function SystemAdmin() {
       status: eventStatus ? 'READY' : 'UNKNOWN',
       owner: 'agent_outbox_event',
       why: '避免 afterCommit 和定时任务同时发送同一事件，降低重复分发风险。',
-      operatingLine: '分发前先把事件 CAS 抢占到 DISPATCHING，只有抢到锁的 worker 能发。'
+      operatingLine: '分发前先 CAS 抢占为 DISPATCHING，只有抢到锁的 worker 能发送。'
     },
     {
       key: 'dead-letter',
       name: 'Outbox DLQ',
-      status: (eventStatus?.outboxDeadLetters ?? 0) > 0 ? 'HAS_DEAD' : 'READY',
+      status: deadLetterCount > 0 ? 'HAS_DEAD' : 'READY',
       owner: '事件后台任务',
-      why: 'Kafka 或下游故障时，失败事件不会悄悄丢掉，超过重试次数进入死信。',
-      operatingLine: '当前是 at-least-once，失败满 5 次进入 DEAD_LETTER，可以人工重试。'
+      why: 'Kafka 或下游故障时，失败事件不应悄悄丢失，超过重试次数后进入死信。',
+      operatingLine: '当前是 at-least-once；失败满 5 次进入 DEAD_LETTER，可人工重试。'
     },
     {
       key: 'tool-schema',
@@ -348,15 +349,7 @@ export default function SystemAdmin() {
       status: knowledgeStatus?.vectorStoreMode ?? 'unknown',
       owner: 'Knowledge Service',
       why: '用真实 embedding 和向量库做知识检索，回答带引用，低置信拒答。',
-      operatingLine: 'RAG 不是让模型凭空答，而是先检索销售 SOP 和政策，再基于引用回答。'
-    },
-    {
-      key: 'retention',
-      name: '数据保留策略',
-      status: retentionStatus?.enabled ? 'ACTIVE' : 'DRY_RUN',
-      owner: 'Operations Retention',
-      why: '审计、检索和事件日志会持续增长，需要可预估、可回滚意识的清理机制。',
-      operatingLine: '默认只做 dry-run 预演；真正删除需要开启保留策略，并且不超过单次删除上限。'
+      operatingLine: 'RAG 先检索销售 SOP 和政策，再基于引用回答，减少模型凭空编造。'
     }
   ];
 
@@ -366,7 +359,7 @@ export default function SystemAdmin() {
 
       <Card
         className="command-card"
-        title="系统运行中枢"
+        title="系统运行中心"
         extra={
           <Space>
             <Button icon={<DatabaseOutlined />} loading={loading} onClick={rebuildVectors}>
@@ -383,9 +376,9 @@ export default function SystemAdmin() {
             <Title level={4} style={{ marginTop: 0 }}>
               把“能不能上线”拆成可观察、可解释、可恢复的运行指标
             </Title>
-            <Paragraph style={{ marginBottom: 12 }}>
+            <Paragraph>
               系统管理页面向管理员、运维和产品负责人，集中展示访问控制、接口限流、事件分发、知识索引和模型接入状态。
-              销售首页不展示这些技术细节，后台这里负责证明系统安全边界和运行韧性。
+              销售首页不展示这些技术细节；后台这里负责证明系统安全边界和运行韧性。
             </Paragraph>
             <Space wrap>
               {statusTag(securityStatus?.mode ?? 'security-loading')}
@@ -452,22 +445,13 @@ export default function SystemAdmin() {
         </Col>
         <Col xs={24} md={6}>
           <Card className="metric-card">
-            <Statistic title="死信事件" value={eventStatus?.outboxDeadLetters ?? 0} prefix={<ThunderboltOutlined />} />
+            <Statistic title="死信事件" value={deadLetterCount} prefix={<ThunderboltOutlined />} />
             <Text className="metric-label">需要人工重试</Text>
           </Card>
         </Col>
       </Row>
 
-      <Card
-        className="command-card"
-        title="上线检查清单"
-        extra={
-          <Space>
-            <Tag color={readinessColor}>{readinessStatus?.overallStatus ?? 'LOADING'}</Tag>
-            <Text type="secondary">phase: {readinessStatus?.phase ?? '-'}</Text>
-          </Space>
-        }
-      >
+      <Card className="command-card" title="上线检查清单" extra={<Tag color={readinessColor}>{readinessStatus?.overallStatus ?? 'LOADING'}</Tag>}>
         <Table
           rowKey="key"
           loading={loading}
@@ -479,9 +463,7 @@ export default function SystemAdmin() {
               title: '状态',
               dataIndex: 'status',
               width: 100,
-              render: (value) => (
-                <Tag color={value === 'PASS' ? 'green' : value === 'FAIL' ? 'red' : 'orange'}>{value}</Tag>
-              )
+              render: (value) => <Tag color={value === 'PASS' ? 'green' : value === 'FAIL' ? 'red' : 'orange'}>{value}</Tag>
             },
             { title: '当前情况', dataIndex: 'detail' },
             { title: '处理建议', dataIndex: 'action', render: (value) => <Text type="secondary">{value}</Text> }
@@ -493,23 +475,19 @@ export default function SystemAdmin() {
         <Table
           rowKey="userId"
           loading={loading}
-          pagination={false}
+          pagination={securityUsers.length > 8 ? { pageSize: 8 } : false}
           dataSource={securityUsers}
           columns={[
             {
               title: '用户',
-              render: (_, record) => (
+              render: (_, record: SecurityUser) => (
                 <Space direction="vertical" size={0}>
                   <Text strong>{record.displayName}</Text>
                   <Text type="secondary">{record.username}</Text>
                 </Space>
               )
             },
-            {
-              title: '租户',
-              dataIndex: 'tenantId',
-              render: (value) => <Tag color="cyan">{value || '-'}</Tag>
-            },
+            { title: '租户', dataIndex: 'tenantId', render: (value) => <Tag color="cyan">{value || '-'}</Tag> },
             {
               title: '角色',
               dataIndex: 'roles',
@@ -525,16 +503,8 @@ export default function SystemAdmin() {
             },
             { title: '销售范围', dataIndex: 'salesRepId', render: (value) => <Tag>salesRep #{value}</Tag> },
             { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
-            {
-              title: '最近认证',
-              dataIndex: 'lastAuthenticatedAt',
-              render: (value) => <Text type={value ? undefined : 'secondary'}>{formatTime(value)}</Text>
-            },
-            {
-              title: '来源 IP',
-              dataIndex: 'lastAuthenticatedIp',
-              render: (value) => <Text type="secondary">{value || '-'}</Text>
-            },
+            { title: '最近认证', dataIndex: 'lastAuthenticatedAt', render: (value) => <Text>{formatTime(value)}</Text> },
+            { title: '来源 IP', dataIndex: 'lastAuthenticatedIp', render: (value) => <Text type="secondary">{value || '-'}</Text> },
             { title: '权限数', dataIndex: 'permissions', render: (permissions: string[]) => permissions.length }
           ]}
         />
@@ -550,19 +520,14 @@ export default function SystemAdmin() {
           columns={[
             { title: 'ID', dataIndex: 'id', width: 80 },
             { title: '事件类型', dataIndex: 'eventType', render: (value) => <Text code>{value}</Text> },
-            { title: '聚合对象', render: (_, record) => `${record.aggregateType} #${record.aggregateId}` },
+            { title: '聚合对象', render: (_, record: OutboxEvent) => `${record.aggregateType} #${record.aggregateId}` },
             { title: 'Topic', dataIndex: 'topic' },
             { title: '重试次数', dataIndex: 'retryCount', width: 100 },
-            {
-              title: '错误',
-              dataIndex: 'errorMessage',
-              ellipsis: true,
-              render: (value) => <Text type="secondary">{value || '-'}</Text>
-            },
+            { title: '错误', dataIndex: 'errorMessage', ellipsis: true, render: (value) => <Text type="secondary">{value || '-'}</Text> },
             {
               title: '操作',
               width: 120,
-              render: (_, record) => (
+              render: (_, record: OutboxEvent) => (
                 <Button size="small" type="link" onClick={() => retryOutboxEvent(record.id)}>
                   重新分发
                 </Button>
@@ -597,7 +562,7 @@ export default function SystemAdmin() {
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} md={8}>
             <Statistic title="超过保留周期" value={retentionEligibleRows} suffix="行" />
-            <Text type="secondary">dry-run 会先统计，不会删除数据</Text>
+            <Text type="secondary">dry-run 只统计，不会删除数据</Text>
           </Col>
           <Col xs={24} md={8}>
             <Statistic title="单次清理上限" value={retentionStatus?.maxDeleteRowsPerRun ?? 0} suffix="行" />
@@ -637,11 +602,7 @@ export default function SystemAdmin() {
                 { title: '状态', dataIndex: 'status', width: 140, render: (value) => statusTag(value) },
                 { title: '落点', dataIndex: 'owner', width: 220 },
                 { title: '为什么要做', dataIndex: 'why' },
-                {
-                  title: '运行说明',
-                  dataIndex: 'operatingLine',
-                  render: (value) => <Text type="secondary">{value}</Text>
-                }
+                { title: '运行说明', dataIndex: 'operatingLine', render: (value) => <Text type="secondary">{value}</Text> }
               ]}
             />
           </Card>
@@ -659,21 +620,12 @@ export default function SystemAdmin() {
                 <Descriptions.Item label="角色 / 用户">
                   {securityStatus?.rbacRoleCount ?? 0} roles / {securityStatus?.rbacUserCount ?? 0} users
                 </Descriptions.Item>
-                <Descriptions.Item label="种子账号">
-                  {securityStatus?.seedUsersEnabled ? <Tag color="orange">本地可用</Tag> : <Tag color="green">生产禁用</Tag>}
+                <Descriptions.Item label="企业 SSO">
+                  {securityStatus?.jwt?.enabled ? <Tag color="green">已启用</Tag> : <Tag>可启用</Tag>}
                 </Descriptions.Item>
-                <Descriptions.Item label="Agent Chat">
-                  {securityStatus?.rateLimit?.agentCapacity ?? '-'} / min
-                </Descriptions.Item>
-                <Descriptions.Item label="限流后端">
-                  {securityStatus?.rateLimit?.backend ?? '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="Model Chat">
-                  {securityStatus?.rateLimit?.modelCapacity ?? '-'} / min
-                </Descriptions.Item>
-                <Descriptions.Item label="普通 API">
-                  {securityStatus?.rateLimit?.defaultCapacity ?? '-'} / min
-                </Descriptions.Item>
+                <Descriptions.Item label="Agent Chat">{securityStatus?.rateLimit?.agentCapacity ?? '-'} / min</Descriptions.Item>
+                <Descriptions.Item label="Model Chat">{securityStatus?.rateLimit?.modelCapacity ?? '-'} / min</Descriptions.Item>
+                <Descriptions.Item label="普通 API">{securityStatus?.rateLimit?.defaultCapacity ?? '-'} / min</Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -682,7 +634,7 @@ export default function SystemAdmin() {
                 <Descriptions.Item label="模式">{statusTag(eventStatus?.mode ?? 'log-only')}</Descriptions.Item>
                 <Descriptions.Item label="待分发">{eventStatus?.outboxPending ?? 0}</Descriptions.Item>
                 <Descriptions.Item label="分发中">{eventStatus?.outboxDispatching ?? 0}</Descriptions.Item>
-                <Descriptions.Item label="死信">{eventStatus?.outboxDeadLetters ?? 0}</Descriptions.Item>
+                <Descriptions.Item label="死信">{deadLetterCount}</Descriptions.Item>
                 <Descriptions.Item label="最大重试">{eventStatus?.maxRetryCount ?? 5}</Descriptions.Item>
               </Descriptions>
             </Card>
@@ -698,9 +650,7 @@ export default function SystemAdmin() {
               children: (
                 <Space direction="vertical" size={2}>
                   <Text strong>为什么要限流？</Text>
-                  <Text type="secondary">
-                    Agent Chat 和 Model Chat 会调用模型，成本和延迟都比普通接口高。限流可以防止恶意刷接口或误操作把模型费用、数据库连接打爆。
-                  </Text>
+                  <Text type="secondary">Agent Chat 和 Model Chat 会调用模型，成本和延迟都更高。限流可以防止误操作或恶意请求打爆模型费用和数据库连接。</Text>
                 </Space>
               )
             },
@@ -709,9 +659,7 @@ export default function SystemAdmin() {
               children: (
                 <Space direction="vertical" size={2}>
                   <Text strong>Outbox 为什么要 CAS？</Text>
-                  <Text type="secondary">
-                    afterCommit 和定时补偿任务可能同时看到同一条 PENDING 事件。CAS 先抢占成 DISPATCHING，只有抢到锁的 worker 发送，减少重复分发。
-                  </Text>
+                  <Text type="secondary">afterCommit 和定时补偿任务可能同时看到同一条 PENDING 事件。CAS 先抢占成 DISPATCHING，只让抢到锁的 worker 发送。</Text>
                 </Space>
               )
             },
@@ -719,10 +667,8 @@ export default function SystemAdmin() {
               dot: <LockOutlined />,
               children: (
                 <Space direction="vertical" size={2}>
-                  <Text strong>RBAC token 和本地身份有什么区别？</Text>
-                  <Text type="secondary">
-                    本地身份用于单机环境快速进入系统；RBAC token 来自数据库，token 只存 SHA-256，认证后加载真实用户、销售归属和权限集合。
-                  </Text>
+                  <Text strong>RBAC token 和企业 JWT 有什么区别？</Text>
+                  <Text type="secondary">RBAC token 适合系统内部令牌；企业 JWT 适合接入统一身份源，由 IdP 负责账号生命周期、MFA 和登录审计。</Text>
                 </Space>
               )
             },
@@ -731,20 +677,7 @@ export default function SystemAdmin() {
               children: (
                 <Space direction="vertical" size={2}>
                   <Text strong>这些能力怎么和业务连起来？</Text>
-                  <Text type="secondary">
-                    RBAC 限制销售只能看自己的客户，限流保护模型和数据库，Outbox 保证 CRM 写入后的事件可重试可恢复。
-                  </Text>
-                </Space>
-              )
-            },
-            {
-              dot: <ClearOutlined />,
-              children: (
-                <Space direction="vertical" size={2}>
-                  <Text strong>为什么要做数据保留策略？</Text>
-                  <Text type="secondary">
-                    Agent 运行、工具调用、知识检索和 Outbox 会持续写日志。保留策略先预估影响，再按周期清理已结束数据，防止数据库无限增长。
-                  </Text>
+                  <Text type="secondary">RBAC 限制数据范围，限流保护模型和数据库，Outbox 保证 CRM 写入后的事件可重试可恢复。</Text>
                 </Space>
               )
             }
@@ -760,12 +693,12 @@ export default function SystemAdmin() {
             pagination={false}
             dataSource={tools}
             columns={[
-              { title: '工具名', render: (_, record) => <Text code>{record.function.name}</Text> },
-              { title: '用途', render: (_, record) => record.function.description },
+              { title: '工具名', render: (_, record: OpenAiToolDefinition) => <Text code>{record.function.name}</Text> },
+              { title: '用途', render: (_, record: OpenAiToolDefinition) => record.function.description },
               {
                 title: '写入风险',
                 width: 120,
-                render: (_, record) =>
+                render: (_, record: OpenAiToolDefinition) =>
                   ['createFollowupTask', 'writeContactLog', 'updateLeadStage'].includes(record.function.name) ? (
                     <Tag color="orange">需确认</Tag>
                   ) : (
