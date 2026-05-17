@@ -1,5 +1,6 @@
 package com.agentpilot.crm.vo;
 
+import com.agentpilot.common.security.DataMasking;
 import com.agentpilot.crm.entity.Customer;
 
 import java.time.LocalDateTime;
@@ -32,7 +33,7 @@ public record CustomerView(
                 customer.getCity(),
                 customer.getAddress(),
                 customer.getContactName(),
-                maskMobile(customer.getContactMobile()),
+                DataMasking.maskMobile(customer.getContactMobile()),
                 customer.getLifecycleStage(),
                 customer.getValueLevel(),
                 customer.getRiskLevel(),
@@ -47,10 +48,4 @@ public record CustomerView(
         );
     }
 
-    private static String maskMobile(String mobile) {
-        if (mobile == null || mobile.length() < 7) {
-            return mobile;
-        }
-        return mobile.substring(0, 3) + "****" + mobile.substring(mobile.length() - 4);
-    }
 }

@@ -62,11 +62,28 @@ class CrmCoreControllerTest {
 
     @Test
     void contactLogsCanBeFetchedByCustomer() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO crm_contact_log (
+                    id, tenant_id, customer_id, sales_rep_id, lead_id, channel, content,
+                    summary, customer_intent, objections, next_action, idempotency_key, contact_at
+                ) VALUES (
+                    9902, 'demo', 1001, 1, 3001, 'PHONE',
+                    '客户补充手机号 13988881234，邮箱 buyer@example.com，希望明天联系。',
+                    '需要回拨 13988881234 并发送邮件到 buyer@example.com。',
+                    'HIGH', '担心服务效果', '明天回拨 13988881234',
+                    'test-contact-log-pii', '2026-06-01 10:00:00'
+                )
+                """);
+
         mockMvc.perform(get("/api/customers/1001/contact-logs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(3))))
-                .andExpect(jsonPath("$.data[0].customerId", is(1001)));
+                .andExpect(jsonPath("$.data[0].customerId", is(1001)))
+                .andExpect(jsonPath("$.data[0].tenantId").doesNotExist())
+                .andExpect(jsonPath("$.data[0].idempotencyKey").doesNotExist())
+                .andExpect(jsonPath("$.data[0].content", is("客户补充手机号 139****1234，邮箱 b***@example.com，希望明天联系。")))
+                .andExpect(jsonPath("$.data[0].summary", is("需要回拨 139****1234 并发送邮件到 b***@example.com。")));
 
         mockMvc.perform(get("/api/customers/1002/contact-logs"))
                 .andExpect(status().isForbidden());

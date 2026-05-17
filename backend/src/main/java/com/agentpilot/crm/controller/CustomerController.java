@@ -2,10 +2,10 @@ package com.agentpilot.crm.controller;
 
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.common.response.PageResponse;
-import com.agentpilot.crm.entity.ContactLog;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.crm.service.CustomerService;
+import com.agentpilot.crm.vo.ContactLogView;
 import com.agentpilot.crm.vo.CustomerView;
 import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -71,9 +71,12 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}/contact-logs")
-    public ApiResponse<List<ContactLog>> contactLogs(@PathVariable Long id) {
+    public ApiResponse<List<ContactLogView>> contactLogs(@PathVariable Long id) {
         requireCustomerVisible(customerService.getById(id));
-        return ApiResponse.ok(contactLogService.listByCustomerId(id, CurrentUser.tenantId()));
+        return ApiResponse.ok(contactLogService.listByCustomerId(id, CurrentUser.tenantId())
+                .stream()
+                .map(ContactLogView::from)
+                .toList());
     }
 
     private Long scopedSalesRepId(Long requestedSalesRepId) {
