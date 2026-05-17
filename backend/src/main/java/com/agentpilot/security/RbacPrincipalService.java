@@ -3,6 +3,7 @@ package com.agentpilot.security;
 import com.agentpilot.security.config.AgentPilotSecurityProperties;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -366,8 +367,14 @@ public class RbacPrincipalService {
     }
 
     private Long nextUserId() {
-        Long next = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) + 1 FROM agentpilot_user", Long.class);
-        return next == null ? 1L : next;
+        String databaseProduct = jdbcTemplate.execute((ConnectionCallback<String>) connection ->
+                connection.getMetaData().getDatabaseProductName()
+        );
+        String nextValueSql = databaseProduct != null && databaseProduct.toLowerCase().contains("h2")
+                ? "SELECT NEXT VALUE FOR agentpilot_user_id_seq"
+                : "SELECT nextval('agentpilot_user_id_seq')";
+        Long next = jdbcTemplate.queryForObject(nextValueSql, Long.class);
+        return next == null ? 10000L : next;
     }
 
     private void replaceRoles(Long userId, List<Long> roleIds) {

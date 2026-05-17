@@ -1,0 +1,3 @@
+CREATE SEQUENCE IF NOT EXISTS agentpilot_user_id_seq
+    START WITH 10000
+    INCREMENT BY 1;
