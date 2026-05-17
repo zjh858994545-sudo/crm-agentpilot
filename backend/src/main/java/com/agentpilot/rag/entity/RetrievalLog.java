@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class RetrievalLog {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String tenantId;
     private Long runId;
     private String query;
     private String rewrittenQuery;
@@ -25,6 +26,14 @@ public class RetrievalLog {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public Long getRunId() {
@@ -91,4 +100,3 @@ public class RetrievalLog {
         this.createdAt = createdAt;
     }
 }
-

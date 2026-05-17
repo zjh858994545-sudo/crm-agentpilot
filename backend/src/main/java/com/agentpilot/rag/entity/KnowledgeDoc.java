@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class KnowledgeDoc {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String tenantId;
     private String title;
     private String docType;
     private String source;
@@ -25,6 +26,14 @@ public class KnowledgeDoc {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getTitle() {
@@ -91,4 +100,3 @@ public class KnowledgeDoc {
         this.updatedAt = updatedAt;
     }
 }
-

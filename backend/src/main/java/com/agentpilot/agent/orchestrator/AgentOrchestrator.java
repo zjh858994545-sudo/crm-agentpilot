@@ -295,8 +295,9 @@ public class AgentOrchestrator {
         List<ContactLog> logs = contactLogService.listByCustomerId(customer.getId(), defaultTenantId(request.tenantId()));
         AgentToolCall historyCall = recordTool(run.getId(), "queryContactHistory", Map.of("customerId", customer.getId()), logs, "SUCCESS", null, elapsedMs(historyStartedAt));
         Instant knowledgeStartedAt = Instant.now();
-        KnowledgeAnswer knowledge = ragService.ask(customer.getIndustry() + " 续费 价格异议 跟进策略", 3);
-        AgentToolCall knowledgeCall = recordTool(run.getId(), "searchKnowledge", Map.of("query", customer.getIndustry() + " 续费 价格异议 跟进策略"), knowledge, "SUCCESS", null, elapsedMs(knowledgeStartedAt));
+        String knowledgeQuery = customer.getIndustry() + " 续费 价格异议 跟进策略";
+        KnowledgeAnswer knowledge = ragService.ask(defaultTenantId(request.tenantId()), knowledgeQuery, 3);
+        AgentToolCall knowledgeCall = recordTool(run.getId(), "searchKnowledge", Map.of("query", knowledgeQuery), knowledge, "SUCCESS", null, elapsedMs(knowledgeStartedAt));
 
         String deterministicAnswer = "客户现状：" + customer.getName() + " 属于 " + customer.getValueLevel()
                 + " 类客户，风险等级 " + customer.getRiskLevel()
@@ -370,7 +371,7 @@ public class AgentOrchestrator {
 
     private AgentChatResponse answerKnowledge(AgentChatRequest request, AgentSession session, AgentRun run, String query, int topK) {
         Instant toolStartedAt = Instant.now();
-        KnowledgeAnswer answer = ragService.ask(query, Math.max(1, Math.min(topK, 20)));
+        KnowledgeAnswer answer = ragService.ask(defaultTenantId(request.tenantId()), query, Math.max(1, Math.min(topK, 20)));
         AgentToolCall call = recordTool(run.getId(), "searchKnowledge", Map.of("query", query), answer, "SUCCESS", null, elapsedMs(toolStartedAt));
         run.setStatus("COMPLETED");
         run.setAgentOutput(answer.answer());

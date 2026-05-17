@@ -57,13 +57,19 @@ public class RagService {
 
     @Transactional
     public KnowledgeDoc importDocument(KnowledgeImportRequest request) {
+        return importDocument("demo", 1L, request);
+    }
+
+    @Transactional
+    public KnowledgeDoc importDocument(String tenantId, Long createdBy, KnowledgeImportRequest request) {
         KnowledgeDoc doc = new KnowledgeDoc();
+        doc.setTenantId(defaultTenantId(tenantId));
         doc.setTitle(request.title());
         doc.setDocType(request.docType());
         doc.setSource(request.source() == null ? "manual" : request.source());
         doc.setStatus("ACTIVE");
         doc.setContentHash(Integer.toHexString(request.content().hashCode()));
-        doc.setCreatedBy(1L);
+        doc.setCreatedBy(createdBy == null ? 1L : createdBy);
         docService.save(doc);
 
         List<ChunkDraft> chunks = splitter.split(request.title(), request.content());
@@ -84,15 +90,23 @@ public class RagService {
     }
 
     public KnowledgeSearchResponse search(String query, int topK) {
+        return search("demo", query, topK);
+    }
+
+    public KnowledgeSearchResponse search(String tenantId, String query, int topK) {
         Instant startedAt = Instant.now();
         String rewrittenQuery = queryRewriteService.rewrite(query);
-        List<KnowledgeItem> items = retriever.search(query, rewrittenQuery, topK);
-        saveLog(query, rewrittenQuery, topK, items, startedAt);
+        List<KnowledgeItem> items = retriever.search(defaultTenantId(tenantId), query, rewrittenQuery, topK);
+        saveLog(defaultTenantId(tenantId), query, rewrittenQuery, topK, items, startedAt);
         return new KnowledgeSearchResponse(query, rewrittenQuery, items);
     }
 
     public KnowledgeAnswer ask(String question, int topK) {
-        KnowledgeSearchResponse search = search(question, topK);
+        return ask("demo", question, topK);
+    }
+
+    public KnowledgeAnswer ask(String tenantId, String question, int topK) {
+        KnowledgeSearchResponse search = search(defaultTenantId(tenantId), question, topK);
         if (search.items().isEmpty() || search.items().get(0).score() < REFUSAL_THRESHOLD) {
             return new KnowledgeAnswer(
                     question,
@@ -135,6 +149,7 @@ public class RagService {
     }
 
     private void saveLog(
+            String tenantId,
             String query,
             String rewrittenQuery,
             int topK,
@@ -142,6 +157,7 @@ public class RagService {
             Instant startedAt
     ) {
         RetrievalLog log = new RetrievalLog();
+        log.setTenantId(defaultTenantId(tenantId));
         log.setQuery(query);
         log.setRewrittenQuery(rewrittenQuery);
         log.setRetrieverType("hybrid");
@@ -153,5 +169,9 @@ public class RagService {
             log.setResultJson("[]");
         }
         retrievalLogService.save(log);
+    }
+
+    private String defaultTenantId(String tenantId) {
+        return tenantId == null || tenantId.isBlank() ? "demo" : tenantId;
     }
 }

@@ -5,9 +5,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -30,6 +34,9 @@ class SecurityStrictModeTest {
 
     @Autowired
     private RbacPrincipalService rbacPrincipalService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void strictModeRequiresAgentPilotTokenForApi() throws Exception {
@@ -191,5 +198,39 @@ class SecurityStrictModeTest {
                         .content("{\"prompt\":\"ping\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)));
+    }
+
+    @Test
+    void knowledgeSearchIsScopedToCurrentTenant() throws Exception {
+        jdbcTemplate.update("""
+                        INSERT INTO crm_knowledge_doc
+                        (id, tenant_id, title, doc_type, source, content_hash, status, created_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                99001L, "tenant-other", "Other tenant playbook", "PRIVATE", "test", "tenant-other-doc", "ACTIVE", 900L);
+        jdbcTemplate.update("""
+                        INSERT INTO crm_knowledge_chunk
+                        (id, doc_id, chunk_index, title, content, token_count, keywords, embedding)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                99002L, 99001L, 0, "Private chunk", "TENANT_SECRET_ALPHA should never appear in demo tenant search",
+                12, "TENANT_SECRET_ALPHA", "");
+
+        MvcResult docsResult = mockMvc.perform(get("/api/knowledge/docs")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(docsResult.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .doesNotContain("Other tenant playbook");
+
+        MvcResult searchResult = mockMvc.perform(post("/api/knowledge/search")
+                        .header("X-AgentPilot-Token", "agentpilot-manager")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"TENANT_SECRET_ALPHA\",\"topK\":5}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(searchResult.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .doesNotContain("Private chunk")
+                .doesNotContain("tenant-other");
     }
 }

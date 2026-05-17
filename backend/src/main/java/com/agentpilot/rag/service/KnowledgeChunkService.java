@@ -76,14 +76,47 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
         return pgvectorAvailable ? "pgvector-hybrid" : "java-fallback";
     }
 
+    public long countByTenant(String tenantId) {
+        Long count = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM crm_knowledge_chunk c
+                        JOIN crm_knowledge_doc d ON d.id = c.doc_id
+                        WHERE d.tenant_id = ?
+                        """,
+                Long.class,
+                tenantId
+        );
+        return count == null ? 0L : count;
+    }
+
     public long vectorizedChunkCount() {
+        return vectorizedChunkCount(null);
+    }
+
+    public long vectorizedChunkCount(String tenantId) {
         if (!pgvectorAvailable) {
             return 0L;
         }
-        Long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM crm_knowledge_chunk WHERE embedding_vector IS NOT NULL",
-                Long.class
-        );
+        Long count;
+        if (tenantId == null || tenantId.isBlank()) {
+            count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM crm_knowledge_chunk WHERE embedding_vector IS NOT NULL",
+                    Long.class
+            );
+        } else {
+            count = jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(*)
+                            FROM crm_knowledge_chunk c
+                            JOIN crm_knowledge_doc d ON d.id = c.doc_id
+                            WHERE c.embedding_vector IS NOT NULL
+                              AND d.tenant_id = ?
+                            """,
+                    Long.class,
+                    tenantId
+            );
+        }
         return count == null ? 0L : count;
     }
 
@@ -99,6 +132,10 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
     }
 
     public List<VectorSearchRow> searchByVector(String vectorLiteral, int limit) {
+        return searchByVector(null, vectorLiteral, limit);
+    }
+
+    public List<VectorSearchRow> searchByVector(String tenantId, String vectorLiteral, int limit) {
         if (!pgvectorAvailable) {
             return List.of();
         }
@@ -115,13 +152,16 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
                         FROM crm_knowledge_chunk c
                         LEFT JOIN crm_knowledge_doc d ON d.id = c.doc_id
                         WHERE c.embedding_vector IS NOT NULL
+                          AND (? IS NULL OR d.tenant_id = ?)
                         ORDER BY c.embedding_vector <=> CAST(? AS vector)
                         LIMIT ?
                         """,
                 ps -> {
                     ps.setString(1, vectorLiteral);
-                    ps.setString(2, vectorLiteral);
-                    ps.setInt(3, Math.max(1, limit));
+                    ps.setString(2, tenantId);
+                    ps.setString(3, tenantId);
+                    ps.setString(4, vectorLiteral);
+                    ps.setInt(5, Math.max(1, limit));
                 },
                 (rs, rowNum) -> new VectorSearchRow(
                         rs.getLong("chunk_id"),
@@ -137,17 +177,41 @@ public class KnowledgeChunkService extends ServiceImpl<KnowledgeChunkMapper, Kno
     }
 
     public int rebuildMissingEmbeddingVectors() {
+        return rebuildMissingEmbeddingVectors(null);
+    }
+
+    public int rebuildMissingEmbeddingVectors(String tenantId) {
         if (!pgvectorAvailable) {
             return 0;
         }
-        return backfillMissingEmbeddingVectors();
+        return backfillMissingEmbeddingVectors(tenantId);
     }
 
     private int backfillMissingEmbeddingVectors() {
-        List<Long> missingChunkIds = jdbcTemplate.queryForList(
-                "SELECT id FROM crm_knowledge_chunk WHERE embedding_vector IS NULL ORDER BY id",
-                Long.class
-        );
+        return backfillMissingEmbeddingVectors(null);
+    }
+
+    private int backfillMissingEmbeddingVectors(String tenantId) {
+        List<Long> missingChunkIds;
+        if (tenantId == null || tenantId.isBlank()) {
+            missingChunkIds = jdbcTemplate.queryForList(
+                    "SELECT id FROM crm_knowledge_chunk WHERE embedding_vector IS NULL ORDER BY id",
+                    Long.class
+            );
+        } else {
+            missingChunkIds = jdbcTemplate.queryForList(
+                    """
+                            SELECT c.id
+                            FROM crm_knowledge_chunk c
+                            JOIN crm_knowledge_doc d ON d.id = c.doc_id
+                            WHERE c.embedding_vector IS NULL
+                              AND d.tenant_id = ?
+                            ORDER BY c.id
+                            """,
+                    Long.class,
+                    tenantId
+            );
+        }
         int updated = 0;
         for (Long chunkId : missingChunkIds) {
             KnowledgeChunk chunk = getById(chunkId);

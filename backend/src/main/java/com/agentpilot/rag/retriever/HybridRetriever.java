@@ -33,10 +33,15 @@ public class HybridRetriever {
     }
 
     public List<KnowledgeItem> search(String query, String rewrittenQuery, int topK) {
+        return search("demo", query, rewrittenQuery, topK);
+    }
+
+    public List<KnowledgeItem> search(String tenantId, String query, String rewrittenQuery, int topK) {
         int limit = Math.max(1, Math.min(topK, 20));
         double[] queryVector = embeddingService.embed(rewrittenQuery);
         if (chunkService.pgvectorAvailable()) {
             List<KnowledgeItem> vectorItems = chunkService.searchByVector(
+                            tenantId,
                             embeddingService.serializeForPgVector(queryVector),
                             Math.max(limit * 4, 20)
                     )
@@ -51,12 +56,13 @@ public class HybridRetriever {
             }
         }
 
-        Map<Long, KnowledgeDoc> docs = docService.list()
+        Map<Long, KnowledgeDoc> docs = docService.listByTenant(tenantId)
                 .stream()
                 .collect(Collectors.toMap(KnowledgeDoc::getId, Function.identity()));
 
         return chunkService.list()
                 .stream()
+                .filter(chunk -> docs.containsKey(chunk.getDocId()))
                 .map(chunk -> toItem(chunk, docs.get(chunk.getDocId()), rewrittenQuery, queryVector))
                 .filter(item -> item.score() > 0.02)
                 .sorted(Comparator.comparingDouble(KnowledgeItem::score).reversed())

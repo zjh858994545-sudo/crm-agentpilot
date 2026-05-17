@@ -11,7 +11,9 @@ import com.agentpilot.rag.vo.KnowledgeAskRequest;
 import com.agentpilot.rag.vo.KnowledgeImportRequest;
 import com.agentpilot.rag.vo.KnowledgeSearchRequest;
 import com.agentpilot.rag.vo.KnowledgeSearchResponse;
+import com.agentpilot.security.CurrentUser;
 import jakarta.validation.Valid;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,48 +46,53 @@ public class KnowledgeController {
     @PostMapping("/docs")
     @PreAuthorize("hasAuthority('knowledge:write')")
     public ApiResponse<KnowledgeDoc> importDocument(@Valid @RequestBody KnowledgeImportRequest request) {
-        return ApiResponse.ok(ragService.importDocument(request));
+        return ApiResponse.ok(ragService.importDocument(CurrentUser.tenantId(), CurrentUser.userId(), request));
     }
 
     @GetMapping("/docs")
     public ApiResponse<List<KnowledgeDoc>> docs() {
-        return ApiResponse.ok(docService.list());
+        return ApiResponse.ok(docService.listByTenant(CurrentUser.tenantId()));
     }
 
     @GetMapping("/status")
     public ApiResponse<Map<String, Object>> status() {
+        String tenantId = CurrentUser.tenantId();
         return ApiResponse.ok(Map.of(
                 "vectorStoreMode", chunkService.vectorStoreMode(),
                 "pgvectorAvailable", chunkService.pgvectorAvailable(),
-                "docCount", docService.count(),
-                "chunkCount", chunkService.count(),
-                "vectorizedChunkCount", chunkService.vectorizedChunkCount()
+                "docCount", docService.countByTenant(tenantId),
+                "chunkCount", chunkService.countByTenant(tenantId),
+                "vectorizedChunkCount", chunkService.vectorizedChunkCount(tenantId)
         ));
     }
 
     @PostMapping("/vectors/rebuild")
     @PreAuthorize("hasAuthority('knowledge:write')")
     public ApiResponse<Map<String, Object>> rebuildMissingVectors() {
-        int updatedChunks = chunkService.rebuildMissingEmbeddingVectors();
+        String tenantId = CurrentUser.tenantId();
+        int updatedChunks = chunkService.rebuildMissingEmbeddingVectors(tenantId);
         return ApiResponse.ok(Map.of(
                 "vectorStoreMode", chunkService.vectorStoreMode(),
                 "updatedChunks", updatedChunks,
-                "vectorizedChunkCount", chunkService.vectorizedChunkCount()
+                "vectorizedChunkCount", chunkService.vectorizedChunkCount(tenantId)
         ));
     }
 
     @GetMapping("/docs/{id}")
     public ApiResponse<List<KnowledgeChunk>> chunks(@PathVariable Long id) {
+        if (!docService.visibleToTenant(id, CurrentUser.tenantId())) {
+            throw new AccessDeniedException("knowledge document is outside current tenant");
+        }
         return ApiResponse.ok(chunkService.listByDocId(id));
     }
 
     @PostMapping("/search")
     public ApiResponse<KnowledgeSearchResponse> search(@Valid @RequestBody KnowledgeSearchRequest request) {
-        return ApiResponse.ok(ragService.search(request.query(), request.topK() == null ? 5 : request.topK()));
+        return ApiResponse.ok(ragService.search(CurrentUser.tenantId(), request.query(), request.topK() == null ? 5 : request.topK()));
     }
 
     @PostMapping("/ask")
     public ApiResponse<KnowledgeAnswer> ask(@Valid @RequestBody KnowledgeAskRequest request) {
-        return ApiResponse.ok(ragService.ask(request.question(), request.topK() == null ? 5 : request.topK()));
+        return ApiResponse.ok(ragService.ask(CurrentUser.tenantId(), request.question(), request.topK() == null ? 5 : request.topK()));
     }
 }

@@ -18,6 +18,7 @@ import com.agentpilot.rag.vo.KnowledgeAnswer;
 import com.agentpilot.security.CurrentUser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,7 +64,7 @@ public class CallCenterService {
     }
 
     public QualityCheckResponse qualityCheck(CallTextRequest request) {
-        KnowledgeAnswer evidence = ragService.ask("销售通话质检 违规承诺 保证收益 优惠审批", 3);
+        KnowledgeAnswer evidence = ragService.ask(currentTenantId(), "销售通话质检 违规承诺 保证收益 优惠审批", 3);
         List<QualityViolation> violations = new ArrayList<>();
         String text = removeNegatedCommitments(request.text());
         if (containsAny(text, "保证收益", "保证排名", "一定成交", "保证入职", "保证治疗效果")) {
@@ -204,6 +205,14 @@ public class CallCenterService {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
             return "{}";
+        }
+    }
+
+    private String currentTenantId() {
+        try {
+            return CurrentUser.tenantId();
+        } catch (AccessDeniedException ex) {
+            return "demo";
         }
     }
 }
