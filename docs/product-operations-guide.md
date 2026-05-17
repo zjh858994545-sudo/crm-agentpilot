@@ -163,7 +163,10 @@ Agent run 和 tool call 是审计事件，使用同一张 outbox 表做 at-least
 - 日志禁止输出 API key、token、手机号、客户备注等敏感信息。
 - 导出报表需要按角色和数据范围授权。
 - 联系记录、通话摘要和质检结果属于业务敏感数据，需要保留审计。
-- 多租户场景需要在 salesRepId 之外引入 tenantId。
+- 当前后端已在 CRM 客户/商机/任务、Agent run/confirmation、呼叫中心、知识库文档、检索日志等核心链路中使用 `tenantId` 做租户隔离。
+- `sales` 角色只能访问自己的 `salesRepId` 数据；`sales_manager` 和 `system_admin` 可以访问同一租户内的团队数据，但不能跨租户。
+- 前端不能传入或决定 `tenantId`；后端必须从认证后的 `AgentPilotPrincipal` 读取租户、角色和数据范围。
+- 生产环境还需要补充更完整的数据分级、字段级权限、审计导出审批和租户级备份恢复演练。
 
 ## 9. 备份与恢复
 

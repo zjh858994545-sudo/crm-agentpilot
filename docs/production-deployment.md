@@ -85,8 +85,10 @@ Production code must follow these rules:
 
 - Frontend never decides `tenantId`; it only displays it.
 - Backend derives `tenantId` from `AgentPilotPrincipal`.
-- CRM customer, lead, task, contact log, agent session, and agent run queries include `tenant_id`.
+- CRM customer, lead, task, contact log, agent session, agent run, confirmation, knowledge document, retrieval log, and call-center operations include `tenant_id`.
 - Sales users can only access their own `salesRepId`; `sales_manager` and `system_admin` can access other sales reps in the same tenant.
+- Call-center write proposals must keep `customerId`, `leadId`, and `salesRepId` aligned before creating a confirmation.
+- Knowledge search, answer generation, vector rebuild, and document listing are tenant-scoped so one tenant cannot retrieve another tenant's playbooks.
 - Confirmation ownership checks validate tenant, user, and sales scope before executing CRM writes.
 - Event payloads include enough IDs for downstream idempotency, but downstream services must re-check tenant scope.
 

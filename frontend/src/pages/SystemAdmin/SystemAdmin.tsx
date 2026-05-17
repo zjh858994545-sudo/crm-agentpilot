@@ -304,6 +304,14 @@ export default function SystemAdmin() {
       operatingLine: '优先使用 Redis 做分布式限流；Redis 不可用时回退本机 token bucket；超限返回 429。'
     },
     {
+      key: 'tenant-scope',
+      name: '租户数据隔离',
+      status: securityStatus?.rbacEnabled ? 'ACTIVE' : 'LOCAL_PROFILE',
+      owner: 'CurrentUser / tenant_id / salesRepId',
+      why: '商业化部署必须保证不同企业、不同销售团队之间不会串看客户、商机、知识库和审计数据。',
+      operatingLine: '后端从认证主体读取 tenantId 和 salesRepId，CRM、Agent、RAG、呼叫中心接口统一做数据范围校验。'
+    },
+    {
       key: 'rbac',
       name: 'RBAC Token',
       status: securityStatus?.rbacEnabled ? 'ACTIVE' : 'LOCAL_PROFILE',

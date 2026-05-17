@@ -378,7 +378,7 @@ CRM-AgentPilot 是一个面向本地生活销售场景的 CRM AI Agent 工作台
 
 你可以这样讲：
 
-> demo token 是为了本地快速演示；RBAC token 和企业 JWT 才是更接近真实业务的方案。认证后会得到 tenantId、salesRepId、角色和权限。销售只能看自己的客户和商机；销售主管、系统管理员可以在同一租户内查看其他销售的数据，避免跨租户或越权串看。
+> demo token 是为了本地快速演示；RBAC token 和企业 JWT 才是更接近真实业务的方案。认证后会得到 tenantId、salesRepId、角色和权限。销售只能看自己的客户、商机、Agent 审计和呼叫中心记录；销售主管、系统管理员可以在同一租户内查看团队数据。知识库文档、RAG 检索日志和向量重建也按租户隔离，避免跨企业串看话术和政策。
 
 ### Retention 数据保留
 
@@ -575,6 +575,12 @@ cd "F:\后端开发新项目\crm-agentpilot"
 答：
 
 > 兼容 token 是本地兜底，方便没有真实用户体系时快速跑起来。RBAC token 会从数据库加载 userId、tenantId、salesRepId、角色和权限；企业 JWT 会从企业身份源签发的 token 中读取这些 claim。这样不同销售能看到的数据范围不同，不会所有人都用 userId=1。
+
+### Q8.1：tenantId 多租户隔离到底隔离了什么？
+
+答：
+
+> tenantId 是企业或业务租户边界。项目里 CRM 客户、商机、任务、联系记录、Agent run、confirmation、知识库文档和 retrieval log 都带 tenantId。后端每次查询都从当前登录用户取 tenantId，而不是相信前端传值。销售再叠加 salesRepId 范围，主管和管理员可以看同租户团队数据，但不能跨租户。
 
 ### Q9：这些生产化能力应该在哪里看？
 
