@@ -51,9 +51,9 @@ const navItems: NavEntry[] = [
   { key: '/leads', icon: <ThunderboltOutlined />, label: '商机优先级', group: 'manager', visibleFor: ['sales', 'manager'] },
   { key: '/knowledge', icon: <BookOutlined />, label: '知识库问答', group: 'sales', visibleFor: ['sales', 'manager', 'admin'] },
   { key: '/callcenter', icon: <PhoneOutlined />, label: '呼叫中心', group: 'sales', visibleFor: ['sales'] },
-  { key: '/system', icon: <SettingOutlined />, label: '系统能力', group: 'admin', visibleFor: ['admin'] },
+  { key: '/system', icon: <SettingOutlined />, label: '系统管理', group: 'admin', visibleFor: ['admin'] },
   { key: '/runs', icon: <AuditOutlined />, label: '运行审计', group: 'admin', visibleFor: ['admin'] },
-  { key: '/evaluation', icon: <ExperimentOutlined />, label: '质量评估', group: 'admin', visibleFor: ['admin'] }
+  { key: '/evaluation', icon: <ExperimentOutlined />, label: '质量评测', group: 'admin', visibleFor: ['admin'] }
 ];
 
 const groupLabels: Record<NavEntry['group'], string> = {
@@ -101,7 +101,7 @@ class WorkspaceErrorBoundary extends Component<WorkspaceErrorBoundaryProps, Work
             <Tag color="red">页面异常</Tag>
             <Title level={4}>当前工作区加载失败</Title>
             <Paragraph type="secondary">
-              页面组件出现异常，但登录状态和后端服务仍保留。可以刷新页面重新进入，或切换到其他菜单继续处理业务。
+              页面组件出现异常，但登录状态和后端服务仍会保留。请刷新页面重新进入，或切换到其他菜单继续处理业务。
             </Paragraph>
             <Button type="primary" onClick={() => window.location.reload()}>
               刷新页面
@@ -132,8 +132,8 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
   },
   '/leads': {
     title: '商机优先级',
-    subtitle: '销售主管查看高优先级商机、评分解释和跟进建议',
-    role: '主管'
+    subtitle: '查看高优先级商机、评分解释和跟进建议',
+    role: '销售 / 主管'
   },
   '/knowledge': {
     title: '知识库问答',
@@ -146,18 +146,18 @@ const pageMeta: Record<string, { title: string; subtitle: string; role: string }
     role: '销售'
   },
   '/system': {
-    title: '系统能力',
-    subtitle: '系统管理员集中查看限流、RBAC、Outbox、模型工具和向量检索状态',
+    title: '系统管理',
+    subtitle: '集中查看限流、RBAC、Outbox、模型工具和向量检索状态',
     role: '系统管理'
   },
   '/runs': {
     title: '运行审计',
-    subtitle: '系统管理员排查每一次 AI 处理、工具调用和确认链路',
+    subtitle: '排查每一次 AI 处理、工具调用和确认链路',
     role: '系统管理'
   },
   '/evaluation': {
-    title: '质量评估',
-    subtitle: '系统管理员查看评测用例、知识引用、工具命中和延迟指标',
+    title: '质量评测',
+    subtitle: '查看评测用例、知识引用、工具命中和延迟指标',
     role: '系统管理'
   }
 };
@@ -221,7 +221,7 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
       onLogin(profile);
     } catch {
       clearSession();
-      setError('访问令牌无效或系统暂不可用，请确认令牌后重试。');
+      setError('访问令牌无效，或系统暂时不可用。请确认令牌后重试。');
     } finally {
       setSubmitting(false);
     }
@@ -234,16 +234,12 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
           <Text className="eyebrow">CRM-AgentPilot</Text>
           <Title level={2}>登录销售作业平台</Title>
           <Paragraph>
-            输入由系统管理员分配的访问令牌。系统会根据令牌识别销售、主管或管理员身份，并自动加载对应菜单和数据范围。
+            输入系统管理员分配的访问令牌。系统会根据令牌识别销售、主管或管理员身份，并自动加载对应菜单和数据范围。
           </Paragraph>
         </Space>
         <Card className="login-role-card login-token-card">
           <Form layout="vertical" onFinish={submit}>
-            <Form.Item
-              label="访问令牌"
-              name="token"
-              rules={[{ required: true, message: '请输入访问令牌' }]}
-            >
+            <Form.Item label="访问令牌" name="token" rules={[{ required: true, message: '请输入访问令牌' }]}>
               <Input.Password
                 size="large"
                 autoFocus
@@ -319,7 +315,7 @@ function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) 
           </Space>
           <Space size={8} wrap className="header-status">
             <Tag color={roleColors[user.primaryRole]} icon={isAdminUser ? <SettingOutlined /> : <UserOutlined />}>
-              {roleTitles[user.primaryRole]} · {user.displayName}
+              {roleTitles[user.primaryRole]} / {user.displayName}
             </Tag>
             <Badge status="success" text="工作台在线" />
             <Button icon={<LogoutOutlined />} onClick={logout}>
