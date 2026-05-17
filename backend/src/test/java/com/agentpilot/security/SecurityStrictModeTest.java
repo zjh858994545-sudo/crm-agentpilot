@@ -137,6 +137,17 @@ class SecurityStrictModeTest {
     }
 
     @Test
+    void agentRunAuditExportRequiresOperationalPermission() throws Exception {
+        mockMvc.perform(get("/api/agent/runs/export")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-1"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/agent/runs/export")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void currentUserEndpointReturnsDatabaseBackedProfile() throws Exception {
         mockMvc.perform(get("/api/auth/me")
                         .header("X-AgentPilot-Token", "agentpilot-manager")

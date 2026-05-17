@@ -16,11 +16,15 @@ import com.agentpilot.agent.vo.AgentExecutionTrace;
 import com.agentpilot.agent.vo.ConfirmationDecisionRequest;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.common.response.PageResponse;
+import com.agentpilot.common.security.DataMasking;
 import com.agentpilot.crm.entity.Customer;
 import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.security.CurrentUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -188,6 +193,24 @@ public class AgentController {
         return ApiResponse.ok(new PageResponse<>(items, total, safePage, safePageSize));
     }
 
+    @GetMapping(value = "/runs/export", produces = "text/csv")
+    @PreAuthorize("hasAuthority('events:read')")
+    public ResponseEntity<String> exportRuns(
+            @RequestParam(defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "1000") int limit
+    ) {
+        int safeLimit = Math.max(1, Math.min(limit, 5000));
+        List<AgentRun> items = runService.list(runQuery(status, keyword)
+                .orderByDesc(AgentRun::getId)
+                .last("limit " + safeLimit));
+        String csv = buildRunCsv(items);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"agent-runs.csv\"")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csv);
+    }
+
     @GetMapping("/runs/{runId}/tool-calls")
     public ApiResponse<List<AgentToolCall>> toolCalls(@PathVariable Long runId) {
         requireRunVisible(runId);
@@ -277,5 +300,39 @@ public class AgentController {
                 || !CurrentUser.canAccessSalesRep(customer.getOwnerSalesRepId())) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
+    }
+
+    private String buildRunCsv(List<AgentRun> items) {
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("runId,tenantId,userId,salesRepId,customerId,intent,status,modelName,latencyMs,completedAt,userInput,agentOutput,errorMessage\n");
+        for (AgentRun run : items) {
+            builder.append(csv(run.getId())).append(',')
+                    .append(csv(run.getTenantId())).append(',')
+                    .append(csv(run.getUserId())).append(',')
+                    .append(csv(run.getSalesRepId())).append(',')
+                    .append(csv(run.getCustomerId())).append(',')
+                    .append(csv(run.getIntent())).append(',')
+                    .append(csv(run.getStatus())).append(',')
+                    .append(csv(run.getModelName())).append(',')
+                    .append(csv(run.getLatencyMs())).append(',')
+                    .append(csv(run.getCompletedAt())).append(',')
+                    .append(csv(maskedSnippet(run.getUserInput()))).append(',')
+                    .append(csv(maskedSnippet(run.getAgentOutput()))).append(',')
+                    .append(csv(maskedSnippet(run.getErrorMessage()))).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String maskedSnippet(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String masked = DataMasking.maskSensitiveText(value);
+        return masked.length() > 240 ? masked.substring(0, 240) + "..." : masked;
+    }
+
+    private String csv(Object value) {
+        String text = value == null ? "" : String.valueOf(value);
+        return "\"" + text.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ") + "\"";
     }
 }

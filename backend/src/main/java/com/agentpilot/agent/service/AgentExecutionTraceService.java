@@ -125,7 +125,7 @@ public class AgentExecutionTraceService {
                 steps,
                 routingMode(run),
                 currentStage(run, confirmations),
-                "写 CRM 前必须生成确认单，人确认后才执行真正写入。",
+                "写入 CRM 前必须生成确认单，人工确认后才会真正执行。",
                 requiresConfirmation
         );
     }

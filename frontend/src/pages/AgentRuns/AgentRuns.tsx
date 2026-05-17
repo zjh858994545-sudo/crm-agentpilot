@@ -2,6 +2,7 @@ import {
   ClockCircleOutlined,
   CodeOutlined,
   DeploymentUnitOutlined,
+  DownloadOutlined,
   ReloadOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
@@ -28,6 +29,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AgentRun,
   AgentToolCall,
+  exportAgentRunsCsv,
   fetchAgentRunPage,
   fetchAgentRunToolCalls,
   sendAgentMessage
@@ -143,6 +145,29 @@ export default function AgentRuns() {
     }
   };
 
+  const exportCsv = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const blob = await exportAgentRunsCsv({
+        status: statusFilter,
+        keyword: keyword.trim(),
+        limit: 1000
+      });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `agent-runs-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      message.success('已导出当前筛选条件下的审计记录');
+    } catch {
+      setError('导出审计记录失败，请确认当前账号具备运营审计权限。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {error && <Alert type="warning" showIcon message={error} />}
@@ -153,6 +178,9 @@ export default function AgentRuns() {
         </Button>
         <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadRuns()}>
           刷新
+        </Button>
+        <Button icon={<DownloadOutlined />} loading={loading} onClick={exportCsv}>
+          导出审计 CSV
         </Button>
         <Input.Search
           allowClear

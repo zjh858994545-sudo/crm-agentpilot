@@ -834,6 +834,18 @@ export async function fetchAgentRunPage(params: {
   return response.data.data;
 }
 
+export async function exportAgentRunsCsv(params: {
+  status?: string;
+  keyword?: string;
+  limit?: number;
+} = {}) {
+  const response = await apiClient.get<Blob>('/agent/runs/export', {
+    params,
+    responseType: 'blob'
+  });
+  return response.data;
+}
+
 export async function fetchAgentRunToolCalls(runId: number) {
   const response = await apiClient.get<ApiResponse<AgentToolCall[]>>(`/agent/runs/${runId}/tool-calls`);
   return response.data.data;
