@@ -76,6 +76,7 @@ const roleColors: Record<WorkspaceRole, string> = {
 
 type WorkspaceErrorBoundaryProps = {
   children: ReactNode;
+  resetKey: string;
 };
 
 type WorkspaceErrorBoundaryState = {
@@ -91,6 +92,12 @@ class WorkspaceErrorBoundary extends Component<WorkspaceErrorBoundaryProps, Work
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Workspace page crashed', error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: WorkspaceErrorBoundaryProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false });
+    }
   }
 
   render() {
@@ -324,7 +331,7 @@ function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) 
           </Space>
         </Header>
         <Content className="app-content">
-          <WorkspaceErrorBoundary>
+          <WorkspaceErrorBoundary resetKey={location.pathname}>
             <Suspense fallback={<PageLoading />}>
               <Routes>
                 <Route path="/" element={route('/', <Dashboard />)} />
