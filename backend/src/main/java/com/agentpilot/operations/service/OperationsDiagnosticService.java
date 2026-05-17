@@ -62,6 +62,14 @@ public class OperationsDiagnosticService {
                         It contains runtime state, aggregate counts, readiness checks, retention status, usage metrics and outbox status.
                         It intentionally does not export customer records, contact logs, call transcripts, API tokens or model keys.
                         Share it with engineers only when support needs runtime context.
+
+                        Files:
+                        - manifest.json: generation time, tenant, actor, trace id and JVM/OS summary.
+                        - readiness.json: production readiness checks and blocking risks.
+                        - retention.json: cleanup categories, eligible rows, protected rows and cleanup policy.
+                        - usage.json: tenant-scoped daily and seven-day usage counters.
+                        - outbox.json: pending, dispatching and dead-letter event state.
+                        - database.json: database product and safe aggregate table counts only.
                         """);
             }
             return output.toByteArray();
