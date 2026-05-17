@@ -1,6 +1,42 @@
 groups:
   - name: crm-agentpilot
     rules:
+      - alert: AgentPilotBackendDown
+        expr: up{job=~".*agentpilot.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRM-AgentPilot backend is down"
+          description: "Prometheus cannot scrape the AgentPilot backend. Check application process, container status, and network path."
+
+      - alert: AgentPilotApi5xxSpike
+        expr: sum(rate(http_server_requests_seconds_count{uri=~"/api/.*",status=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRM-AgentPilot API 5xx errors are increasing"
+          description: "Backend API is returning server errors. Check logs by X-Trace-Id, recent deployment, database, model provider, and Kafka/outbox state."
+
+      - alert: AgentPilotAuthFailureSpike
+        expr: sum(rate(http_server_requests_seconds_count{uri=~"/api/.*",status=~"401|403"}[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot authentication or authorization failures are high"
+          description: "401/403 rate is unusually high. Check token rotation, JWT issuer, tenant allow-list, RBAC permissions, and possible abuse."
+
+      - alert: AgentPilotRateLimitSpike
+        expr: sum(rate(http_server_requests_seconds_count{uri=~"/api/.*",status="429"}[5m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CRM-AgentPilot rate limit is frequently triggered"
+          description: "429 responses are above threshold. Check whether traffic is expected, Redis rate-limit backend is healthy, and model cost protection is working."
+
       - alert: AgentPilotOutboxDeadLetters
         expr: agentpilot_outbox_dead_letter_events > 0
         for: 5m
