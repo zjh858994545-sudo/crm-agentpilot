@@ -14,6 +14,12 @@ import java.util.List;
 
 @Service
 public class NotificationService extends ServiceImpl<AgentPilotNotificationMapper, AgentPilotNotification> {
+    private final NotificationDeliveryService deliveryService;
+
+    public NotificationService(NotificationDeliveryService deliveryService) {
+        this.deliveryService = deliveryService;
+    }
+
     public void notifyConfirmationRequired(AgentRun run, AgentConfirmation confirmation) {
         if (run == null || confirmation == null || run.getUserId() == null || run.getTenantId() == null) {
             return;
@@ -40,6 +46,7 @@ public class NotificationService extends ServiceImpl<AgentPilotNotificationMappe
         notification.setDedupeKey(dedupeKey);
         notification.setCreatedAt(LocalDateTime.now());
         save(notification);
+        deliveryService.deliver(notification);
     }
 
     public List<AgentPilotNotification> recentForUser(String tenantId, Long userId, String status, int limit) {

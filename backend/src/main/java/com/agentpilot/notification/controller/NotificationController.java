@@ -2,6 +2,7 @@ package com.agentpilot.notification.controller;
 
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.notification.entity.AgentPilotNotification;
+import com.agentpilot.notification.service.NotificationDeliveryService;
 import com.agentpilot.notification.service.NotificationService;
 import com.agentpilot.security.CurrentUser;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,9 +21,11 @@ import java.util.Map;
 @PreAuthorize("hasAuthority('agent:use')")
 public class NotificationController {
     private final NotificationService notificationService;
+    private final NotificationDeliveryService deliveryService;
 
-    public NotificationController(NotificationService notificationService) {
+    public NotificationController(NotificationService notificationService, NotificationDeliveryService deliveryService) {
         this.notificationService = notificationService;
+        this.deliveryService = deliveryService;
     }
 
     @GetMapping
@@ -44,6 +47,11 @@ public class NotificationController {
                 "unreadCount",
                 notificationService.unreadCount(CurrentUser.tenantId(), CurrentUser.userId())
         ));
+    }
+
+    @GetMapping("/status")
+    public ApiResponse<Map<String, Object>> status() {
+        return ApiResponse.ok(deliveryService.status());
     }
 
     @PostMapping("/{id}/read")

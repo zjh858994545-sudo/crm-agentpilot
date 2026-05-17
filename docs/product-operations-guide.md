@@ -305,6 +305,7 @@ Operationally this means confirmation is not only an audit record. It is also a 
 - When Agent or Call Center creates a CRM write confirmation, the backend creates an `agentpilot_notification` row for the responsible user.
 - The frontend header shows unread confirmation reminders so sales reps do not need to actively search for pending writes.
 - Confirming or rejecting the confirmation marks the related notification as read.
+- Delivery mode is log-only by default. Set `AGENTPILOT_NOTIFICATION_WEBHOOK_ENABLED=true` and `AGENTPILOT_NOTIFICATION_WEBHOOK_URL=...` to forward confirmation reminders to a WeCom/DingTalk/SMS gateway.
 - `POST /api/callcenter/call-ended-events` is the productized call-end entry point. A telephony provider can send `callId`, `recordingUrl`, `transcript`, `customerId`, and `leadId`; the system returns summary, quality-check result, and a contact-log confirmation draft.
 
 Production integration notes:

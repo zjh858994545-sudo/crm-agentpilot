@@ -3,6 +3,7 @@ package com.agentpilot;
 import com.agentpilot.common.config.ApplicationInfoProperties;
 import com.agentpilot.events.config.EventProperties;
 import com.agentpilot.model.config.ModelProperties;
+import com.agentpilot.notification.config.NotificationProperties;
 import com.agentpilot.operations.config.RetentionProperties;
 import com.agentpilot.security.config.AgentPilotSecurityProperties;
 import com.agentpilot.security.config.JwtSsoProperties;
@@ -17,6 +18,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties({
         ApplicationInfoProperties.class,
         ModelProperties.class,
+        NotificationProperties.class,
         EventProperties.class,
         RetentionProperties.class,
         AgentPilotSecurityProperties.class,
