@@ -12,6 +12,7 @@ import com.agentpilot.rag.service.KnowledgeChunkService;
 import com.agentpilot.rag.service.KnowledgeDocService;
 import com.agentpilot.security.RbacPrincipalService;
 import com.agentpilot.security.config.AgentPilotSecurityProperties;
+import com.agentpilot.security.config.JwtSsoProperties;
 import com.agentpilot.security.ratelimit.ApiRateLimitProperties;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,7 @@ import java.util.Locale;
 public class LaunchReadinessService {
     private final ApplicationInfoProperties appProperties;
     private final AgentPilotSecurityProperties securityProperties;
+    private final JwtSsoProperties jwtSsoProperties;
     private final ApiRateLimitProperties rateLimitProperties;
     private final RbacPrincipalService rbacPrincipalService;
     private final ChatModelClient chatModelClient;
@@ -37,6 +39,7 @@ public class LaunchReadinessService {
     public LaunchReadinessService(
             ApplicationInfoProperties appProperties,
             AgentPilotSecurityProperties securityProperties,
+            JwtSsoProperties jwtSsoProperties,
             ApiRateLimitProperties rateLimitProperties,
             RbacPrincipalService rbacPrincipalService,
             ChatModelClient chatModelClient,
@@ -49,6 +52,7 @@ public class LaunchReadinessService {
     ) {
         this.appProperties = appProperties;
         this.securityProperties = securityProperties;
+        this.jwtSsoProperties = jwtSsoProperties;
         this.rateLimitProperties = rateLimitProperties;
         this.rbacPrincipalService = rbacPrincipalService;
         this.chatModelClient = chatModelClient;
@@ -87,6 +91,7 @@ public class LaunchReadinessService {
                 "活跃 RBAC 用户数：" + rbacPrincipalService.activeUserCount(),
                 "至少保留一个系统管理员账号，并为销售/主管分配真实 token"
         ));
+        checks.add(jwtTenantAllowListCheck(productionPhase));
         checks.add(check(
                 "rate-limit.enabled",
                 "接口限流",
@@ -161,6 +166,28 @@ public class LaunchReadinessService {
                 "WARN",
                 knowledgeChunkService.vectorStoreMode() + " / " + vectorizedChunkCount + "/" + chunkCount + " chunks",
                 "确保 vectorStoreMode=pgvector-hybrid，且向量化覆盖率不低于 80%"
+        );
+    }
+
+    private LaunchReadinessCheck jwtTenantAllowListCheck(boolean productionPhase) {
+        if (!jwtSsoProperties.isEnabled()) {
+            return new LaunchReadinessCheck(
+                    "security.jwt-tenant-allow-list",
+                    "JWT 租户白名单",
+                    "PASS",
+                    "WARN",
+                    "企业 JWT 未启用，当前由 RBAC token 或本地身份接管",
+                    "启用企业 SSO 时配置 AGENTPILOT_JWT_ALLOWED_TENANTS"
+            );
+        }
+        int tenantCount = jwtSsoProperties.normalizedAllowedTenants().size();
+        return check(
+                "security.jwt-tenant-allow-list",
+                "JWT 租户白名单",
+                tenantCount > 0,
+                productionPhase ? "FAIL" : "WARN",
+                "允许租户数：" + tenantCount,
+                "商业部署必须显式列出已开通租户，避免外部 JWT 携带未知 tenantId 获得访问"
         );
     }
 
