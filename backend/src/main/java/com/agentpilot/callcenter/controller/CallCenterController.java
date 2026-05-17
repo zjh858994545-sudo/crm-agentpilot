@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/callcenter")
@@ -69,36 +70,58 @@ public class CallCenterController {
     }
 
     private CallTextRequest securedRequest(CallTextRequest request, boolean requireCustomer) {
-        Long salesRepId = CurrentUser.salesRepId();
-        if (request.salesRepId() != null && !request.salesRepId().equals(salesRepId)) {
-            throw new AccessDeniedException("request.salesRepId is outside current data scope");
-        }
+        Long salesRepId = request.salesRepId();
+        Customer customer = null;
+        Lead lead = null;
         if (request.customerId() != null) {
-            requireCustomerVisible(request.customerId());
+            customer = requireCustomerVisible(request.customerId());
+            salesRepId = resolveSalesRepId(salesRepId, customer.getOwnerSalesRepId());
         } else if (requireCustomer) {
             throw new AccessDeniedException("customerId is required for CRM write confirmation");
         }
         if (request.leadId() != null) {
-            requireLeadVisible(request.leadId());
+            lead = requireLeadVisible(request.leadId());
+            salesRepId = resolveSalesRepId(salesRepId, lead.getSalesRepId());
+            if (customer != null && !Objects.equals(customer.getId(), lead.getCustomerId())) {
+                throw new AccessDeniedException("lead is outside selected customer scope");
+            }
+        }
+        if (salesRepId == null) {
+            salesRepId = CurrentUser.salesRepId();
+        }
+        if (!CurrentUser.canAccessSalesRep(salesRepId)) {
+            throw new AccessDeniedException("request.salesRepId is outside current data scope");
         }
         return new CallTextRequest(request.customerId(), salesRepId, request.leadId(), request.text());
     }
 
-    private void requireCustomerVisible(Long customerId) {
+    private Customer requireCustomerVisible(Long customerId) {
         Customer customer = customerService.getById(customerId);
         if (customer == null
                 || !CurrentUser.tenantId().equals(customer.getTenantId())
-                || !CurrentUser.salesRepId().equals(customer.getOwnerSalesRepId())) {
+                || !CurrentUser.canAccessSalesRep(customer.getOwnerSalesRepId())) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
+        return customer;
     }
 
-    private void requireLeadVisible(Long leadId) {
+    private Lead requireLeadVisible(Long leadId) {
         Lead lead = leadService.getById(leadId);
         if (lead == null
                 || !CurrentUser.tenantId().equals(lead.getTenantId())
-                || !CurrentUser.salesRepId().equals(lead.getSalesRepId())) {
+                || !CurrentUser.canAccessSalesRep(lead.getSalesRepId())) {
             throw new AccessDeniedException("lead is outside current data scope");
         }
+        return lead;
+    }
+
+    private Long resolveSalesRepId(Long requestedSalesRepId, Long ownerSalesRepId) {
+        if (requestedSalesRepId == null) {
+            return ownerSalesRepId;
+        }
+        if (!Objects.equals(requestedSalesRepId, ownerSalesRepId)) {
+            throw new AccessDeniedException("request.salesRepId does not match customer or lead owner");
+        }
+        return requestedSalesRepId;
     }
 }

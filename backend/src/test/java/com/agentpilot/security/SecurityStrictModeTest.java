@@ -144,6 +144,34 @@ class SecurityStrictModeTest {
     }
 
     @Test
+    void salesManagerCanUseCallCenterForTeamMemberButSalesCannotCrossScope() throws Exception {
+        String callText = "\\u5ba2\\u6237\\u8981\\u6c42\\u53d1\\u9001\\u5957\\u9910\\u5bf9\\u6bd4\\u548c\\u4f18\\u60e0\\u5ba1\\u6279\\u65b9\\u6848";
+        mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
+                        .header("X-AgentPilot-Token", "agentpilot-manager")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":1002,\"salesRepId\":2,\"leadId\":3002,\"text\":\"" + callText + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.payload.customerId", is(1002)))
+                .andExpect(jsonPath("$.data.payload.salesRepId", is(2)))
+                .andExpect(jsonPath("$.data.payload.leadId", is(3002)));
+
+        mockMvc.perform(get("/api/callcenter/customers/1002/memory")
+                        .header("X-AgentPilot-Token", "agentpilot-manager"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":1002,\"salesRepId\":2,\"leadId\":3002,\"text\":\"" + callText + "\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/callcenter/customers/1002/memory")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-1"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void agentRunAuditExportRequiresOperationalPermission() throws Exception {
         mockMvc.perform(get("/api/agent/runs/export")
                         .header("X-AgentPilot-Token", "agentpilot-sales-1"))
