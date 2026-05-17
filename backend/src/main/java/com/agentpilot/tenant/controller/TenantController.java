@@ -3,9 +3,14 @@ package com.agentpilot.tenant.controller;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.operations.service.AdminAuditService;
 import com.agentpilot.tenant.entity.AgentPilotTenant;
+import com.agentpilot.tenant.entity.TenantConfig;
+import com.agentpilot.tenant.service.TenantConfigService;
 import com.agentpilot.tenant.service.TenantService;
+import com.agentpilot.tenant.vo.TenantConfigUpsertRequest;
 import com.agentpilot.tenant.vo.TenantStatusRequest;
 import com.agentpilot.tenant.vo.TenantUpsertRequest;
+import com.agentpilot.security.CurrentUser;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -23,10 +28,16 @@ import java.util.List;
 @PreAuthorize("hasAuthority('ops:read')")
 public class TenantController {
     private final TenantService tenantService;
+    private final TenantConfigService tenantConfigService;
     private final AdminAuditService adminAuditService;
 
-    public TenantController(TenantService tenantService, AdminAuditService adminAuditService) {
+    public TenantController(
+            TenantService tenantService,
+            TenantConfigService tenantConfigService,
+            AdminAuditService adminAuditService
+    ) {
         this.tenantService = tenantService;
+        this.tenantConfigService = tenantConfigService;
         this.adminAuditService = adminAuditService;
     }
 
@@ -63,5 +74,42 @@ public class TenantController {
         AgentPilotTenant tenant = tenantService.changeStatus(tenantId, request == null ? null : request.status());
         adminAuditService.record("tenant.status", "tenant", tenant.getId(), "Changed tenant status to " + tenant.getStatus());
         return ApiResponse.ok(tenant);
+    }
+
+    @GetMapping("/{tenantId}/configs")
+    public ApiResponse<List<TenantConfig>> configs(@PathVariable String tenantId) {
+        return ApiResponse.ok(tenantConfigService.listByTenant(tenantId));
+    }
+
+    @PutMapping("/{tenantId}/configs")
+    @PreAuthorize("hasAuthority('ops:write')")
+    public ApiResponse<TenantConfig> upsertConfig(
+            @PathVariable String tenantId,
+            @RequestBody TenantConfigUpsertRequest request
+    ) {
+        TenantConfig config = tenantConfigService.upsert(tenantId, request, CurrentUser.userId());
+        adminAuditService.record(
+                "tenant.config.upsert",
+                "tenant_config",
+                tenantId + ":" + config.getConfigKey(),
+                "Updated tenant config " + config.getConfigKey()
+        );
+        return ApiResponse.ok(config);
+    }
+
+    @DeleteMapping("/{tenantId}/configs/{configKey}")
+    @PreAuthorize("hasAuthority('ops:write')")
+    public ApiResponse<Void> deleteConfig(
+            @PathVariable String tenantId,
+            @PathVariable String configKey
+    ) {
+        tenantConfigService.removeConfig(tenantId, configKey);
+        adminAuditService.record(
+                "tenant.config.delete",
+                "tenant_config",
+                tenantId + ":" + configKey,
+                "Deleted tenant config " + configKey
+        );
+        return ApiResponse.ok(null);
     }
 }

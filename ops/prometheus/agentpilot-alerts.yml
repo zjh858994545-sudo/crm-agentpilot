@@ -1,0 +1,47 @@
+groups:
+  - name: agentpilot-runtime
+    rules:
+      - alert: AgentPilotHighHttp5xxRate
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: CRM-AgentPilot 5xx error rate is high
+          description: "More than 0.05 5xx responses/sec for 5 minutes. Check application logs and recent Trace IDs."
+
+      - alert: AgentPilotRateLimitSpike
+        expr: sum(rate(agentpilot_rate_limited_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: CRM-AgentPilot rate limiting is frequently triggered
+          description: "High 429 volume may indicate user retry loops, abuse, or an undersized tenant plan."
+
+      - alert: AgentPilotOutboxDeadLetters
+        expr: agentpilot_outbox_dead_letter_events > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: CRM-AgentPilot has Outbox dead letters
+          description: "Open System Admin > Outbox dead letters, inspect the error and retry after downstream recovery."
+
+      - alert: AgentPilotNotificationFailures
+        expr: sum(rate(agentpilot_notification_webhook_delivery_total{result="failed"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: CRM-AgentPilot notification webhook failures
+          description: "Check WeCom/DingTalk/generic webhook URL, timeout, and provider-side rate limits."
+
+      - alert: AgentPilotWebhookRejected
+        expr: sum(rate(agentpilot_webhook_rejected_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: CRM-AgentPilot rejected external webhooks
+          description: "Rejected call-center callbacks may indicate bad signatures, replay attempts, or clock skew."

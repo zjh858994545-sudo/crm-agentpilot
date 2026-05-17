@@ -81,15 +81,16 @@ if (-not $SkipFrontendBuild -and -not $SkipFrontendBundleBudget) {
 
 if (-not $SkipPreflight) {
     Invoke-Step "Static production preflight" {
-        $args = @()
-        if ($SkipDockerCheck) {
-            $args += "-SkipDockerCheck"
+        $script = Join-Path $PSScriptRoot "preflight-production.ps1"
+        if ($EnvFile -and $EnvFile.Trim().Length -gt 0 -and $SkipDockerCheck) {
+            & $script -EnvFile $EnvFile -SkipDockerCheck
+        } elseif ($EnvFile -and $EnvFile.Trim().Length -gt 0) {
+            & $script -EnvFile $EnvFile
+        } elseif ($SkipDockerCheck) {
+            & $script -SkipDockerCheck
+        } else {
+            & $script
         }
-        if ($EnvFile -and $EnvFile.Trim().Length -gt 0) {
-            $args += "-EnvFile"
-            $args += $EnvFile
-        }
-        & (Join-Path $PSScriptRoot "preflight-production.ps1") @args
     }
 }
 

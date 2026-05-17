@@ -40,6 +40,8 @@ AGENTPILOT_RATE_LIMIT_ENABLED=true
 AGENT_MODEL_PROVIDER=openai-compatible
 AGENT_EMBEDDING_PROVIDER=openai-compatible
 AGENT_EVENTS_KAFKA_ENABLED=true
+AGENTPILOT_CALLCENTER_PROVIDER=manual|aliyun|tencent|custom
+AGENTPILOT_ASR_PROVIDER=manual|aliyun-nls|tencent-asr|custom
 ```
 
 本地开发可以使用 mock model、mock embedding 和 permissive security。生产环境必须显式配置模型、embedding、RBAC、安全模式和限流。
@@ -104,6 +106,9 @@ npm run build
 - Token 审计：RBAC token 最近认证时间和来源 IP，默认按用户 + IP 节流写入，避免高频请求持续写库。
 - 限流状态：Agent、模型诊断、普通 API 的限流策略。
 - Outbox 状态：待分发、分发中、失败和已发布事件数量。
+- 租户配置中心：按租户覆盖模型、通知、限流、保留周期和供应商配置，避免所有企业共用一组环境变量。
+- 导出审批：敏感数据导出必须先提交申请，管理员审批后再进入真实导出流程。
+- 电话 / ASR 供应商：显示电话系统和语音转文字供应商是否开启、endpoint 是否配置。
 - 数据生命周期：Agent 审计、检索日志、已发布 Outbox 事件的保留周期、可清理行数和受保护行数。
 - 审计状态：Agent run、tool call、confirmation 和 trace 信息。
 - Actuator 指标：`/actuator/health` 用于探活，`/actuator/metrics` 和 `/actuator/prometheus` 需要认证后访问，可接 Prometheus/Grafana。
@@ -118,7 +123,15 @@ npm run build
 - `agentpilot_knowledge_vectorized_chunks`
 - `agentpilot_retention_eligible_rows`
 
-告警规则模板位于 `ops/prometheus/agentpilot-alert-rules.yml`，覆盖 Outbox 死信、Outbox backlog、保留策略 backlog 和知识向量覆盖率过低。
+告警规则模板位于 `ops/prometheus/agentpilot-alert-rules.yml` 和 `ops/prometheus/agentpilot-alerts.yml`，覆盖 Outbox 死信、Outbox backlog、保留策略 backlog、知识向量覆盖率过低、接口限流突增、通知失败和 webhook 拒绝。
+
+OpenTelemetry Collector 模板位于 `ops/otel/otel-collector.yml`。生产环境可以通过 Java Agent 把 trace/metric 送入 Collector，再由 Collector 暴露 Prometheus 指标或转发到企业已有 APM：
+
+```text
+JAVA_TOOL_OPTIONS=-javaagent:/otel/opentelemetry-javaagent.jar
+OTEL_SERVICE_NAME=crm-agentpilot-backend
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+```
 
 运维人员优先关注：
 
@@ -161,12 +174,52 @@ Agent run 和 tool call 是审计事件，使用同一张 outbox 表做 at-least
 当前客户手机号接口层已做展示脱敏，但生产环境仍需要继续完善：
 
 - 日志禁止输出 API key、token、手机号、客户备注等敏感信息。
-- 导出报表需要按角色和数据范围授权。
+- 导出报表需要按角色和数据范围授权；当前系统已经提供 `agentpilot_export_request` 审批表，记录导出类型、原因、申请人、审批人和审批意见，后续真实导出文件应绑定水印、下载过期时间和审批单 ID。
 - 联系记录、通话摘要和质检结果属于业务敏感数据，需要保留审计。
 - 当前后端已在 CRM 客户/商机/任务、Agent run/confirmation、呼叫中心、知识库文档、检索日志等核心链路中使用 `tenantId` 做租户隔离。
 - `sales` 角色只能访问自己的 `salesRepId` 数据；`sales_manager` 和 `system_admin` 可以访问同一租户内的团队数据，但不能跨租户。
 - 前端不能传入或决定 `tenantId`；后端必须从认证后的 `AgentPilotPrincipal` 读取租户、角色和数据范围。
 - 生产环境还需要补充更完整的数据分级、字段级权限、审计导出审批和租户级备份恢复演练。
+
+## 8.1 租户配置中心
+
+`agentpilot_tenant_config` 是商业化 SaaS 的控制面，不替代代码配置，而是让同一套系统可以按企业覆盖部分运行策略。
+
+建议配置命名：
+
+```text
+model.chat.model
+model.embedding.model
+notification.webhook.url
+rateLimit.agentChat.capacity
+retention.agentRun.days
+callcenter.provider
+callcenter.asr.provider
+```
+
+读取顺序建议为：
+
+1. 先读租户配置。
+2. 没有租户覆盖值时读全局环境变量。
+3. 仍没有配置时使用安全默认值或拒绝启动。
+
+管理员每次新增、修改、删除租户配置都会写入管理员审计日志，方便追踪“谁改了哪个租户的运行策略”。
+
+## 8.2 电话与语音供应商
+
+当前系统把真实电话系统和语音转文字供应商先做成可配置接入点，系统管理页会显示：
+
+- 电话供应商是否启用。
+- 电话供应商 endpoint 是否配置。
+- ASR 是否启用。
+- ASR 供应商和模型名称。
+
+真实上线建议：
+
+- 电话系统通过 `call-ended-events` webhook 推送通话结束事件。
+- webhook 必须启用 HMAC 签名、时间窗校验和 nonce 防重放。
+- ASR 供应商把录音转文字后，再进入通话摘要、质检和联系记录确认流。
+- 原始录音 URL、转写文本和质检结果都属于敏感数据，必须按租户隔离并设置保留周期。
 
 ## 9. 备份与恢复
 

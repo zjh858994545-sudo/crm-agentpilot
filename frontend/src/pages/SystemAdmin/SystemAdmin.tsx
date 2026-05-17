@@ -42,8 +42,10 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AdminAuditLog,
   CallCenterWebhookStatus,
+  CallCenterProviderStatus,
   ClientErrorLog,
   EventStatus,
+  ExportRequest,
   KnowledgeStatus,
   LaunchReadinessStatus,
   ModelStatus,
@@ -55,18 +57,25 @@ import {
   SecurityUser,
   SecurityUserUpsertPayload,
   Tenant,
+  TenantConfig,
+  TenantConfigUpsertPayload,
   TenantUpsertPayload,
   UsageSnapshot,
+  approveExportRequest,
   createTenant,
+  createExportRequest,
   createSecurityUser,
   clearClientErrorLogs,
+  deleteTenantConfig,
   describeApiError,
   downloadDiagnosticsBundle,
   fetchAdminAuditLogs,
   fetchCallCenterWebhookStatus,
+  fetchCallCenterProviderStatus,
   fetchClientErrorLogs,
   fetchDeadLetters,
   fetchEventStatus,
+  fetchExportRequests,
   fetchKnowledgeStatus,
   fetchLaunchReadiness,
   fetchModelStatus,
@@ -75,13 +84,16 @@ import {
   fetchRetentionStatus,
   fetchSecurityStatus,
   fetchSecurityUsers,
+  fetchTenantConfigs,
   fetchTenants,
   fetchUsageSnapshot,
   rebuildKnowledgeVectors,
   regenerateSecurityUserToken,
+  rejectExportRequest,
   retryDeadLetter,
   runRetentionCleanup,
   updateTenant,
+  upsertTenantConfig,
   updateTenantStatus,
   updateSecurityUser,
   updateSecurityUserStatus
@@ -127,6 +139,8 @@ function formatTime(value?: string) {
 export default function SystemAdmin() {
   const [tenantForm] = Form.useForm<TenantUpsertPayload>();
   const [userForm] = Form.useForm<SecurityUserUpsertPayload>();
+  const [tenantConfigForm] = Form.useForm<TenantConfigUpsertPayload>();
+  const [exportForm] = Form.useForm<{ exportType: string; reason: string }>();
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [eventStatus, setEventStatus] = useState<EventStatus | null>(null);
   const [knowledgeStatus, setKnowledgeStatus] = useState<KnowledgeStatus | null>(null);
@@ -134,6 +148,9 @@ export default function SystemAdmin() {
   const [tools, setTools] = useState<OpenAiToolDefinition[]>([]);
   const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState('demo');
+  const [tenantConfigs, setTenantConfigs] = useState<TenantConfig[]>([]);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -144,8 +161,11 @@ export default function SystemAdmin() {
   const [retentionStatus, setRetentionStatus] = useState<RetentionStatus | null>(null);
   const [readinessStatus, setReadinessStatus] = useState<LaunchReadinessStatus | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<CallCenterWebhookStatus | null>(null);
+  const [callProviderStatus, setCallProviderStatus] = useState<CallCenterProviderStatus | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<NotificationDeliveryStatus | null>(null);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
+  const [exportRequests, setExportRequests] = useState<ExportRequest[]>([]);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [clientErrorLogs, setClientErrorLogs] = useState<ClientErrorLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -167,8 +187,10 @@ export default function SystemAdmin() {
       fetchLaunchReadiness(),
       fetchAdminAuditLogs(),
       fetchCallCenterWebhookStatus(),
+      fetchCallCenterProviderStatus(),
       fetchNotificationDeliveryStatus(),
-      fetchUsageSnapshot()
+      fetchUsageSnapshot(),
+      fetchExportRequests()
     ]);
     if (results[0].status === 'fulfilled') setSecurityStatus(results[0].value);
     if (results[1].status === 'fulfilled') setEventStatus(results[1].value);
@@ -182,8 +204,17 @@ export default function SystemAdmin() {
     if (results[9].status === 'fulfilled') setReadinessStatus(results[9].value);
     if (results[10].status === 'fulfilled') setAdminAuditLogs(results[10].value);
     if (results[11].status === 'fulfilled') setWebhookStatus(results[11].value);
-    if (results[12].status === 'fulfilled') setNotificationStatus(results[12].value);
-    if (results[13].status === 'fulfilled') setUsageSnapshot(results[13].value);
+    if (results[12].status === 'fulfilled') setCallProviderStatus(results[12].value);
+    if (results[13].status === 'fulfilled') setNotificationStatus(results[13].value);
+    if (results[14].status === 'fulfilled') setUsageSnapshot(results[14].value);
+    if (results[15].status === 'fulfilled') setExportRequests(results[15].value);
+    const tenantId = selectedTenantId || (results[6].status === 'fulfilled' ? results[6].value[0]?.id : '') || 'demo';
+    setSelectedTenantId(tenantId);
+    try {
+      setTenantConfigs(await fetchTenantConfigs(tenantId));
+    } catch {
+      setTenantConfigs([]);
+    }
     if (results.some((result) => result.status === 'rejected')) {
       setError('部分运行状态读取失败，请确认后端已启动，并且当前令牌具备系统管理权限。');
     }
@@ -202,6 +233,16 @@ export default function SystemAdmin() {
       planCode: tenant?.planCode ?? 'standard'
     });
     setTenantModalOpen(true);
+  };
+
+  const openConfigModal = (config?: TenantConfig) => {
+    tenantConfigForm.setFieldsValue({
+      configKey: config?.configKey ?? 'model.chat.model',
+      configValue: config?.configValue ?? '',
+      valueType: config?.valueType ?? 'string',
+      description: config?.description ?? ''
+    });
+    setConfigModalOpen(true);
   };
 
   const openUserModal = (user?: SecurityUser) => {
@@ -236,6 +277,71 @@ export default function SystemAdmin() {
     } catch (err) {
       const detail = describeApiError(err);
       antdMessage.error(`租户保存失败：${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveTenantConfig = async () => {
+    const values = await tenantConfigForm.validateFields();
+    setLoading(true);
+    try {
+      await upsertTenantConfig(selectedTenantId, values);
+      antdMessage.success('租户配置已保存');
+      setConfigModalOpen(false);
+      setTenantConfigs(await fetchTenantConfigs(selectedTenantId));
+      await load();
+    } catch (err) {
+      antdMessage.error(`租户配置保存失败：${describeApiError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeTenantConfig = async (config: TenantConfig) => {
+    setLoading(true);
+    try {
+      await deleteTenantConfig(config.tenantId, config.configKey);
+      antdMessage.success('租户配置已删除');
+      setTenantConfigs(await fetchTenantConfigs(selectedTenantId));
+      await load();
+    } catch (err) {
+      antdMessage.error(`租户配置删除失败：${describeApiError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitExportRequest = async () => {
+    const values = await exportForm.validateFields();
+    setLoading(true);
+    try {
+      await createExportRequest(values);
+      antdMessage.success('导出申请已提交，等待管理员审批');
+      setExportModalOpen(false);
+      setExportRequests(await fetchExportRequests());
+      await load();
+    } catch (err) {
+      antdMessage.error(`导出申请失败：${describeApiError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const decideExportRequest = async (request: ExportRequest, action: 'approve' | 'reject') => {
+    setLoading(true);
+    try {
+      if (action === 'approve') {
+        await approveExportRequest(request.id, 'Approved from System Admin');
+        antdMessage.success('导出申请已批准');
+      } else {
+        await rejectExportRequest(request.id, 'Rejected from System Admin');
+        antdMessage.info('导出申请已拒绝');
+      }
+      setExportRequests(await fetchExportRequests());
+      await load();
+    } catch (err) {
+      antdMessage.error(`导出审批失败：${describeApiError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -488,6 +594,14 @@ export default function SystemAdmin() {
       detail: webhookStatus?.signatureEnabled
         ? `HMAC + nonce 防重放 / ${webhookStatus.maxSkewSeconds}s 时间窗`
         : '外部电话系统接入前需开启签名'
+    },
+    {
+      title: '电话与语音',
+      value: callProviderStatus?.enabled ? '供应商接入' : '手动录入',
+      color: callProviderStatus?.enabled ? 'green' : 'blue',
+      detail: callProviderStatus?.enabled
+        ? `${callProviderStatus.provider} / ASR ${callProviderStatus.asrEnabled ? callProviderStatus.asrProvider : '未启用'}`
+        : '可接云通信和语音转文字供应商'
     },
     {
       title: '通知触达',
@@ -922,6 +1036,107 @@ export default function SystemAdmin() {
         />
       </Card>
 
+      <Card
+        className="command-card"
+        title="租户级配置中心"
+        extra={
+          <Space>
+            <Select
+              style={{ width: 220 }}
+              value={selectedTenantId}
+              onChange={async (value) => {
+                setSelectedTenantId(value);
+                setTenantConfigs(await fetchTenantConfigs(value));
+              }}
+              options={tenants.map((tenant) => ({ label: `${tenant.name} (${tenant.id})`, value: tenant.id }))}
+            />
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openConfigModal()}>
+              新增配置
+            </Button>
+          </Space>
+        }
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="租户配置用于覆盖模型、通知、限流、保留周期和供应商设置；生产实现应优先读取租户配置，再回退全局环境变量。"
+        />
+        <Table
+          rowKey={(record) => `${record.tenantId}:${record.configKey}`}
+          loading={loading}
+          pagination={tenantConfigs.length > 8 ? { pageSize: 8 } : false}
+          dataSource={tenantConfigs}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前租户暂无覆盖配置，使用全局默认值" /> }}
+          columns={[
+            { title: '配置项', dataIndex: 'configKey', width: 220, render: (value) => <Text code>{value}</Text> },
+            { title: '值', dataIndex: 'configValue', ellipsis: true, render: (value) => <Text>{value || '-'}</Text> },
+            { title: '类型', dataIndex: 'valueType', width: 90, render: (value) => <Tag>{value}</Tag> },
+            { title: '说明', dataIndex: 'description', ellipsis: true },
+            { title: '更新时间', dataIndex: 'updatedAt', width: 180, render: (value) => <Text>{formatTime(value)}</Text> },
+            {
+              title: '操作',
+              width: 150,
+              render: (_, record: TenantConfig) => (
+                <Space>
+                  <Button size="small" type="link" onClick={() => openConfigModal(record)}>
+                    编辑
+                  </Button>
+                  <Popconfirm title="确认删除该租户配置？" okText="确认" cancelText="取消" onConfirm={() => removeTenantConfig(record)}>
+                    <Button size="small" type="link" danger>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              )
+            }
+          ]}
+        />
+      </Card>
+
+      <Card
+        className="command-card"
+        title="导出审批与审计"
+        extra={
+          <Button type="primary" icon={<DownloadOutlined />} onClick={() => setExportModalOpen(true)}>
+            申请导出
+          </Button>
+        }
+      >
+        <Table
+          rowKey="id"
+          loading={loading}
+          pagination={exportRequests.length > 8 ? { pageSize: 8 } : false}
+          dataSource={exportRequests}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无导出申请" /> }}
+          columns={[
+            { title: 'ID', dataIndex: 'id', width: 80 },
+            { title: '类型', dataIndex: 'exportType', width: 130, render: (value) => <Tag color="blue">{value}</Tag> },
+            { title: '申请人', dataIndex: 'requesterUserId', width: 110, render: (value) => <Tag>user #{value}</Tag> },
+            { title: '原因', dataIndex: 'reason', ellipsis: true },
+            { title: '状态', dataIndex: 'status', width: 110, render: (value) => statusTag(value) },
+            { title: '申请时间', dataIndex: 'requestedAt', width: 180, render: (value) => <Text>{formatTime(value)}</Text> },
+            {
+              title: '审批',
+              width: 150,
+              render: (_, record: ExportRequest) =>
+                record.status === 'PENDING' ? (
+                  <Space>
+                    <Button size="small" type="link" onClick={() => decideExportRequest(record, 'approve')}>
+                      批准
+                    </Button>
+                    <Button size="small" type="link" danger onClick={() => decideExportRequest(record, 'reject')}>
+                      拒绝
+                    </Button>
+                  </Space>
+                ) : (
+                  <Text type="secondary">{record.approvalComment || '-'}</Text>
+                )
+            }
+          ]}
+        />
+      </Card>
+
       <Card className="command-card" title="Outbox 死信处理">
         <Table
           rowKey="id"
@@ -1054,6 +1269,15 @@ export default function SystemAdmin() {
                     {webhookStatus?.signatureEnabled ? <Tag color="green">HMAC 已开启</Tag> : <Tag color="orange">未开启</Tag>}
                     {webhookStatus?.replayProtection ? <Tag color="blue">nonce 防重放</Tag> : <Tag>未启用</Tag>}
                     <Text type="secondary">{webhookStatus?.maxSkewSeconds ?? 300}s 时间窗</Text>
+                  </Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="电话 / ASR 供应商">
+                  <Space wrap>
+                    {callProviderStatus?.enabled ? <Tag color="green">{callProviderStatus.provider}</Tag> : <Tag>manual</Tag>}
+                    {callProviderStatus?.asrEnabled ? <Tag color="blue">{callProviderStatus.asrProvider}</Tag> : <Tag>ASR 未启用</Tag>}
+                    <Text type="secondary">
+                      {callProviderStatus?.endpointConfigured ? '供应商 endpoint 已配置' : '未配置供应商 endpoint'}
+                    </Text>
                   </Space>
                 </Descriptions.Item>
               </Descriptions>
@@ -1274,6 +1498,92 @@ export default function SystemAdmin() {
             showIcon
             message="租户是商业化部署的数据边界"
             description="RBAC 用户、JWT 登录、CRM 数据和审计记录都会挂在租户维度下。停用租户后，该企业用户无法继续访问业务接口。"
+          />
+        </Form>
+      </Modal>
+
+      <Modal
+        title="租户级配置"
+        open={configModalOpen}
+        okText="保存配置"
+        cancelText="取消"
+        confirmLoading={loading}
+        onOk={saveTenantConfig}
+        onCancel={() => setConfigModalOpen(false)}
+      >
+        <Form form={tenantConfigForm} layout="vertical" initialValues={{ valueType: 'string' }}>
+          <Form.Item
+            name="configKey"
+            label="配置 Key"
+            tooltip="建议使用 model.chat.model、notification.webhook.url、retention.agentRun.days 这类分层命名。"
+            rules={[
+              { required: true, message: '请输入配置 Key' },
+              { pattern: /^[a-zA-Z][a-zA-Z0-9_.-]{1,127}$/, message: '2-128 位，以字母开头，支持字母、数字、点、下划线和短横线' }
+            ]}
+          >
+            <Input placeholder="例如 model.chat.model" />
+          </Form.Item>
+          <Form.Item name="valueType" label="值类型" rules={[{ required: true, message: '请选择值类型' }]}>
+            <Select
+              options={[
+                { label: 'string', value: 'string' },
+                { label: 'number', value: 'number' },
+                { label: 'boolean', value: 'boolean' },
+                { label: 'json', value: 'json' }
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="configValue" label="配置值">
+            <Input.TextArea rows={4} placeholder='例如 qwen3.6-flash，或 {"dailyLimit": 2000}' />
+          </Form.Item>
+          <Form.Item name="description" label="业务说明">
+            <Input.TextArea rows={2} placeholder="说明这项配置影响哪个租户能力，方便管理员审计。" />
+          </Form.Item>
+          <Alert
+            type="info"
+            showIcon
+            message="租户配置是商业化 SaaS 的控制面"
+            description="同一套系统可以按租户覆盖模型、通知、限流、保留周期和供应商配置，避免所有企业共用一份环境变量。"
+          />
+        </Form>
+      </Modal>
+
+      <Modal
+        title="申请数据导出"
+        open={exportModalOpen}
+        okText="提交审批"
+        cancelText="取消"
+        confirmLoading={loading}
+        onOk={submitExportRequest}
+        onCancel={() => setExportModalOpen(false)}
+      >
+        <Form form={exportForm} layout="vertical">
+          <Form.Item name="exportType" label="导出范围" rules={[{ required: true, message: '请选择导出范围' }]}>
+            <Select
+              options={[
+                { label: '客户资料', value: 'CUSTOMERS' },
+                { label: '商机数据', value: 'LEADS' },
+                { label: '联系记录', value: 'CONTACT_LOGS' },
+                { label: 'Agent 审计', value: 'AGENT_AUDIT' },
+                { label: '知识库文档', value: 'KNOWLEDGE_DOCS' }
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            name="reason"
+            label="导出原因"
+            rules={[
+              { required: true, message: '请填写导出原因' },
+              { min: 6, message: '请说明业务背景，至少 6 个字符' }
+            ]}
+          >
+            <Input.TextArea rows={4} placeholder="例如：主管复盘本周高价值客户跟进情况，需要导出客户与联系记录。" />
+          </Form.Item>
+          <Alert
+            type="warning"
+            showIcon
+            message="敏感数据导出必须留痕"
+            description="导出申请会记录申请人、审批人、原因和 Trace ID；生产环境应继续接入水印、下载过期和字段脱敏。"
           />
         </Form>
       </Modal>

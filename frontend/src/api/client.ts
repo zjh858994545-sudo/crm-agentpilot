@@ -198,6 +198,15 @@ export interface CallCenterWebhookStatus {
   replayProtection: boolean;
 }
 
+export interface CallCenterProviderStatus {
+  provider: string;
+  enabled: boolean;
+  endpointConfigured: boolean;
+  asrProvider: string;
+  asrModel?: string;
+  asrEnabled: boolean;
+}
+
 export interface NotificationDeliveryStatus {
   mode: string;
   deliveryChannel: 'generic' | 'wecom' | 'dingtalk' | string;
@@ -253,10 +262,45 @@ export interface Tenant {
   updatedAt?: string;
 }
 
+export interface TenantConfig {
+  tenantId: string;
+  configKey: string;
+  configValue?: string;
+  valueType: string;
+  description?: string;
+  updatedBy?: number;
+  updatedAt?: string;
+}
+
+export interface TenantConfigUpsertPayload {
+  configKey: string;
+  configValue?: string;
+  valueType?: string;
+  description?: string;
+}
+
 export interface TenantUpsertPayload {
   id?: string;
   name: string;
   planCode?: string;
+}
+
+export interface ExportRequest {
+  id: number;
+  tenantId: string;
+  requesterUserId: number;
+  exportType: string;
+  reason: string;
+  status: string;
+  approverUserId?: number;
+  approvalComment?: string;
+  requestedAt?: string;
+  decidedAt?: string;
+}
+
+export interface ExportRequestCreatePayload {
+  exportType: string;
+  reason: string;
 }
 
 export interface RetentionCategoryStatus {
@@ -829,6 +873,11 @@ export async function fetchCallCenterWebhookStatus() {
   return response.data.data;
 }
 
+export async function fetchCallCenterProviderStatus() {
+  const response = await apiClient.get<ApiResponse<CallCenterProviderStatus>>('/callcenter/provider/status');
+  return response.data.data;
+}
+
 export async function fetchNotificationDeliveryStatus() {
   const response = await apiClient.get<ApiResponse<NotificationDeliveryStatus>>('/notifications/status');
   return response.data.data;
@@ -861,6 +910,41 @@ export async function regenerateSecurityUserToken(userId: number) {
 
 export async function fetchTenants() {
   const response = await apiClient.get<ApiResponse<Tenant[]>>('/tenants');
+  return response.data.data;
+}
+
+export async function fetchTenantConfigs(tenantId: string) {
+  const response = await apiClient.get<ApiResponse<TenantConfig[]>>(`/tenants/${tenantId}/configs`);
+  return response.data.data;
+}
+
+export async function upsertTenantConfig(tenantId: string, payload: TenantConfigUpsertPayload) {
+  const response = await apiClient.put<ApiResponse<TenantConfig>>(`/tenants/${tenantId}/configs`, payload);
+  return response.data.data;
+}
+
+export async function deleteTenantConfig(tenantId: string, configKey: string) {
+  const response = await apiClient.delete<ApiResponse<void>>(`/tenants/${tenantId}/configs/${encodeURIComponent(configKey)}`);
+  return response.data.data;
+}
+
+export async function fetchExportRequests(status?: string) {
+  const response = await apiClient.get<ApiResponse<ExportRequest[]>>('/export-requests', { params: { status } });
+  return response.data.data;
+}
+
+export async function createExportRequest(payload: ExportRequestCreatePayload) {
+  const response = await apiClient.post<ApiResponse<ExportRequest>>('/export-requests', payload);
+  return response.data.data;
+}
+
+export async function approveExportRequest(id: number, comment = '') {
+  const response = await apiClient.patch<ApiResponse<ExportRequest>>(`/export-requests/${id}/approve`, { comment });
+  return response.data.data;
+}
+
+export async function rejectExportRequest(id: number, comment = '') {
+  const response = await apiClient.patch<ApiResponse<ExportRequest>>(`/export-requests/${id}/reject`, { comment });
   return response.data.data;
 }
 

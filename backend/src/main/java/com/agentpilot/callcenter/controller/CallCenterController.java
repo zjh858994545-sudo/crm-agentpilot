@@ -1,5 +1,6 @@
 package com.agentpilot.callcenter.controller;
 
+import com.agentpilot.callcenter.config.CallProviderProperties;
 import com.agentpilot.callcenter.service.CallCenterService;
 import com.agentpilot.callcenter.vo.CallEndedEventRequest;
 import com.agentpilot.callcenter.vo.CallEndedEventResponse;
@@ -46,6 +47,7 @@ public class CallCenterController {
     private final CustomerService customerService;
     private final LeadService leadService;
     private final WebhookSecurityService webhookSecurityService;
+    private final CallProviderProperties callProviderProperties;
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
@@ -55,6 +57,7 @@ public class CallCenterController {
             CustomerService customerService,
             LeadService leadService,
             WebhookSecurityService webhookSecurityService,
+            CallProviderProperties callProviderProperties,
             ObjectMapper objectMapper,
             Validator validator
     ) {
@@ -63,6 +66,7 @@ public class CallCenterController {
         this.customerService = customerService;
         this.leadService = leadService;
         this.webhookSecurityService = webhookSecurityService;
+        this.callProviderProperties = callProviderProperties;
         this.objectMapper = objectMapper;
         this.validator = validator;
     }
@@ -114,13 +118,26 @@ public class CallCenterController {
     }
 
     @GetMapping("/webhook/status")
-    @PreAuthorize("hasAuthority('operations:read')")
+    @PreAuthorize("hasAuthority('ops:read')")
     public ApiResponse<Map<String, Object>> webhookStatus() {
         return ApiResponse.ok(Map.of(
                 "signatureEnabled", webhookSecurityService.enabled(),
                 "secretConfigured", webhookSecurityService.secretConfigured(),
                 "maxSkewSeconds", webhookSecurityService.maxSkewSeconds(),
                 "replayProtection", true
+        ));
+    }
+
+    @GetMapping("/provider/status")
+    @PreAuthorize("hasAuthority('ops:read')")
+    public ApiResponse<Map<String, Object>> providerStatus() {
+        return ApiResponse.ok(Map.of(
+                "provider", callProviderProperties.getProvider(),
+                "enabled", callProviderProperties.isEnabled(),
+                "endpointConfigured", callProviderProperties.endpointConfigured(),
+                "asrProvider", callProviderProperties.getAsrProvider(),
+                "asrModel", callProviderProperties.getAsrModel(),
+                "asrEnabled", callProviderProperties.isAsrEnabled()
         ));
     }
 

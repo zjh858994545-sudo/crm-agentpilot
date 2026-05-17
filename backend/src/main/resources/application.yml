@@ -100,6 +100,13 @@ agentpilot:
     webhook-url: ${AGENTPILOT_NOTIFICATION_WEBHOOK_URL:}
     webhook-timeout-seconds: ${AGENTPILOT_NOTIFICATION_WEBHOOK_TIMEOUT_SECONDS:5}
   callcenter:
+    provider:
+      provider: ${AGENTPILOT_CALLCENTER_PROVIDER:manual}
+      enabled: ${AGENTPILOT_CALLCENTER_PROVIDER_ENABLED:false}
+      endpoint: ${AGENTPILOT_CALLCENTER_PROVIDER_ENDPOINT:}
+      asr-provider: ${AGENTPILOT_ASR_PROVIDER:manual}
+      asr-model: ${AGENTPILOT_ASR_MODEL:}
+      asr-enabled: ${AGENTPILOT_ASR_ENABLED:false}
     webhook:
       signature-enabled: ${AGENTPILOT_CALLCENTER_WEBHOOK_SIGNATURE_ENABLED:false}
       secret: ${AGENTPILOT_CALLCENTER_WEBHOOK_SECRET:}

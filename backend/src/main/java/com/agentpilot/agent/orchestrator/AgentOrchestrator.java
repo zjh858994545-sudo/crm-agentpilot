@@ -9,9 +9,6 @@ import com.agentpilot.agent.service.AgentConfirmationService;
 import com.agentpilot.agent.service.AgentRunService;
 import com.agentpilot.agent.service.AgentSessionService;
 import com.agentpilot.agent.service.AgentToolCallService;
-import com.agentpilot.agent.tool.AgentToolDefinition;
-import com.agentpilot.agent.tool.ToolRegistry;
-import com.agentpilot.agent.tool.ToolType;
 import com.agentpilot.agent.vo.AgentChatRequest;
 import com.agentpilot.agent.vo.AgentChatResponse;
 import com.agentpilot.agent.vo.ToolCallView;
@@ -22,7 +19,6 @@ import com.agentpilot.crm.entity.Lead;
 import com.agentpilot.crm.entity.ProductPackage;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.crm.service.CrmTaskService;
-import com.agentpilot.crm.service.CustomerService;
 import com.agentpilot.crm.service.LeadService;
 import com.agentpilot.crm.service.ProductPackageService;
 import com.agentpilot.events.AgentPilotEventPublisher;
@@ -69,8 +65,6 @@ public class AgentOrchestrator {
     private final AgentToolCallService toolCallService;
     private final AgentConfirmationService confirmationService;
     private final ShortTermMemoryService memoryService;
-    private final ToolRegistry toolRegistry;
-    private final CustomerService customerService;
     private final ContactLogService contactLogService;
     private final LeadService leadService;
     private final CrmTaskService taskService;
@@ -82,6 +76,8 @@ public class AgentOrchestrator {
     private final ConfirmationGateway confirmationGateway;
     private final LlmToolRouter llmToolRouter;
     private final IntentRouter intentRouter;
+    private final CustomerResolver customerResolver;
+    private final AgentToolCallRecorder toolCallRecorder;
     private final ObjectMapper objectMapper;
 
     public AgentOrchestrator(
@@ -90,8 +86,6 @@ public class AgentOrchestrator {
             AgentToolCallService toolCallService,
             AgentConfirmationService confirmationService,
             ShortTermMemoryService memoryService,
-            ToolRegistry toolRegistry,
-            CustomerService customerService,
             ContactLogService contactLogService,
             LeadService leadService,
             CrmTaskService taskService,
@@ -103,6 +97,8 @@ public class AgentOrchestrator {
             ConfirmationGateway confirmationGateway,
             LlmToolRouter llmToolRouter,
             IntentRouter intentRouter,
+            CustomerResolver customerResolver,
+            AgentToolCallRecorder toolCallRecorder,
             ObjectMapper objectMapper
     ) {
         this.sessionService = sessionService;
@@ -110,8 +106,6 @@ public class AgentOrchestrator {
         this.toolCallService = toolCallService;
         this.confirmationService = confirmationService;
         this.memoryService = memoryService;
-        this.toolRegistry = toolRegistry;
-        this.customerService = customerService;
         this.contactLogService = contactLogService;
         this.leadService = leadService;
         this.taskService = taskService;
@@ -123,6 +117,8 @@ public class AgentOrchestrator {
         this.confirmationGateway = confirmationGateway;
         this.llmToolRouter = llmToolRouter;
         this.intentRouter = intentRouter;
+        this.customerResolver = customerResolver;
+        this.toolCallRecorder = toolCallRecorder;
         this.objectMapper = objectMapper;
     }
 
@@ -741,22 +737,7 @@ public class AgentOrchestrator {
     }
 
     private AgentToolCall recordTool(Long runId, String toolName, Object input, Object output, String status, String errorMessage, long latencyMs) {
-        AgentToolDefinition definition = toolRegistry.find(toolName)
-                .orElse(new AgentToolDefinition(toolName, "unknown", ToolType.READ, false, List.of(), Map.of()));
-        AgentToolCall call = new AgentToolCall();
-        call.setRunId(runId);
-        call.setToolName(toolName);
-        call.setToolType(definition.type().name());
-        call.setInputJson(toJson(input));
-        call.setOutputJson(toJson(output));
-        call.setStatus(status);
-        call.setLatencyMs(Math.max(0L, latencyMs));
-        call.setErrorMessage(errorMessage);
-        call.setRequiresConfirmation(definition.requiresConfirmation());
-        call.setCompletedAt(LocalDateTime.now());
-        toolCallService.save(call);
-        eventPublisher.publishToolCallRecorded(call);
-        return call;
+        return toolCallRecorder.record(runId, toolName, input, output, status, errorMessage, latencyMs);
     }
 
     private String generateCustomerAnalysisAnswer(
@@ -843,38 +824,22 @@ public class AgentOrchestrator {
     }
 
     private Customer resolveCustomer(AgentChatRequest request) {
-        if (request.customerId() != null) {
-            Customer customer = customerService.getById(request.customerId());
-            return customerVisibleTo(customer, defaultTenantId(request.tenantId()), defaultSalesRepId(request.salesRepId())) ? customer : null;
-        }
-        String message = request.message();
-        return customerService.findMentionedIn(message, defaultTenantId(request.tenantId()), defaultSalesRepId(request.salesRepId())).orElse(null);
+        return customerResolver.resolve(
+                request.customerId(),
+                request.message(),
+                defaultTenantId(request.tenantId()),
+                defaultSalesRepId(request.salesRepId())
+        );
     }
 
     private Customer resolveCustomer(AgentChatRequest request, Map<String, Object> args) {
-        String tenantId = defaultTenantId(request.tenantId());
-        Long salesRepId = defaultSalesRepId(request.salesRepId());
-        Long customerId = nullableLongArg(args, "customerId");
-        if (customerId != null) {
-            Customer customer = customerService.getById(customerId);
-            if (customerVisibleTo(customer, tenantId, salesRepId)) {
-                return customer;
-            }
-        }
-        String customerName = stringArg(args, "customerName", "");
-        if (!customerName.isBlank()) {
-            Optional<Customer> customer = customerService.findMentionedIn(customerName, tenantId, salesRepId);
-            if (customer.isPresent()) {
-                return customer.get();
-            }
-        }
-        return resolveCustomer(request);
-    }
-
-    private boolean customerVisibleTo(Customer customer, String tenantId, Long salesRepId) {
-        return customer != null
-                && Objects.equals(customer.getTenantId(), tenantId)
-                && Objects.equals(customer.getOwnerSalesRepId(), salesRepId);
+        return customerResolver.resolve(
+                request.customerId(),
+                request.message(),
+                args,
+                defaultTenantId(request.tenantId()),
+                defaultSalesRepId(request.salesRepId())
+        );
     }
 
     private boolean sessionVisibleTo(AgentSession session, AgentChatRequest request) {
@@ -954,14 +919,7 @@ public class AgentOrchestrator {
     }
 
     private ToolCallView view(AgentToolCall call) {
-        return new ToolCallView(
-                call.getId(),
-                call.getToolName(),
-                call.getToolType(),
-                call.getStatus(),
-                Boolean.TRUE.equals(call.getRequiresConfirmation()),
-                call.getConfirmationId()
-        );
+        return toolCallRecorder.view(call);
     }
 
     private Long defaultUserId(Long userId) {
@@ -977,10 +935,6 @@ public class AgentOrchestrator {
     }
 
     private String toJson(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException ex) {
-            return "{}";
-        }
+        return toolCallRecorder.toJson(value);
     }
 }

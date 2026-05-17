@@ -3,6 +3,8 @@ package com.agentpilot.security.ratelimit;
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.security.AgentPilotPrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,17 +36,20 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
     private final ApiRateLimitProperties properties;
     private final ObjectMapper objectMapper;
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
+    private final MeterRegistry meterRegistry;
     private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
     private volatile long lastRedisFailureNanos = 0L;
 
     public ApiRateLimitFilter(
             ApiRateLimitProperties properties,
             ObjectMapper objectMapper,
-            ObjectProvider<StringRedisTemplate> redisTemplateProvider
+            ObjectProvider<StringRedisTemplate> redisTemplateProvider,
+            MeterRegistry meterRegistry
     ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.redisTemplateProvider = redisTemplateProvider;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -61,6 +66,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         LimitRule rule = ruleFor(request.getRequestURI());
         String key = rule.name() + ":" + callerKey(request);
         if (!tryConsume(rule, key)) {
+            recordRateLimited(rule.name(), request.getRequestURI());
             writeRateLimited(response, rule.name());
             return;
         }
@@ -139,6 +145,14 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 response.getWriter(),
                 ApiResponse.fail("RATE_LIMITED", "Too many requests for bucket: " + bucketName)
         );
+    }
+
+    private void recordRateLimited(String bucketName, String uri) {
+        Counter.builder("agentpilot_rate_limited_total")
+                .tag("bucket", bucketName)
+                .tag("uri", uri == null ? "unknown" : uri)
+                .register(meterRegistry)
+                .increment();
     }
 
     @Scheduled(fixedDelayString = "${agentpilot.rate-limit.cleanup-delay-ms:600000}")

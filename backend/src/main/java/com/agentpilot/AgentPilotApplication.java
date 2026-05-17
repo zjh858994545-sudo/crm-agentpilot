@@ -2,6 +2,7 @@ package com.agentpilot;
 
 import com.agentpilot.common.config.ApplicationInfoProperties;
 import com.agentpilot.callcenter.config.CallCenterWebhookProperties;
+import com.agentpilot.callcenter.config.CallProviderProperties;
 import com.agentpilot.events.config.EventProperties;
 import com.agentpilot.model.config.ModelProperties;
 import com.agentpilot.notification.config.NotificationProperties;
@@ -20,6 +21,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         ApplicationInfoProperties.class,
         ModelProperties.class,
         CallCenterWebhookProperties.class,
+        CallProviderProperties.class,
         NotificationProperties.class,
         EventProperties.class,
         RetentionProperties.class,
