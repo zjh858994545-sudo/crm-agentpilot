@@ -5,7 +5,7 @@ param(
     [switch]$SkipRuntimeHealthcheck,
     [switch]$SkipDockerCheck,
     [string]$EnvFile = "",
-    [string]$MavenRepo = $(if ($env:MAVEN_REPO_LOCAL) { $env:MAVEN_REPO_LOCAL } else { "F:\后端开发新项目\DevCache\m2" }),
+    [string]$MavenRepo = $(if ($env:MAVEN_REPO_LOCAL) { $env:MAVEN_REPO_LOCAL } else { "F:\DockerData\AgentPilotCache\m2" }),
     [string]$BaseUrl = $(if ($env:AGENTPILOT_BASE_URL) { $env:AGENTPILOT_BASE_URL } else { "http://localhost:18080" }),
     [string]$Token = $(if ($env:AGENTPILOT_API_TOKEN) { $env:AGENTPILOT_API_TOKEN } else { "" })
 )
@@ -17,6 +17,18 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $root = Split-Path -Parent $PSScriptRoot
 $startedAt = Get-Date
 $summary = New-Object System.Collections.Generic.List[string]
+
+function Invoke-Native {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments = @()
+    )
+    & $FilePath @Arguments
+    $exitCode = $LASTEXITCODE
+    if ($null -ne $exitCode -and $exitCode -ne 0) {
+        throw "$FilePath exited with code $exitCode"
+    }
+}
 
 function Invoke-Step {
     param(
@@ -39,7 +51,8 @@ if (-not $SkipBackendTests) {
     Invoke-Step "Backend tests" {
         Push-Location (Join-Path $root "backend")
         try {
-            mvn "-Dmaven.repo.local=$MavenRepo" test
+            New-Item -ItemType Directory -Force -Path $MavenRepo | Out-Null
+            Invoke-Native "mvn" @("-Dmaven.repo.local=$MavenRepo", "test")
         } finally {
             Pop-Location
         }
@@ -50,7 +63,7 @@ if (-not $SkipFrontendBuild) {
     Invoke-Step "Frontend production build" {
         Push-Location (Join-Path $root "frontend")
         try {
-            npm run build
+            Invoke-Native "npm" @("run", "build")
         } finally {
             Pop-Location
         }
