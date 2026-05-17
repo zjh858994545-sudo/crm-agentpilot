@@ -83,6 +83,7 @@ agentpilot:
       sales-rep-claim: ${AGENTPILOT_JWT_SALES_REP_CLAIM:sales_rep_id}
       roles-claim: ${AGENTPILOT_JWT_ROLES_CLAIM:roles}
       permissions-claim: ${AGENTPILOT_JWT_PERMISSIONS_CLAIM:permissions}
+      allowed-tenants: ${AGENTPILOT_JWT_ALLOWED_TENANTS:}
   rate-limit:
     enabled: ${AGENTPILOT_RATE_LIMIT_ENABLED:true}
     backend: ${AGENTPILOT_RATE_LIMIT_BACKEND:auto}

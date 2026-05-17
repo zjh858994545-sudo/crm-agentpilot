@@ -37,6 +37,7 @@ AGENTPILOT_JWT_TENANT_CLAIM=tenant_id
 AGENTPILOT_JWT_SALES_REP_CLAIM=sales_rep_id
 AGENTPILOT_JWT_ROLES_CLAIM=roles
 AGENTPILOT_JWT_PERMISSIONS_CLAIM=permissions
+AGENTPILOT_JWT_ALLOWED_TENANTS=demo,tenant-acme
 
 SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/agentpilot
 SPRING_DATASOURCE_USERNAME=agentpilot
@@ -85,6 +86,7 @@ Production code must follow these rules:
 
 - Frontend never decides `tenantId`; it only displays it.
 - Backend derives `tenantId` from `AgentPilotPrincipal`.
+- Enterprise JWT deployments should configure `AGENTPILOT_JWT_ALLOWED_TENANTS`; unknown tenants are rejected before a principal is created.
 - CRM customer, lead, task, contact log, agent session, agent run, confirmation, knowledge document, retrieval log, and call-center operations include `tenant_id`.
 - Sales users can only access their own `salesRepId`; `sales_manager` and `system_admin` can access other sales reps in the same tenant.
 - Call-center write proposals must keep `customerId`, `leadId`, and `salesRepId` aligned before creating a confirmation.

@@ -87,6 +87,32 @@ class JwtSsoAuthenticationFilterTest {
     }
 
     @Test
+    void rejectsJwtFromTenantOutsideAllowList() throws Exception {
+        JwtSsoProperties properties = properties();
+        properties.setAllowedTenants(List.of("tenant-alpha"));
+        JwtDecoder decoder = token -> Jwt.withTokenValue(token)
+                .header("alg", "none")
+                .subject("enterprise-user-42")
+                .audience(List.of("crm-agentpilot"))
+                .claim("user_id", 42L)
+                .claim("tenant_id", "tenant-unknown")
+                .claim("sales_rep_id", 7L)
+                .claim("roles", List.of("sales"))
+                .build();
+        JwtSsoAuthenticationFilter filter = new JwtSsoAuthenticationFilter(properties, decoder, objectMapper());
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/customers");
+        request.addHeader("Authorization", "Bearer enterprise.jwt.token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.doFilter(request, response, (req, res) -> chainCalled.set(true));
+
+        assertThat(chainCalled).isFalse();
+        assertThat(response.getStatus()).isEqualTo(401);
+    }
+
+    @Test
     void rejectsJwtWithoutRoleOrPermissionClaims() throws Exception {
         JwtSsoProperties properties = properties();
         JwtDecoder decoder = token -> Jwt.withTokenValue(token)

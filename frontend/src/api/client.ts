@@ -132,6 +132,8 @@ export interface SecurityStatus {
     salesRepClaim: string;
     rolesClaim: string;
     permissionsClaim: string;
+    tenantAllowListEnabled?: boolean;
+    allowedTenantCount?: number;
   };
   rateLimit?: {
     enabled: boolean;

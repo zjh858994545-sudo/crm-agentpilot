@@ -2,6 +2,9 @@ package com.agentpilot.security.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @ConfigurationProperties(prefix = "agentpilot.security.jwt")
 public class JwtSsoProperties {
     private boolean enabled = false;
@@ -12,6 +15,7 @@ public class JwtSsoProperties {
     private String salesRepClaim = "sales_rep_id";
     private String rolesClaim = "roles";
     private String permissionsClaim = "permissions";
+    private List<String> allowedTenants = new ArrayList<>();
 
     public boolean isEnabled() {
         return enabled;
@@ -75,5 +79,20 @@ public class JwtSsoProperties {
 
     public void setPermissionsClaim(String permissionsClaim) {
         this.permissionsClaim = permissionsClaim;
+    }
+
+    public List<String> getAllowedTenants() {
+        return allowedTenants;
+    }
+
+    public void setAllowedTenants(List<String> allowedTenants) {
+        this.allowedTenants = allowedTenants == null ? new ArrayList<>() : allowedTenants;
+    }
+
+    public List<String> normalizedAllowedTenants() {
+        return allowedTenants.stream()
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .toList();
     }
 }

@@ -8,7 +8,7 @@ Current production-ready baseline supports both database RBAC token authenticati
 - Database tokens are stored as SHA-256 hashes in `agentpilot_user`.
 - Authentication loads `userId`, `tenantId`, `salesRepId`, roles, and permissions from the database.
 - When `AGENTPILOT_JWT_ENABLED=true`, `Authorization: Bearer <jwt>` is decoded with Spring Security's JWT decoder.
-- JWT authentication validates issuer metadata, audience, tenant claim, sales-rep claim, and either roles or permissions.
+- JWT authentication validates issuer metadata, audience, tenant claim, tenant allow-list, sales-rep claim, and either roles or permissions.
 - JWT roles are mapped to the same `AgentPilotPrincipal` used by RBAC tokens, so `@PreAuthorize` and CRM data-scope checks are shared.
 - Demo fallback identity is only for local permissive mode.
 
@@ -61,6 +61,7 @@ agentpilot:
       sales-rep-claim: ${AGENTPILOT_JWT_SALES_REP_CLAIM:sales_rep_id}
       roles-claim: ${AGENTPILOT_JWT_ROLES_CLAIM:roles}
       permissions-claim: ${AGENTPILOT_JWT_PERMISSIONS_CLAIM:permissions}
+      allowed-tenants: ${AGENTPILOT_JWT_ALLOWED_TENANTS:}
 ```
 
 Still recommended before external production rollout:
@@ -90,6 +91,7 @@ Still recommended before external production rollout:
 
 - Never trust frontend-supplied `tenantId`, `userId`, or `salesRepId`.
 - Validate JWT signature, issuer, audience, expiration, and tenant allow-list.
+- Treat an empty allow-list as acceptable only for local/staging validation; commercial deployments should explicitly list onboarded tenant IDs.
 - Use short token TTL.
 - Service accounts should have narrow permissions.
 - Sensitive model API keys stay server-side only.

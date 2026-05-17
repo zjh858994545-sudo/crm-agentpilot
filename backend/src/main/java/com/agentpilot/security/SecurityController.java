@@ -62,7 +62,9 @@ public class SecurityController {
                 "tenantClaim", jwtSsoProperties.getTenantClaim(),
                 "salesRepClaim", jwtSsoProperties.getSalesRepClaim(),
                 "rolesClaim", jwtSsoProperties.getRolesClaim(),
-                "permissionsClaim", jwtSsoProperties.getPermissionsClaim()
+                "permissionsClaim", jwtSsoProperties.getPermissionsClaim(),
+                "tenantAllowListEnabled", !jwtSsoProperties.normalizedAllowedTenants().isEmpty(),
+                "allowedTenantCount", jwtSsoProperties.normalizedAllowedTenants().size()
         ));
         body.put("rateLimit", Map.of(
                 "enabled", rateLimitProperties.isEnabled(),

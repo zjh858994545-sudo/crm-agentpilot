@@ -325,7 +325,7 @@ export default function SystemAdmin() {
       status: securityStatus?.jwt?.enabled ? (securityStatus.jwt.issuerConfigured ? 'ACTIVE' : 'CONFIG_REQUIRED') : 'READY_TO_ENABLE',
       owner: securityStatus?.jwt?.enabled ? `aud=${securityStatus.jwt.audience}` : 'OIDC / JWT claims',
       why: '商业化部署需要接入企业身份源，由 IdP 管理 MFA、离职禁用、密码策略和登录审计。',
-      operatingLine: `user=${securityStatus?.jwt?.userIdClaim ?? 'user_id'} / tenant=${securityStatus?.jwt?.tenantClaim ?? 'tenant_id'} / sales=${securityStatus?.jwt?.salesRepClaim ?? 'sales_rep_id'}`
+      operatingLine: `user=${securityStatus?.jwt?.userIdClaim ?? 'user_id'} / tenant=${securityStatus?.jwt?.tenantClaim ?? 'tenant_id'} / allowList=${securityStatus?.jwt?.tenantAllowListEnabled ? securityStatus.jwt.allowedTenantCount : 'off'}`
     },
     {
       key: 'outbox-lock',

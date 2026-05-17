@@ -94,6 +94,7 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
 
             Long userId = requireLong(jwt, properties.getUserIdClaim(), "user id");
             String tenantId = requireString(jwt, properties.getTenantClaim(), "tenant id");
+            validateTenantAllowed(tenantId);
             Long salesRepId = requireLong(jwt, properties.getSalesRepClaim(), "sales rep id");
             List<String> roles = claimAsStrings(jwt, properties.getRolesClaim());
             List<String> permissions = resolvePermissions(jwt, roles);
@@ -132,6 +133,16 @@ public class JwtSsoAuthenticationFilter extends OncePerRequestFilter {
         }
         if (!jwt.getAudience().contains(properties.getAudience())) {
             throw new IllegalArgumentException("JWT audience does not match CRM-AgentPilot audience");
+        }
+    }
+
+    private void validateTenantAllowed(String tenantId) {
+        List<String> allowedTenants = properties.normalizedAllowedTenants();
+        if (allowedTenants.isEmpty()) {
+            return;
+        }
+        if (!allowedTenants.contains(tenantId)) {
+            throw new IllegalArgumentException("JWT tenant is not allowed for this deployment");
         }
     }
 
