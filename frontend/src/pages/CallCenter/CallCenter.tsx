@@ -30,6 +30,7 @@ import {
   CustomerMemory,
   describeApiError,
   fetchCustomerMemory,
+  processCallEndedEvent,
   QualityCheckResponse,
   summarizeCall
 } from '../../api/client';
@@ -69,6 +70,7 @@ export default function CallCenter() {
   const [summary, setSummary] = useState<CallSummaryResponse | null>(null);
   const [quality, setQuality] = useState<QualityCheckResponse | null>(null);
   const [confirmation, setConfirmation] = useState<ContactLogConfirmationResponse | null>(null);
+  const [lastCallId, setLastCallId] = useState('');
   const [memory, setMemory] = useState<CustomerMemory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -125,6 +127,31 @@ export default function CallCenter() {
     }
   };
 
+  const runPostCallAutomation = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const callId = `CALL-${Date.now()}`;
+      const result = await processCallEndedEvent({
+        callId,
+        customerId,
+        salesRepId,
+        leadId,
+        recordingUrl: `https://voice.example.com/recordings/${callId}`,
+        transcript: text
+      });
+      setLastCallId(result.callId);
+      setSummary(result.summary);
+      setQuality(result.quality);
+      setConfirmation(result.confirmation);
+      message.success('已根据通话结束事件生成摘要、质检和 CRM 写入确认');
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const confirmWrite = async () => {
     if (!confirmation) {
       return;
@@ -147,8 +174,14 @@ export default function CallCenter() {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {error && <ApiErrorNotice error={error} title="通话处理暂时无法完成" />}
 
-      <Card className="command-card" title="通话质检工作台">
+      <Card className="command-card" title="通话结束自动处理">
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="真实业务里，这里由云通信在电话挂断后自动回调"
+            description="回调带入 callId、录音地址和转写文本，系统自动生成摘要、质检结果和 CRM 写入确认。销售只需要在手机或工作台里确认。"
+          />
           <Space wrap>
             <Text>客户 ID</Text>
             <InputNumber min={1} value={customerId} onChange={(value) => setCustomerId(value ?? 1001)} />
@@ -159,7 +192,10 @@ export default function CallCenter() {
           </Space>
           <TextArea rows={5} value={text} onChange={(event) => setText(event.target.value)} />
           <Space wrap>
-            <Button type="primary" icon={<FileDoneOutlined />} loading={loading} onClick={runSummary}>
+            <Button type="primary" icon={<PhoneOutlined />} loading={loading} onClick={runPostCallAutomation}>
+              模拟电话挂断自动生成
+            </Button>
+            <Button icon={<FileDoneOutlined />} loading={loading} onClick={runSummary}>
               生成摘要
             </Button>
             <Button icon={<SafetyCertificateOutlined />} loading={loading} onClick={runQuality}>
@@ -175,8 +211,8 @@ export default function CallCenter() {
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
           <Card className="metric-card">
-            <Statistic title="客户意向" value={summary?.customerIntent ?? '-'} prefix={<PhoneOutlined />} />
-            <Text className="metric-label">来自通话摘要结果</Text>
+            <Statistic title="通话事件" value={lastCallId || '-'} prefix={<PhoneOutlined />} />
+            <Text className="metric-label">电话挂断后自动触发</Text>
           </Card>
         </Col>
         <Col xs={24} md={8}>

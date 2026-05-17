@@ -1,6 +1,8 @@
 package com.agentpilot.callcenter.controller;
 
 import com.agentpilot.callcenter.service.CallCenterService;
+import com.agentpilot.callcenter.vo.CallEndedEventRequest;
+import com.agentpilot.callcenter.vo.CallEndedEventResponse;
 import com.agentpilot.callcenter.vo.CallSummaryResponse;
 import com.agentpilot.callcenter.vo.CallTextRequest;
 import com.agentpilot.callcenter.vo.ContactLogConfirmationResponse;
@@ -61,6 +63,13 @@ public class CallCenterController {
     @PreAuthorize("hasAuthority('crm:write')")
     public ApiResponse<ContactLogConfirmationResponse> proposeContactLog(@Valid @RequestBody CallTextRequest request) {
         return ApiResponse.ok(callCenterService.proposeContactLog(securedRequest(request, true)));
+    }
+
+    @PostMapping("/call-ended-events")
+    @PreAuthorize("hasAuthority('crm:write')")
+    public ApiResponse<CallEndedEventResponse> callEnded(@Valid @RequestBody CallEndedEventRequest request) {
+        CallTextRequest secured = securedRequest(request.toCallTextRequest(), true);
+        return ApiResponse.ok(callCenterService.handleCallEnded(request.callId(), request.recordingUrl(), secured));
     }
 
     @GetMapping("/customers/{customerId}/memory")

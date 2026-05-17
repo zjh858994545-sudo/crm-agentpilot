@@ -296,6 +296,52 @@ body {
   justify-content: flex-end;
 }
 
+.notification-overlay {
+  width: min(420px, calc(100vw - 28px));
+}
+
+.notification-popover {
+  width: 100%;
+}
+
+.notification-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.notification-subtitle {
+  margin-top: 2px;
+  color: var(--ap-muted);
+  font-size: 12px;
+}
+
+.notification-item {
+  cursor: pointer;
+  padding: 12px 4px !important;
+  border-radius: 8px;
+}
+
+.notification-item:hover {
+  background: #f6f9fd;
+}
+
+.notification-item.unread {
+  background: #fff8ed;
+}
+
+.notification-content {
+  color: #334155;
+  line-height: 1.6;
+}
+
+.notification-time {
+  font-size: 12px;
+}
+
 .identity-switcher {
   width: 190px;
 }
@@ -1929,13 +1975,40 @@ body {
 
 @media (max-width: 860px) {
   .app-sider {
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 20;
     height: auto;
   }
 
+  .brand {
+    min-height: 66px;
+    padding: 14px 16px 10px;
+  }
+
+  .app-sider .ant-menu-dark {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 12px 12px;
+  }
+
+  .app-sider .ant-menu-item-group {
+    display: contents;
+  }
+
+  .app-sider .ant-menu-item-group-title {
+    display: none;
+  }
+
+  .app-sider .ant-menu-item {
+    flex: 0 0 auto;
+    min-width: 118px;
+    padding-inline: 12px !important;
+  }
+
   .sider-footer {
-    position: static;
-    margin: 14px;
+    display: none;
   }
 
   .app-shell,
@@ -1953,6 +2026,11 @@ body {
     gap: 12px;
     padding: 14px 16px;
     flex-direction: column;
+  }
+
+  .header-status {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .app-content {

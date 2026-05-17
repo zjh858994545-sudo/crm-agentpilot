@@ -382,10 +382,10 @@ export default function Dashboard() {
       <div className="business-hero">
         <div className="business-hero-main">
           <Text className="eyebrow">Sales Command Center</Text>
-          <Title level={3}>今天先处理谁，下一步做什么</Title>
+          <Title level={3}>AI 建议，人来决策，每一次写入都有背书</Title>
           <Paragraph className="overview-copy">
-            首页只服务销售和销售主管：把高优商机、风险客户、待办跟进和 AI 写入确认放在同一个业务入口里。
-            技术审计、评测和系统状态已经收进系统管理区。
+            首页只服务销售和销售主管：先看高优商机和风险客户，再处理 AI 生成的 CRM 写入确认。
+            Agent 可以帮你起草任务和联系记录，但真正落库前必须由人确认。
           </Paragraph>
           <div className="hero-kpi-strip">
             <div>
@@ -509,7 +509,7 @@ export default function Dashboard() {
         <Col xs={24} xl={9}>
           <Card
             className="command-card"
-            title="待确认写入"
+            title="AI 建议待背书"
             extra={
               <Link to="/agent">
                 <Button size="small" icon={<MessageOutlined />}>进入 AI 助手</Button>
@@ -517,7 +517,7 @@ export default function Dashboard() {
             }
           >
             {pendingConfirmations.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待确认写操作" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无需要背书的 AI 写入建议" />
             ) : (
               <Space direction="vertical" size={10} style={{ width: '100%' }}>
                 {pendingConfirmations.slice(0, 4).map((item) => (

@@ -5,6 +5,8 @@ import com.agentpilot.crm.entity.ContactLog;
 import com.agentpilot.crm.service.ContactLogService;
 import com.agentpilot.events.entity.OutboxEvent;
 import com.agentpilot.events.service.OutboxEventService;
+import com.agentpilot.notification.entity.AgentPilotNotification;
+import com.agentpilot.notification.service.NotificationService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,6 +47,9 @@ class AgentOrchestratorTest {
 
     @Autowired
     private OutboxEventService outboxEventService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -109,6 +114,10 @@ class AgentOrchestratorTest {
 
         JsonNode root = objectMapper.readTree(chatResult.getResponse().getContentAsString());
         long confirmationId = root.at("/data/confirmationId").asLong();
+        assertThat(notificationService.count(new LambdaQueryWrapper<AgentPilotNotification>()
+                .eq(AgentPilotNotification::getSourceType, "confirmation")
+                .eq(AgentPilotNotification::getSourceId, String.valueOf(confirmationId))
+                .eq(AgentPilotNotification::getStatus, "UNREAD"))).isEqualTo(1);
 
         mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -116,6 +125,10 @@ class AgentOrchestratorTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
                 .andExpect(jsonPath("$.data.result.source", is("AGENT")));
+        assertThat(notificationService.count(new LambdaQueryWrapper<AgentPilotNotification>()
+                .eq(AgentPilotNotification::getSourceType, "confirmation")
+                .eq(AgentPilotNotification::getSourceId, String.valueOf(confirmationId))
+                .eq(AgentPilotNotification::getStatus, "READ"))).isEqualTo(1);
 
         mockMvc.perform(post("/api/agent/confirmations/" + confirmationId + "/confirm")
                         .contentType(MediaType.APPLICATION_JSON)

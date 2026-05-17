@@ -28,6 +28,7 @@ import com.agentpilot.crm.service.ProductPackageService;
 import com.agentpilot.events.AgentPilotEventPublisher;
 import com.agentpilot.model.ChatModelClient;
 import com.agentpilot.model.ModelToolCall;
+import com.agentpilot.notification.service.NotificationService;
 import com.agentpilot.rag.service.RagService;
 import com.agentpilot.rag.vo.KnowledgeAnswer;
 import com.agentpilot.scoring.service.LeadScoringService;
@@ -79,6 +80,7 @@ public class AgentOrchestrator {
     private final RagService ragService;
     private final ChatModelClient chatModelClient;
     private final AgentPilotEventPublisher eventPublisher;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
     public AgentOrchestrator(
@@ -97,6 +99,7 @@ public class AgentOrchestrator {
             RagService ragService,
             ChatModelClient chatModelClient,
             AgentPilotEventPublisher eventPublisher,
+            NotificationService notificationService,
             ObjectMapper objectMapper
     ) {
         this.sessionService = sessionService;
@@ -114,6 +117,7 @@ public class AgentOrchestrator {
         this.ragService = ragService;
         this.chatModelClient = chatModelClient;
         this.eventPublisher = eventPublisher;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -203,6 +207,7 @@ public class AgentOrchestrator {
                 toolCall.setCompletedAt(LocalDateTime.now());
                 toolCallService.updateById(toolCall);
             }
+            notificationService.markSourceRead(tenantId, userId, "confirmation", String.valueOf(confirmationId));
             return Map.of(
                     "status", "FAILED",
                     "actionStatus", failureStatus.get(),
@@ -225,6 +230,7 @@ public class AgentOrchestrator {
             toolCall.setCompletedAt(LocalDateTime.now());
             toolCallService.updateById(toolCall);
         }
+        notificationService.markSourceRead(tenantId, userId, "confirmation", String.valueOf(confirmationId));
         return Map.of("status", "CONFIRMED", "confirmationId", confirmationId, "result", result);
     }
 
@@ -259,6 +265,7 @@ public class AgentOrchestrator {
                     "confirmationId", confirmationId
             );
         }
+        notificationService.markSourceRead(tenantId, userId, "confirmation", String.valueOf(confirmationId));
         return Map.of("status", "REJECTED", "confirmationId", confirmationId);
     }
 
@@ -385,6 +392,7 @@ public class AgentOrchestrator {
         confirmation.setStatus("PENDING");
         confirmation.setExpiredAt(LocalDateTime.now().plusHours(24));
         confirmationService.save(confirmation);
+        notificationService.notifyConfirmationRequired(run, confirmation);
 
         call.setConfirmationId(confirmation.getId());
         call.setOutputJson(toJson(Map.of("confirmationId", confirmation.getId())));
@@ -586,6 +594,7 @@ public class AgentOrchestrator {
         confirmation.setStatus("PENDING");
         confirmation.setExpiredAt(LocalDateTime.now().plusHours(24));
         confirmationService.save(confirmation);
+        notificationService.notifyConfirmationRequired(run, confirmation);
         return confirmation;
     }
 

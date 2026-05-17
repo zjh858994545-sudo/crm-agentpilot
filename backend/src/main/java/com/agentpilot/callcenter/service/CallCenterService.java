@@ -10,9 +10,11 @@ import com.agentpilot.agent.service.AgentSessionService;
 import com.agentpilot.agent.service.AgentToolCallService;
 import com.agentpilot.callcenter.vo.CallSummaryResponse;
 import com.agentpilot.callcenter.vo.CallTextRequest;
+import com.agentpilot.callcenter.vo.CallEndedEventResponse;
 import com.agentpilot.callcenter.vo.ContactLogConfirmationResponse;
 import com.agentpilot.callcenter.vo.QualityCheckResponse;
 import com.agentpilot.callcenter.vo.QualityViolation;
+import com.agentpilot.notification.service.NotificationService;
 import com.agentpilot.rag.service.RagService;
 import com.agentpilot.rag.vo.KnowledgeAnswer;
 import com.agentpilot.security.CurrentUser;
@@ -36,6 +38,7 @@ public class CallCenterService {
     private final AgentRunService runService;
     private final AgentToolCallService toolCallService;
     private final AgentConfirmationService confirmationService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
     public CallCenterService(
@@ -44,6 +47,7 @@ public class CallCenterService {
             AgentRunService runService,
             AgentToolCallService toolCallService,
             AgentConfirmationService confirmationService,
+            NotificationService notificationService,
             ObjectMapper objectMapper
     ) {
         this.ragService = ragService;
@@ -51,6 +55,7 @@ public class CallCenterService {
         this.runService = runService;
         this.toolCallService = toolCallService;
         this.confirmationService = confirmationService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -157,11 +162,20 @@ public class CallCenterService {
         confirmation.setStatus("PENDING");
         confirmation.setExpiredAt(LocalDateTime.now().plusHours(24));
         confirmationService.save(confirmation);
+        notificationService.notifyConfirmationRequired(run, confirmation);
 
         toolCall.setConfirmationId(confirmation.getId());
         toolCallService.updateById(toolCall);
 
         return new ContactLogConfirmationResponse(run.getId(), confirmation.getId(), confirmation.getActionSummary(), payload);
+    }
+
+    @Transactional
+    public CallEndedEventResponse handleCallEnded(String callId, String recordingUrl, CallTextRequest request) {
+        CallSummaryResponse summary = summarize(request);
+        QualityCheckResponse quality = qualityCheck(request);
+        ContactLogConfirmationResponse confirmation = proposeContactLog(request);
+        return new CallEndedEventResponse(callId, recordingUrl, summary, quality, confirmation);
     }
 
     private String detectObjections(String text) {

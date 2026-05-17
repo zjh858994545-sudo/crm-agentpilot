@@ -115,6 +115,22 @@ class CallCenterServiceTest {
     }
 
     @Test
+    void callEndedEventCreatesSummaryQualityAndConfirmation() throws Exception {
+        mockMvc.perform(post("/api/callcenter/call-ended-events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"callId":"CALL-TEST-001","customerId":1001,"salesRepId":1,"leadId":3001,
+                                "recordingUrl":"https://voice.example.com/recordings/CALL-TEST-001",
+                                "transcript":"客户说套餐贵，担心续费没有效果。销售说明明天提供曝光数据和同行案例。"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.callId", is("CALL-TEST-001")))
+                .andExpect(jsonPath("$.data.summary.objections").value(org.hamcrest.Matchers.containsString("价格异议")))
+                .andExpect(jsonPath("$.data.quality.riskLevel", is("LOW")))
+                .andExpect(jsonPath("$.data.confirmation.confirmationId").isNumber());
+    }
+
+    @Test
     void callCenterRejectsRequestsOutsideCurrentSalesRepScope() throws Exception {
         mockMvc.perform(post("/api/callcenter/contact-log-confirmations")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -250,6 +250,22 @@ export interface AdminAuditLog {
   createdAt?: string;
 }
 
+export interface WorkspaceNotification {
+  id: number;
+  tenantId: string;
+  recipientUserId: number;
+  salesRepId?: number;
+  type: string;
+  title: string;
+  content: string;
+  actionUrl?: string;
+  sourceType?: string;
+  sourceId?: string;
+  status: 'UNREAD' | 'READ' | string;
+  createdAt?: string;
+  readAt?: string;
+}
+
 export interface LaunchReadinessCheck {
   key: string;
   name: string;
@@ -585,6 +601,14 @@ export interface ContactLogConfirmationResponse {
   payload: Record<string, unknown>;
 }
 
+export interface CallEndedEventResponse {
+  callId: string;
+  recordingUrl?: string;
+  summary: CallSummaryResponse;
+  quality: QualityCheckResponse;
+  confirmation: ContactLogConfirmationResponse;
+}
+
 export interface CustomerMemory {
   id: number;
   customerId: number;
@@ -772,6 +796,28 @@ export async function runRetentionCleanup(dryRun = true) {
 
 export async function fetchCurrentUser() {
   const response = await apiClient.get<ApiResponse<AuthProfile>>('/auth/me');
+  return response.data.data;
+}
+
+export async function fetchNotifications(params: { status?: string; limit?: number } = {}) {
+  const response = await apiClient.get<ApiResponse<WorkspaceNotification[]>>('/notifications', { params });
+  return response.data.data;
+}
+
+export async function fetchUnreadNotificationCount() {
+  const response = await apiClient.get<ApiResponse<{ unreadCount: number }>>('/notifications/unread-count');
+  return response.data.data.unreadCount;
+}
+
+export async function markNotificationRead(notificationId: number) {
+  const response = await apiClient.post<ApiResponse<{ updated: boolean; notificationId: number }>>(
+    `/notifications/${notificationId}/read`
+  );
+  return response.data.data;
+}
+
+export async function markAllNotificationsRead() {
+  const response = await apiClient.post<ApiResponse<{ updated: number }>>('/notifications/read-all');
   return response.data.data;
 }
 
@@ -976,6 +1022,18 @@ export async function createContactLogConfirmation(payload: {
     '/callcenter/contact-log-confirmations',
     payload
   );
+  return response.data.data;
+}
+
+export async function processCallEndedEvent(payload: {
+  callId: string;
+  customerId: number;
+  salesRepId: number;
+  leadId?: number;
+  recordingUrl?: string;
+  transcript: string;
+}) {
+  const response = await apiClient.post<ApiResponse<CallEndedEventResponse>>('/callcenter/call-ended-events', payload);
   return response.data.data;
 }
 

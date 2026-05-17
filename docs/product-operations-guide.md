@@ -295,3 +295,21 @@ Outbox 堆积：
 - The script accepts internal RBAC tokens through `-Token` and enterprise SSO/JWT tokens through `-BearerToken`.
 - `scripts/release-gate.ps1` calls this script in the runtime stage and supports `-SkipAdminHealthchecks` for non-admin staging checks.
 - The script should be run after deployment, after configuration changes, and after incident recovery.
+
+## 14. Sales Notification And Call-End Workflow
+
+The product story is now centered on: **AI suggests, humans decide, every CRM write has a responsible owner**.
+
+Operationally this means confirmation is not only an audit record. It is also a user-facing work item:
+
+- When Agent or Call Center creates a CRM write confirmation, the backend creates an `agentpilot_notification` row for the responsible user.
+- The frontend header shows unread confirmation reminders so sales reps do not need to actively search for pending writes.
+- Confirming or rejecting the confirmation marks the related notification as read.
+- `POST /api/callcenter/call-ended-events` is the productized call-end entry point. A telephony provider can send `callId`, `recordingUrl`, `transcript`, `customerId`, and `leadId`; the system returns summary, quality-check result, and a contact-log confirmation draft.
+
+Production integration notes:
+
+- The telephony system should own call recording and speech-to-text; CRM-AgentPilot owns analysis, confirmation, and CRM write safety.
+- The call-end endpoint must be protected by tenant identity, request signature validation, and replay protection before being exposed to third-party callbacks.
+- WeCom/DingTalk/SMS push should subscribe to `CONFIRMATION_REQUIRED` notifications and deliver them to the sales rep's phone.
+- Notification and confirmation remain intentionally separate: notification is for reachability, confirmation is the write-safety boundary.

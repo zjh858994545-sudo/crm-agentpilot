@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   AuditOutlined,
+  BellOutlined,
   BookOutlined,
   DashboardOutlined,
   ExperimentOutlined,
@@ -14,12 +15,20 @@ import {
   ThunderboltOutlined,
   UserOutlined
 } from '@ant-design/icons';
-import { Badge, Button, Card, Form, Input, Layout, Menu, Space, Spin, Tag, Typography } from 'antd';
+import { Badge, Button, Card, Empty, Form, Input, Layout, List, Menu, Popover, Space, Spin, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { describeApiError, fetchCurrentUser, type AuthProfile } from './api/client';
+import {
+  describeApiError,
+  fetchCurrentUser,
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type AuthProfile,
+  type WorkspaceNotification
+} from './api/client';
 import ApiErrorNotice from './components/ApiErrorNotice';
 
 const AgentChat = lazy(() => import('./pages/AgentChat/AgentChat'));
@@ -285,6 +294,106 @@ function LoginPage({ onLogin }: { onLogin: (profile: AuthProfile) => void }) {
   );
 }
 
+function formatNotificationTime(value?: string) {
+  if (!value) {
+    return '';
+  }
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) {
+    return value;
+  }
+  return time.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function NotificationBell() {
+  const navigate = useNavigate();
+  const [items, setItems] = useState<WorkspaceNotification[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const unreadCount = items.filter((item) => item.status === 'UNREAD').length;
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      setItems(await fetchNotifications({ status: 'ALL', limit: 12 }));
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const openNotification = async (item: WorkspaceNotification) => {
+    if (item.status === 'UNREAD') {
+      await markNotificationRead(item.id);
+    }
+    await load();
+    if (item.actionUrl) {
+      navigate(item.actionUrl);
+    }
+  };
+
+  const markAll = async () => {
+    await markAllNotificationsRead();
+    await load();
+  };
+
+  const content = (
+    <div className="notification-popover">
+      <div className="notification-head">
+        <div>
+          <Text strong>AI 写入确认</Text>
+          <div className="notification-subtitle">需要你背书后才会进入 CRM</div>
+        </div>
+        <Button size="small" type="link" disabled={!unreadCount} onClick={markAll}>
+          全部已读
+        </Button>
+      </div>
+      {items.length ? (
+        <List
+          loading={loading}
+          dataSource={items}
+          renderItem={(item) => (
+            <List.Item className={`notification-item ${item.status === 'UNREAD' ? 'unread' : ''}`} onClick={() => openNotification(item)}>
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <Space size={6} wrap>
+                  <Tag color={item.status === 'UNREAD' ? 'orange' : 'default'}>{item.status === 'UNREAD' ? '待处理' : '已读'}</Tag>
+                  <Text strong>{item.title}</Text>
+                </Space>
+                <Text className="notification-content">{item.content}</Text>
+                <Text type="secondary" className="notification-time">{formatNotificationTime(item.createdAt)}</Text>
+              </Space>
+            </List.Item>
+          )}
+        />
+      ) : (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待确认提醒" />
+      )}
+    </div>
+  );
+
+  return (
+    <Popover placement="bottomRight" trigger="click" content={content} overlayClassName="notification-overlay">
+      <Badge count={unreadCount} size="small" offset={[-2, 4]}>
+        <Button icon={<BellOutlined />} aria-label="AI 写入确认提醒">
+          提醒
+        </Button>
+      </Badge>
+    </Popover>
+  );
+}
+
 function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -336,6 +445,7 @@ function Shell({ user, onLogout }: { user: AuthProfile; onLogout: () => void }) 
             <Tag color={roleColors[user.primaryRole]} icon={isAdminUser ? <SettingOutlined /> : <UserOutlined />}>
               {roleTitles[user.primaryRole]} / {user.displayName}
             </Tag>
+            {!isAdminUser ? <NotificationBell /> : null}
             <Badge status="success" text="工作台在线" />
             <Button icon={<LogoutOutlined />} onClick={logout}>
               退出
@@ -380,7 +490,8 @@ export default function App() {
 
   useEffect(() => {
     const token = window.localStorage.getItem('agentpilot.apiToken');
-    if (!token) {
+    const bearerToken = window.localStorage.getItem('agentpilot.bearerToken');
+    if (!token && !bearerToken) {
       clearSession();
       setReady(true);
       return;
