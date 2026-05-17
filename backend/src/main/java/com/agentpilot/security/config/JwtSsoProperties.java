@@ -7,8 +7,11 @@ public class JwtSsoProperties {
     private boolean enabled = false;
     private String issuerUri = "";
     private String audience = "crm-agentpilot";
+    private String userIdClaim = "user_id";
     private String tenantClaim = "tenant_id";
     private String salesRepClaim = "sales_rep_id";
+    private String rolesClaim = "roles";
+    private String permissionsClaim = "permissions";
 
     public boolean isEnabled() {
         return enabled;
@@ -38,6 +41,14 @@ public class JwtSsoProperties {
         return tenantClaim;
     }
 
+    public String getUserIdClaim() {
+        return userIdClaim;
+    }
+
+    public void setUserIdClaim(String userIdClaim) {
+        this.userIdClaim = userIdClaim;
+    }
+
     public void setTenantClaim(String tenantClaim) {
         this.tenantClaim = tenantClaim;
     }
@@ -48,5 +59,21 @@ public class JwtSsoProperties {
 
     public void setSalesRepClaim(String salesRepClaim) {
         this.salesRepClaim = salesRepClaim;
+    }
+
+    public String getRolesClaim() {
+        return rolesClaim;
+    }
+
+    public void setRolesClaim(String rolesClaim) {
+        this.rolesClaim = rolesClaim;
+    }
+
+    public String getPermissionsClaim() {
+        return permissionsClaim;
+    }
+
+    public void setPermissionsClaim(String permissionsClaim) {
+        this.permissionsClaim = permissionsClaim;
     }
 }

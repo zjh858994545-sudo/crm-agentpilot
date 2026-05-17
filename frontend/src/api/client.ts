@@ -127,8 +127,11 @@ export interface SecurityStatus {
     enabled: boolean;
     issuerConfigured: boolean;
     audience: string;
+    userIdClaim: string;
     tenantClaim: string;
     salesRepClaim: string;
+    rolesClaim: string;
+    permissionsClaim: string;
   };
   rateLimit?: {
     enabled: boolean;

@@ -2,6 +2,7 @@ package com.agentpilot.security.config;
 
 import com.agentpilot.common.response.ApiResponse;
 import com.agentpilot.security.AgentPilotTokenAuthenticationFilter;
+import com.agentpilot.security.JwtSsoAuthenticationFilter;
 import com.agentpilot.security.RbacPrincipalService;
 import com.agentpilot.security.ratelimit.ApiRateLimitFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,8 +15,12 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 
@@ -33,6 +38,30 @@ public class SecurityConfig {
     }
 
     @Bean
+    public JwtDecoder jwtDecoder(JwtSsoProperties properties) {
+        if (!properties.isEnabled()) {
+            return token -> {
+                throw new JwtException("JWT SSO is disabled");
+            };
+        }
+        if (!StringUtils.hasText(properties.getIssuerUri())) {
+            return token -> {
+                throw new JwtException("JWT SSO requires agentpilot.security.jwt.issuer-uri");
+            };
+        }
+        return JwtDecoders.fromIssuerLocation(properties.getIssuerUri());
+    }
+
+    @Bean
+    public JwtSsoAuthenticationFilter jwtSsoAuthenticationFilter(
+            JwtSsoProperties properties,
+            JwtDecoder jwtDecoder,
+            ObjectMapper objectMapper
+    ) {
+        return new JwtSsoAuthenticationFilter(properties, jwtDecoder, objectMapper);
+    }
+
+    @Bean
     public UserDetailsService userDetailsService() {
         return username -> {
             throw new UsernameNotFoundException("Password login is disabled. Use X-AgentPilot-Token.");
@@ -42,6 +71,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
+            JwtSsoAuthenticationFilter jwtSsoAuthenticationFilter,
             AgentPilotTokenAuthenticationFilter tokenFilter,
             ApiRateLimitFilter apiRateLimitFilter,
             ObjectMapper objectMapper
@@ -80,7 +110,8 @@ public class SecurityConfig {
                         ).authenticated()
                         .anyRequest().permitAll()
                 )
-                .addFilterBefore(tokenFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtSsoAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(tokenFilter, JwtSsoAuthenticationFilter.class);
         http.addFilterAfter(apiRateLimitFilter, AgentPilotTokenAuthenticationFilter.class);
         return http.build();
     }

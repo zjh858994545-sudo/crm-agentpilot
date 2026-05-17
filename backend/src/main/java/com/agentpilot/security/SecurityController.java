@@ -58,8 +58,11 @@ public class SecurityController {
                 "enabled", jwtSsoProperties.isEnabled(),
                 "issuerConfigured", StringUtils.hasText(jwtSsoProperties.getIssuerUri()),
                 "audience", jwtSsoProperties.getAudience(),
+                "userIdClaim", jwtSsoProperties.getUserIdClaim(),
                 "tenantClaim", jwtSsoProperties.getTenantClaim(),
-                "salesRepClaim", jwtSsoProperties.getSalesRepClaim()
+                "salesRepClaim", jwtSsoProperties.getSalesRepClaim(),
+                "rolesClaim", jwtSsoProperties.getRolesClaim(),
+                "permissionsClaim", jwtSsoProperties.getPermissionsClaim()
         ));
         body.put("rateLimit", Map.of(
                 "enabled", rateLimitProperties.isEnabled(),

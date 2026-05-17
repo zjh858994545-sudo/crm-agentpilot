@@ -78,8 +78,11 @@ agentpilot:
       enabled: ${AGENTPILOT_JWT_ENABLED:false}
       issuer-uri: ${AGENTPILOT_JWT_ISSUER_URI:}
       audience: ${AGENTPILOT_JWT_AUDIENCE:crm-agentpilot}
+      user-id-claim: ${AGENTPILOT_JWT_USER_ID_CLAIM:user_id}
       tenant-claim: ${AGENTPILOT_JWT_TENANT_CLAIM:tenant_id}
       sales-rep-claim: ${AGENTPILOT_JWT_SALES_REP_CLAIM:sales_rep_id}
+      roles-claim: ${AGENTPILOT_JWT_ROLES_CLAIM:roles}
+      permissions-claim: ${AGENTPILOT_JWT_PERMISSIONS_CLAIM:permissions}
   rate-limit:
     enabled: ${AGENTPILOT_RATE_LIMIT_ENABLED:true}
     backend: ${AGENTPILOT_RATE_LIMIT_BACKEND:auto}
