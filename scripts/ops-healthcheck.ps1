@@ -1,6 +1,7 @@
 param(
   [string]$BaseUrl = $(if ($env:AGENTPILOT_BASE_URL) { $env:AGENTPILOT_BASE_URL } else { "http://localhost:18080" }),
   [string]$Token = $(if ($env:AGENTPILOT_API_TOKEN) { $env:AGENTPILOT_API_TOKEN } else { "" }),
+  [string]$BearerToken = $(if ($env:AGENTPILOT_BEARER_TOKEN) { $env:AGENTPILOT_BEARER_TOKEN } elseif ($env:AGENTPILOT_JWT_TOKEN) { $env:AGENTPILOT_JWT_TOKEN } else { "" }),
   [switch]$SkipAdminChecks
 )
 
@@ -22,8 +23,19 @@ function Invoke-AgentPilot {
 
   $traceId = New-TraceId $Name
   $headers = @{ "X-Trace-Id" = $traceId }
-  if ($Token -and $Token.Trim().Length -gt 0) {
-    $headers["X-AgentPilot-Token"] = $Token
+  if ($BearerToken -and $BearerToken.Trim().Length -gt 0) {
+    $normalizedBearer = $BearerToken.Trim()
+    if ($normalizedBearer.StartsWith("Bearer ", [System.StringComparison]::OrdinalIgnoreCase)) {
+      $headers["Authorization"] = $normalizedBearer
+    } else {
+      $headers["Authorization"] = "Bearer $normalizedBearer"
+    }
+  } elseif ($Token -and $Token.Trim().Length -gt 0) {
+    if ($Token.Trim().StartsWith("Bearer ", [System.StringComparison]::OrdinalIgnoreCase)) {
+      $headers["Authorization"] = $Token.Trim()
+    } else {
+      $headers["X-AgentPilot-Token"] = $Token
+    }
   }
 
   $invokeArgs = @{

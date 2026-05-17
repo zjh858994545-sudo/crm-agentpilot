@@ -9,7 +9,8 @@ param(
     [string]$EnvFile = "",
     [string]$MavenRepo = $(if ($env:MAVEN_REPO_LOCAL) { $env:MAVEN_REPO_LOCAL } else { "F:\DockerData\AgentPilotCache\m2" }),
     [string]$BaseUrl = $(if ($env:AGENTPILOT_BASE_URL) { $env:AGENTPILOT_BASE_URL } else { "http://localhost:18080" }),
-    [string]$Token = $(if ($env:AGENTPILOT_API_TOKEN) { $env:AGENTPILOT_API_TOKEN } else { "" })
+    [string]$Token = $(if ($env:AGENTPILOT_API_TOKEN) { $env:AGENTPILOT_API_TOKEN } else { "" }),
+    [string]$BearerToken = $(if ($env:AGENTPILOT_BEARER_TOKEN) { $env:AGENTPILOT_BEARER_TOKEN } elseif ($env:AGENTPILOT_JWT_TOKEN) { $env:AGENTPILOT_JWT_TOKEN } else { "" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -94,7 +95,7 @@ if (-not $SkipPreflight) {
 
 if (-not $SkipRuntimeHealthcheck) {
     Invoke-Step "Runtime operations healthcheck" {
-        $args = @("-BaseUrl", $BaseUrl, "-Token", $Token)
+        $args = @("-BaseUrl", $BaseUrl, "-Token", $Token, "-BearerToken", $BearerToken)
         if ($SkipAdminHealthchecks) {
             $args += "-SkipAdminChecks"
         }

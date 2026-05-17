@@ -150,6 +150,7 @@ Runtime healthcheck details:
 
 - `scripts/ops-healthcheck.ps1` sends a unique `X-Trace-Id` for every check and fails if the backend does not echo the same trace id.
 - With an admin token, it verifies `/api/auth/me`, `/api/dashboard/metrics`, `/api/tenants`, model status, knowledge status, outbox status, readiness, and retention status.
+- The script supports both internal RBAC tokens (`-Token` / `AGENTPILOT_API_TOKEN`) and enterprise SSO tokens (`-BearerToken` / `AGENTPILOT_BEARER_TOKEN` / `AGENTPILOT_JWT_TOKEN`).
 - If the token only represents a sales user, use `-SkipAdminHealthchecks` on `release-gate.ps1` or `-SkipAdminChecks` on `ops-healthcheck.ps1`.
 - The release gate uses `F:\DockerData\AgentPilotCache\m2` as the default Maven cache on Windows to avoid C-drive pressure and non-ASCII path issues. Override with `MAVEN_REPO_LOCAL` when needed.
 
