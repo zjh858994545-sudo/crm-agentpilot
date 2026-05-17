@@ -25,12 +25,12 @@ export class AgentPilotApiError extends Error {
 
 export function describeApiError(error: unknown) {
   if (error instanceof AgentPilotApiError) {
-    return error.traceId ? `${error.message}（Trace: ${error.traceId}）` : error.message;
+    return error.traceId ? `${error.message} (Trace: ${error.traceId})` : error.message;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return '系统暂时无法完成请求，请稍后重试。';
+  return 'System is temporarily unavailable. Please retry later.';
 }
 
 export interface PageResponse<T> {
