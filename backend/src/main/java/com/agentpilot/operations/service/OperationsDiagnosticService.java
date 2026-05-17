@@ -116,10 +116,14 @@ public class OperationsDiagnosticService {
                 "crm_lead",
                 "crm_task",
                 "crm_contact_log",
-                "agent_run",
-                "agent_tool_call",
-                "agent_confirmation",
+                "crm_agent_run",
+                "crm_agent_tool_call",
+                "crm_agent_confirmation",
+                "crm_retrieval_log",
                 "agent_outbox_event",
+                "agentpilot_tenant",
+                "agentpilot_tenant_config",
+                "agentpilot_export_request",
                 "agentpilot_admin_audit_log"
         );
         return tables.stream()
