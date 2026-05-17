@@ -70,20 +70,21 @@ public class AgentController {
         Long currentUserId = CurrentUser.userId();
         String currentTenantId = CurrentUser.tenantId();
         Long currentSalesRepId = CurrentUser.salesRepId();
+        Long requestedSalesRepId = request.salesRepId() == null ? currentSalesRepId : request.salesRepId();
         if (!Objects.equals(request.userId(), currentUserId)) {
             throw new AccessDeniedException("request.userId does not match authenticated user");
         }
-        if (request.salesRepId() != null && !Objects.equals(request.salesRepId(), currentSalesRepId)) {
+        if (!CurrentUser.canAccessSalesRep(requestedSalesRepId)) {
             throw new AccessDeniedException("request.salesRepId is outside current data scope");
         }
         if (request.customerId() != null) {
-            requireCustomerVisible(request.customerId(), currentSalesRepId);
+            requireCustomerVisible(request.customerId());
         }
         AgentChatRequest securedRequest = new AgentChatRequest(
                 request.sessionId(),
                 currentUserId,
                 currentTenantId,
-                currentSalesRepId,
+                requestedSalesRepId,
                 request.customerId(),
                 request.message()
         );
@@ -164,11 +165,9 @@ public class AgentController {
 
     @GetMapping("/runs")
     public ApiResponse<List<AgentRun>> runs() {
-        return ApiResponse.ok(runService.list(new LambdaQueryWrapper<AgentRun>()
-                .eq(AgentRun::getTenantId, CurrentUser.tenantId())
-                .eq(AgentRun::getUserId, CurrentUser.userId())
-                .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId())
-                .orderByDesc(AgentRun::getId)));
+        return ApiResponse.ok(runService.list(runQuery("ALL", "")
+                .orderByDesc(AgentRun::getId)
+                .last("limit 50")));
     }
 
     @GetMapping("/runs/page")
@@ -202,22 +201,25 @@ public class AgentController {
     }
 
     private List<Long> visibleRunIds() {
-        return runService.list(new LambdaQueryWrapper<AgentRun>()
+        LambdaQueryWrapper<AgentRun> wrapper = new LambdaQueryWrapper<AgentRun>()
                 .select(AgentRun::getId)
-                .eq(AgentRun::getTenantId, CurrentUser.tenantId())
-                .eq(AgentRun::getUserId, CurrentUser.userId())
-                .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId()))
+                .eq(AgentRun::getTenantId, CurrentUser.tenantId());
+        if (!CurrentUser.isManagerOrAdmin()) {
+            wrapper.eq(AgentRun::getUserId, CurrentUser.userId())
+                    .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId());
+        }
+        return runService.list(wrapper)
                 .stream()
                 .map(AgentRun::getId)
                 .toList();
     }
 
     private LambdaQueryWrapper<AgentConfirmation> confirmationQuery(String status, String keyword) {
-        Long userId = CurrentUser.userId();
         String tenantId = CurrentUser.tenantId().replace("'", "''");
-        Long salesRepId = CurrentUser.salesRepId();
-        String visibleRunSql = "select id from crm_agent_run where tenant_id = '" + tenantId
-                + "' and user_id = " + userId + " and sales_rep_id = " + salesRepId;
+        String visibleRunSql = "select id from crm_agent_run where tenant_id = '" + tenantId + "'";
+        if (!CurrentUser.isManagerOrAdmin()) {
+            visibleRunSql += " and user_id = " + CurrentUser.userId() + " and sales_rep_id = " + CurrentUser.salesRepId();
+        }
         LambdaQueryWrapper<AgentConfirmation> wrapper = new LambdaQueryWrapper<AgentConfirmation>()
                 .inSql(AgentConfirmation::getRunId, visibleRunSql);
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
@@ -237,9 +239,11 @@ public class AgentController {
 
     private LambdaQueryWrapper<AgentRun> runQuery(String status, String keyword) {
         LambdaQueryWrapper<AgentRun> wrapper = new LambdaQueryWrapper<AgentRun>()
-                .eq(AgentRun::getTenantId, CurrentUser.tenantId())
-                .eq(AgentRun::getUserId, CurrentUser.userId())
-                .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId());
+                .eq(AgentRun::getTenantId, CurrentUser.tenantId());
+        if (!CurrentUser.isManagerOrAdmin()) {
+            wrapper.eq(AgentRun::getUserId, CurrentUser.userId())
+                    .eq(AgentRun::getSalesRepId, CurrentUser.salesRepId());
+        }
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
             wrapper.eq(AgentRun::getStatus, status.toUpperCase());
         }
@@ -259,17 +263,18 @@ public class AgentController {
         AgentRun run = runService.getById(runId);
         if (run == null
                 || !Objects.equals(run.getTenantId(), CurrentUser.tenantId())
-                || !Objects.equals(run.getUserId(), CurrentUser.userId())
-                || !Objects.equals(run.getSalesRepId(), CurrentUser.salesRepId())) {
+                || (!CurrentUser.isManagerOrAdmin()
+                && (!Objects.equals(run.getUserId(), CurrentUser.userId())
+                || !Objects.equals(run.getSalesRepId(), CurrentUser.salesRepId())))) {
             throw new AccessDeniedException("run is outside current data scope");
         }
     }
 
-    private void requireCustomerVisible(Long customerId, Long currentSalesRepId) {
+    private void requireCustomerVisible(Long customerId) {
         Customer customer = customerService.getById(customerId);
         if (customer == null
                 || !Objects.equals(customer.getTenantId(), CurrentUser.tenantId())
-                || !Objects.equals(customer.getOwnerSalesRepId(), currentSalesRepId)) {
+                || !CurrentUser.canAccessSalesRep(customer.getOwnerSalesRepId())) {
             throw new AccessDeniedException("customer is outside current data scope");
         }
     }

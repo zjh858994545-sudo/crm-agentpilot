@@ -102,6 +102,41 @@ class SecurityStrictModeTest {
     }
 
     @Test
+    void salesManagerCanRunAgentForTeamMemberButSalesCanOnlySeeOwnRuns() throws Exception {
+        String marker = "TEAM_SCOPE_MARKER";
+        String message = "\\u4eca\\u5929\\u6211\\u5e94\\u8be5\\u4f18\\u5148\\u8ddf\\u8fdb\\u54ea\\u4e9b\\u5ba2\\u6237\\uff1f" + marker;
+        mockMvc.perform(post("/api/agent/chat")
+                        .header("X-AgentPilot-Token", "agentpilot-manager")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":100,\"salesRepId\":2,\"message\":\"" + message + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.type", is("final_answer")));
+
+        mockMvc.perform(get("/api/agent/runs/page")
+                        .header("X-AgentPilot-Token", "agentpilot-manager")
+                        .param("status", "ALL")
+                        .param("keyword", marker))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total", is(1)))
+                .andExpect(jsonPath("$.data.items[0].userId", is(100)))
+                .andExpect(jsonPath("$.data.items[0].salesRepId", is(2)));
+
+        mockMvc.perform(get("/api/agent/runs/page")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-1")
+                        .param("status", "ALL")
+                        .param("keyword", marker))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total", is(0)));
+
+        mockMvc.perform(post("/api/agent/chat")
+                        .header("X-AgentPilot-Token", "agentpilot-sales-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1,\"salesRepId\":2,\"message\":\"" + message + "\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void currentUserEndpointReturnsDatabaseBackedProfile() throws Exception {
         mockMvc.perform(get("/api/auth/me")
                         .header("X-AgentPilot-Token", "agentpilot-manager")
